@@ -1,5 +1,7 @@
 import re
 import numpy as np
+import spacy
+
 # Change the type of hazard to the modified version
 # Caution, several hazards can be present in 'disasterTypeReclassified'
 def change_hazard(reports, dict_hazards_grouped):
