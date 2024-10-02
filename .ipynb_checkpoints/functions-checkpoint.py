@@ -17,7 +17,7 @@ def change_hazard(reports, dict_hazards_grouped):
                     if disaster in dict_hazards_grouped[haz] :
                         new_disasters.append(disaster)
         #print(new_disasters)
-        rep['disasterTypeReclassified'] = np.unique(new_disasters)
+        rep['disasterTypeReclassified'] = np.unique(new_disasters).tolist()
 
         # Save the report if at least one natural hazard is found
         #print(len(rep['disasterTypeReclassified']))
@@ -76,6 +76,31 @@ def extract_entities(text):
     doc = nlp(text)
     entities = [(ent.text, ent.label_) for ent in doc.ents]
     return entities
+
+def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
+    doc = nlp(sentence)
+    causes = []
+
+    # Iterate over the tokens in the sentence
+    for token in doc:
+        prev_token = doc[token.i - 1]
+        next_token = doc[token.i + 1]
+        # Check if the token is a verb and in the list of causal verbs
+        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
+            # Find the subject (nsubj) and object (dobj) of the verb
+            subject = None
+            effect = None
+
+            for child in token.children:
+                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
+                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
+                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+            # If both subject and object (effect) are found, return the relationship
+            if subject and effect:
+                causes.append((subject, token.lemma_, effect))
+
+    return causes
 
 def select_hazard_description(text):
     id_top = None

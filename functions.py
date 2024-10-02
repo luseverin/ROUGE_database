@@ -17,7 +17,7 @@ def change_hazard(reports, dict_hazards_grouped):
                     if disaster in dict_hazards_grouped[haz] :
                         new_disasters.append(disaster)
         #print(new_disasters)
-        rep['disasterTypeReclassified'] = np.unique(new_disasters)
+        rep['disasterTypeReclassified'] = np.unique(new_disasters).tolist()
 
         # Save the report if at least one natural hazard is found
         #print(len(rep['disasterTypeReclassified']))
