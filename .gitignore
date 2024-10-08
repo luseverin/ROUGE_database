@@ -1,3 +1,7 @@
 Data/
 *.json
 __pycache__
+.ipynb_checkpoints/info_extraction_llm_validation-checkpoint.ipynb
+.ipynb_checkpoints/plot_functions-checkpoint.ipynb
+*-checkpoint.ipynb
+.ipynb_checkpoints/plot_functions-checkpoint.py
