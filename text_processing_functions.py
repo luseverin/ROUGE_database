@@ -1,5 +1,9 @@
 import re
 import numpy as np
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
+
 # Change the type of hazard to the modified version
 # Caution, several hazards can be present in 'disasterTypeReclassified'
 def change_hazard(reports, dict_hazards_grouped):
@@ -83,8 +87,8 @@ def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
 
     # Iterate over the tokens in the sentence
     for token in doc:
-        prev_token = doc[token.i - 1]
-        next_token = doc[token.i + 1]
+        #prev_token = doc[token.i - 1]
+        #next_token = doc[token.i + 1]
         # Check if the token is a verb and in the list of causal verbs
         if token.lemma_ in relationship_list and token.pos_ == 'VERB':
             # Find the subject (nsubj) and object (dobj) of the verb
@@ -105,14 +109,14 @@ def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
 def select_hazard_description(text):
     id_top = None
     id_end = None
-    for id_s, sentence in enumerate(text) : 
+    for id_s, sentence in enumerate(text) :
         sentence = sentence.lower()
         hazards = []
         if (re.search(r"the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster", sentence, re.IGNORECASE)) and (id_top==None):
-            #Save where the text should begin 
-            id_top = id_s 
-        if (re.search(r"coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of response|scope and scale", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):   
+            #Save where the text should begin
+            id_top = id_s
+        if (re.search(r"coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of response|scope and scale", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
             # Fix a minimum of 5 sentences for the description of the hazard
-            if ((id_s-id_top) >= 5) : 
+            if ((id_s-id_top) >= 5) :
                 id_end = id_s
     return text[id_top:id_end]
