@@ -96,7 +96,7 @@ def calculate_precision(df1, df2, precision_columns_list, unique_dict=unique_dic
         if tmp.shape[0] == tmp2.shape[0]:
             for precision_column in precision_columns_list:
                 #For Hazard and Country, accuracy is computed by checking is the found attributes are matching 
-                if precision_column in ['Hazard', 'Country'] : 
+                if precision_column in ['Hazard', 'Hazard_main', 'Country'] : 
                     unique_list = unique_dict[precision_column]
                     
                     # Create binary vectors for the two lists
@@ -113,11 +113,11 @@ def calculate_precision(df1, df2, precision_columns_list, unique_dict=unique_dic
                     results[precision_column]["count"] += 1
                 #For Location and Date, the accuracy look is a value is found when one should be found
                 #Do not look at the exact value
-                elif precision_column in ['Locations', 'Start_Date', 'End_Date'] : 
+                elif precision_column in ['Location', 'Start_Date', 'End_Date'] : 
                     # Create binary vectors for the two lists
-                    n_tmp = sum(1 for value in tmp[precision_column] if value != 'NULL')
-                    n_tmp2 = sum(1 for value in tmp2[precision_column] if value != 'NULL')
-
+                    n_tmp = sum(1 for value in tmp[precision_column] if (value != 'NULL') and (value != np.NaN))
+                    n_tmp2 = sum(1 for value in tmp2[precision_column] if (value != 'NULL') and (value != np.NaN))
+                    
                     #cos_sim = cosine_similarity(vector1, vector2)[0][0]
                     if n_tmp != 0 :
                         results[precision_column]["psum"] += n_tmp2/n_tmp
