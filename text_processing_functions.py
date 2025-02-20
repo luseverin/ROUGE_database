@@ -115,7 +115,7 @@ def select_hazard_description(text):
         if (re.search(r"the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster", sentence, re.IGNORECASE)) and (id_top==None):
             #Save where the text should begin
             id_top = id_s
-        if (re.search(r"coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of response|scope and scale", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
+        if (re.search(r"coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|scope and scale", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
             # Fix a minimum of 5 sentences for the description of the hazard
             if ((id_s-id_top) >= 5) :
                 id_end = id_s
