@@ -7,7 +7,6 @@ DATA_OUT_PATH = '../Data_backup/results_llm/'
 hazard_all_subtype_emdat = """["drought", "forest fire", "land fire", "ground movement", "tsunami", "avalanche", "landslide", "rockfall", "sudden subsidence", "mudslide", "ash fall", "lava flow", "pyroclastic flow", "lahar", "coastal flood", "flash flood", "riverine flood", "ice jam flood", "rogue wave", "seiche", "coldwave", "heatwave", "severe winter conditions", "derecho", "hail", "lightning/thunderstorm", "sand/dust storm", "winter storm/blizzard", "storm surge", "tornado", "extra-tropical storm", "tropical cyclone" ]"""
 
 #dict to match emdat maintypes to there subtypes
-global maintype_to_subytpe_emdat
 maintype_to_subytpe_emdat = {'Drought': ['drought'],
  'Wildfire': ['wildfire', 'forest fire', 'land fire'],
  'Earthquake': ['ground movement', 'tsunami'],
@@ -35,7 +34,6 @@ maintype_to_subytpe_emdat = {'Drought': ['drought'],
   'typhoon',
   'hurricane']}
 
-global example_location
 example_location =     """ {"hazardLocation": [
     {
       "country": "Brazil",
@@ -61,7 +59,6 @@ example_location =     """ {"hazardLocation": [
      ]
      }
     """
-global example_date
 example_date =     """{"hazardDate": [
     {
       "startYear": "2017",
@@ -84,17 +81,15 @@ example_date =     """{"hazardDate": [
      ]
      }
     """
-global example_subtypes
-example_subtypes = """{"hazardSubtypes": [
-    [
-     "tornado",
-     "lightning",
-     "hail"
-    ]
-    ]
-    }"""
+#example_subtypes = """{"hazardSubtypes":
+#    [
+#     "tornado",
+#     "lightning",
+#     "hail"
+#    ]
+#    }"""
+example_subtypes = """["tornado", "lightning", "hail"]"""
 
-global example_impacts
 example_impacts = """{"impactSubtypes": [
     {
      "Population" : "[affected, displaced]"
