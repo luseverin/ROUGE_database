@@ -9,5 +9,6 @@
 - 1 test notebook for extracting data using LLM
 - 1 operational notebook for extracting data from all reports using LLM
 - 1 notebook for postprocessing results
+- 1 notebook to label reports
 - 1 notebook for the accuracy of the data extraction
 - notebooks for analysis of results and plotting
