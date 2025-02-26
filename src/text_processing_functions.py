@@ -1,5 +1,7 @@
 import re
 import numpy as np
+import pandas as pd
+import ast
 import spacy
 
 nlp = spacy.load("en_core_web_sm")
@@ -120,3 +122,48 @@ def select_hazard_description(text):
             if ((id_s-id_top) >= 5) :
                 id_end = id_s
     return text[id_top:id_end]
+
+def convert_labelled_chat_format(df_labelled) : 
+    """
+    Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city. 
+    """
+    df_labelled_chat = pd.DataFrame(columns=df_labelled.columns)
+    for index, row in df_labelled.iterrows():
+        #If no regions and cities 
+        if isinstance(row.region, float) and isinstance(row.city, float) :
+            df_labelled_chat = pd.concat([df_labelled_chat, row.to_frame().T], ignore_index=True)
+
+        else : 
+            #Add region 
+            if isinstance(row.region, str)  : 
+                # print(row.region)
+                regions = ast.literal_eval(row.region)
+                for region in regions : 
+                    row_append = row.copy()
+                    row_append['region'] = region
+                    row_append['city'] = None
+                    
+                    #Find the corresponding locationAnnotation
+                    # print(row)
+                    # print(row.locationAnnotation)
+                    locationsAnnotations = ast.literal_eval(row.locationAnnotation)
+                    for locationAnnot in locationsAnnotations :
+                        if re.search(region, locationAnnot, re.IGNORECASE) : 
+                            row_append['locationAnnotation'] = locationAnnot
+                            df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+    
+            #Add location
+            if isinstance(row.city, str) : 
+                cities = ast.literal_eval(row.city)
+                for city in cities : 
+                    row_append = row.copy()
+                    row_append['region'] = None
+                    row_append['city'] = city
+                    
+                    #Find the corresponding locationAnnotation
+                    locationsAnnotations = ast.literal_eval(row.locationAnnotation)
+                    for locationAnnot in locationsAnnotations :
+                        if re.search(city, locationAnnot, re.IGNORECASE) : 
+                            row_append['locationAnnotation'] = locationAnnot
+                            df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+    return df_labelled_chat
