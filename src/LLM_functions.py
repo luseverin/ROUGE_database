@@ -1,209 +1,222 @@
+#Functions to process data using LLMs
 import pandas as pd
-import json
-from collections import Counter
-import numpy as np
+import json as json
 import re
-import pycountry
-from sklearn.metrics.pairwise import cosine_similarity
-import copy as cp
+from copy import deepcopy
+from itertools import chain
+from src.constants import *
+from src.prompts import *
 
+def extract_outer_json(text):
+    start_index = text.find('{')
+    end_index = text.rfind('}')
 
-unique_hazards = ['Drought', 'Flood', 'Storm', 'Tornado', 'Storm surge', 'Heatwave', 'Coldwave', 'Mass movement', 'Cyclone', 'Tidal Wave', 'Wildfire'] 
-unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
-unique_country_names = [country.name for country in pycountry.countries]
-pattern = '|'.join(map(re.escape, unique_country_names))
-unique_dict = {
-    'Hazard' : unique_hazards, 
-    'Country' : unique_countries_ISO
-}
+    if start_index == -1 or end_index == -1 or start_index >= end_index:
+        return None  # Return None for empty JSON or invalid format
 
-def country_name_to_iso3(name):
+    extracted_json = text[start_index:end_index + 1]
+    return extracted_json
+
+def get_model_response(CLIENT, MODEL, prompt):
+  completion = CLIENT.chat.completions.create(
+    model=MODEL,
+    messages=[
+      {"role": "user", "content": prompt}
+    ],
+    temperature=0
+  )
+
+  return completion.choices[0].message.content
+
+def add_key_value_pairs(data, new_pairs):
+    """
+    Adds new key-value pairs to each dictionary in a list of dictionaries.
+
+    Parameters:
+    data (list): A list of dictionaries.
+    new_pairs (list or dict): A dictionary or list of dictionaries containing key-value pairs to be added.
+
+    Returns:
+    list: A list of dictionaries with the new key-value pairs added.
+    """
+    if isinstance(new_pairs, dict):
+        # If new_pairs is a dictionary, add its key-value pairs to each dictionary in data
+        for entry in data:
+            for key, value in new_pairs.items():
+                entry[key] = value
+    elif isinstance(new_pairs, list):
+        # If new_pairs is a list, add the corresponding dictionary's key-value pairs to the corresponding dictionary in data
+        for entry, new_pair in zip(data, new_pairs):
+            if isinstance(new_pair, dict):
+                for key, value in new_pair.items():
+                    entry[key] = value
+    else:
+        raise TypeError("new_pairs must be a dictionary or a list of dictionaries")
+
+    return data
+
+def check_result_json(result_json, label):
     try:
-        country = pycountry.countries.lookup(name)
-        return country.alpha_3
-    except LookupError:
+        answer = json.loads(result_json.replace("\n", ""))[label]
+    except Exception as e:
+        print("An unexpected error occurred:", e)
         return None
+    if not answer:
+        print("JSON is empty:", result_json)
+    return answer
 
-# Convert json to dataframe 
-def clean_output_df(results_json, out_cols=['Hazard','Country','Location','Start_Date','End_Date']):
-    df_all_list = []
-    for report_id, report in results_json.items():
-        results = report['results']
-        results_process = cp.deepcopy(results)
-        results_process = re.sub('[\{\}]', '', results_process)
-        results_process= results_process.split("\n")
-        results_process = results_process[1: -1]
-        columns=['Hazard','Country','Location','Start_Date','End_Date']
-        #df_results = pd.DataFrame(columns=columns)
-        df_list = []
-        haz_list = []
-        dict_results = dict()
-        for i, pair in enumerate(results_process[:]):
-            #print(str(i)+": "+pair)
-            if len(pair.split(":")) == 2:
-                key, value = pair.split(":")
-            else:
-                pass
-            key = re.sub("[\", ]","",key)  
+def identify_hazards(text, hazards_to_check):
+    hazards_identified = []
+    for hazard in hazards_to_check:
+        #test for event occurence
+        prompt = check_event_occurrence(text, hazard)
+        result = get_model_response(CLIENT, MODEL_NAME, prompt)
+        hazard_occurrence = int(''.join(re.findall("[01]", result)))
+        if hazard_occurrence == 1:
+            hazards_identified.append(hazard)
+            print(f"{hazard} occurred in the report area.")
+    return hazards_identified
 
-            if key == 'Hazard':
-                haz_list.append(re.sub("[\", ]","",key))
-                dict_haz = cp.copy(results_process[i:i+5]) 
-                dict_res={}
-                for j in np.arange(i,i+5):
-                    pairj = results_process[j]
-                    keyj, valuej = pairj.split(":")
-                    keyj = re.sub("[\", ,,]","",keyj)
-                    valuej = re.sub("[\",\[,\]]","",valuej)
-                    dict_res[keyj] = valuej[1:]#valuej
-                df_list.append(pd.DataFrame(dict_res,index=[0]))
-            
-            df_all = pd.concat(df_list)
-            df_all['appealCode'] = report_id
+def check_location(location_text):
+    # Check if 'country' key exists and has a value
+    if ("country" in location_text and location_text["country"]):
+        location_country = location_text["country"]
+        print("Location: ", location_country)
+    else:
+        print("Country not specified or missing:", location_text)
+        return None
+    # Check if 'city' key exists and has a value
+    if ("city" in location_text and location_text["city"]) or ("state" in location_text and location_text["state"]):
+        if location_text["city"] and location_text["state"]:
+            location_complete = f"{location_country}, {location_text['state']}, {location_text['city']}"
+        elif location_text["state"]:
+            location_complete = f"{location_country}, {location_text['state']}"
+        elif location_text["city"]:
+            location_complete = f"{location_country}, {location_text['city']}"
+        print("Location found: ", location_complete)
+    else:
+        print("City/State not specified or missing:", location_text)
+        location_complete = f"{location_country}"
+    return location_complete
 
-            #Separate if several countries are found  
-            expanded_df = pd.DataFrame(columns=df_all.columns)
-            for id_row, row in df_all.iterrows() : 
-                matched_countries = re.findall(pattern, row['Country'])
-                # If more than one country found 
-                #if len(matched_countries) > 1 :
-                for country in matched_countries:
-                    new_row = row.copy()
-                    new_row['Country'] = country
-                    expanded_df = pd.concat([expanded_df, pd.DataFrame([new_row])], ignore_index=True)
-                        
-        df_all_list.append(expanded_df)#.append(df_all)
-    return pd.concat(df_all_list)
+def identify_locations(text, hazard):
+    identified_locations = {}
+    prompt = get_event_location(text, hazard)
+    result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    result_json = extract_outer_json(result)
+    answer_location = check_result_json(result_json, "hazardLocation")
+    if len(answer_location) == 1:
+        location_complete = check_location(answer_location[0])
+        if location_complete:
+            identified_locations[location_complete] = answer_location[0]
+    if len(answer_location) >= 1:
+        for location in answer_location:
+            location_complete = check_location(location)
+            if location_complete:
+                identified_locations[location_complete] = location
+    return identified_locations
 
-# Functions for accuracy computation 
-def calculate_precision(df1, df2, precision_columns_list, unique_dict=unique_dict):
-    '''
-    df1 : Test DataFrame
-    df2 : Labbeled DataFrame
-    '''
-    # Replace "nan" with empty string in df2 for specified columns
-    for column in precision_columns_list:
-        df2[column] = ["" if str(value) == "nan" else value for value in df2[column]]
+def identify_dates(text, hazard, location_complete):
+    prompt = get_event_date(text, hazard, location_complete)
+    result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    result_json = extract_outer_json(result)
+    answer_date = check_result_json(result_json, "hazardDate")
+    return answer_date
 
-    # Initialize results dictionary
-    results = {col: {"psum": 0, "count": 0} for col in precision_columns_list}
+def identify_subtypes(text, hazard, location_complete, answer_date):
+    subtypes = maintype_to_subytpe_emdat[hazard]
+    hazard_date = deepcopy(answer_date)
+    if hazard_date:
+        del hazard_date[0]["hazardName"]
+    prompt = get_hazard_subtype(text, hazard, location_complete, hazard_date, subtypes)
+    result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    #result_json = extract_outer_json(result)
+    #answer_subtypes = check_result_json(result_json, "hazardSubtypes")
+    return result
 
-    # Group by 'doi' and calculate precision for each column
-    for id, df in df1.groupby("appealCode"):
-        tmp = df2[df2["appealCode"] == id].reset_index(drop=True)
-        tmp2 = df.reset_index(drop=True)
+def identify_impacts(text, hazard_subtypes, location_complete , hazard_date):
+    prompt = find_impact_types2(text, hazard_subtypes, location_complete , hazard_date)
+    result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    result_json = extract_outer_json(result)
+    answer_subtypes = check_result_json(result_json, "impactSubtypes")
+    return answer_subtypes
 
-        if tmp.shape[0] == tmp2.shape[0]:
-            for precision_column in precision_columns_list:
-                #For Hazard and Country, accuracy is computed by checking is the found attributes are matching 
-                if precision_column in ['Hazard', 'Hazard_main', 'Country'] : 
-                    unique_list = unique_dict[precision_column]
-                    
-                    # Create binary vectors for the two lists
-                    vector1 = [1 if hazard in sorted(tmp[precision_column]) else 0 for hazard in unique_list]
-                    vector2 = [1 if hazard in sorted(tmp2[precision_column]) else 0 for hazard in unique_list]
-        
-                    # Convert the vectors to numpy arrays and reshape them
-                    vector1 = np.array(vector1).reshape(1, -1)
-                    vector2 = np.array(vector2).reshape(1, -1)
-        
-                    # Compute the cosine similarity
-                    cos_sim = cosine_similarity(vector1, vector2)[0][0]
-                    results[precision_column]["psum"] += cos_sim
-                    results[precision_column]["count"] += 1
-                #For Location and Date, the accuracy look is a value is found when one should be found
-                #Do not look at the exact value
-                elif precision_column in ['Location', 'Start_Date', 'End_Date'] : 
-                    # Create binary vectors for the two lists
-                    n_tmp = sum(1 for value in tmp[precision_column] if (value != 'NULL') and (value != np.NaN))
-                    n_tmp2 = sum(1 for value in tmp2[precision_column] if (value != 'NULL') and (value != np.NaN))
-                    
-                    #cos_sim = cosine_similarity(vector1, vector2)[0][0]
-                    if n_tmp != 0 :
-                        results[precision_column]["psum"] += n_tmp2/n_tmp
-                        results[precision_column]["count"] += 1
-    # Calculate precision and create a DataFrame
-    precision_values = []
-    for precision_column in precision_columns_list:
-        if results[precision_column]["count"] > 0:
-            precision = results[precision_column]["psum"] / results[precision_column]["count"]
+def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=True, guess_impacts=False):
+    """Wrapper function to do all level promptings. Calls seaprate subfunctions per
+    each level:
+        Check if any hazard -> investigates_specific_events
+        Check specific hazard -> identify_hazards
+        Check event location -> get_event_location
+        Check event date -> get_event_date
+        Check event subtypes -> get_hazard_subtype
+        Check event impacts -> find_impact_types
+
+    """
+    response = []
+    count = 0
+    for rowid, row in df_labelled.iterrows():
+
+        reference_info = {
+            "appealCode": row["appealCode"],
+            "location": row["location"],
+            "date" : row["date"],
+            "disasterType": row["disasterType"]
+        }
+
+        text = row["nathaz_text"]
+
+        #ask LLM to identify main haz types from list
+        if guess_hazard_types:
+            hazards_to_check = list(maintype_to_subytpe_emdat.keys())
+
+        #just check that LLM can identify hazard identified with keyword search
         else:
-            precision = float('nan')  # Handle case where there is no data to calculate precision
-        precision_values.append(precision)
+            hazards_to_check = row['hazards_found']
 
-    precision_df = pd.DataFrame([precision_values], columns=precision_columns_list)
-    return precision_df
+        #test if a hazard occured, maybe unnecessary step?
+        prompt = investigates_specific_events(text)
+        result = get_model_response(CLIENT, MODEL_NAME, prompt)
+        specific_event = int(''.join(re.findall("[01]", result)))
 
-# Functions for accuracy computation 
-def calculate_precision_v2(df1, df2, precision_columns_list, unique_dict=unique_dict):
-    '''
-    df1 : Test DataFrame
-    df2 : Labbeled DataFrame
+        if not specific_event:
+            print(f"No hazard event identified in{row.index}")
+            continue
 
-    Look for unique type 
-    '''
-    # Replace "nan" with empty string in df2 for specified columns
-    for column in precision_columns_list:
-        df2[column] = ["" if str(value) == "nan" else value for value in df2[column]]
+        #identify hazards
+        hazards_identified = identify_hazards(text, hazards_to_check)
+        for hazard in hazards_identified:
+            locations_identified = identify_locations(text, hazard)
 
-    # Initialize results dictionary
-    results = {col: {"psum": 0, "count": 0} for col in precision_columns_list}
+            for location_complete, location in locations_identified.items():
 
-    # Group by 'doi' and calculate precision for each column
-    for id, df in df1.groupby("appealCode"):
-        tmp = df2[df2["appealCode"] == id].reset_index(drop=True)
-        tmp2 = df.reset_index(drop=True)
+                #add data entry
+                data = add_key_value_pairs([{"hazardType": hazard}], location)
 
-        for precision_column in precision_columns_list:
-            #For Hazard and Country, accuracy is computed by checking is the found attributes are matching 
-            if precision_column in ['Hazard', 'Hazard_subtype', 'Country'] : 
-                unique_list = unique_dict[precision_column]
+                #try to identify dates
+                ##!assumes only one date per event-location
+                answer_date = identify_dates(text, hazard, location_complete)
+                if answer_date:
+                    updated_data = deepcopy(add_key_value_pairs(data, answer_date))
 
-                #Select the unique set 
-                tmp_unique  = tmp[precision_column].unique()
+                if guess_subtypes:
+                    answer_subtypes = identify_subtypes(text, hazard, location_complete, answer_date)
+                    if answer_subtypes:
+                        updated_data = deepcopy(add_key_value_pairs(updated_data, {"hazardSubtypes":answer_subtypes}))
 
-                if precision_column == 'Hazard_subtype' : 
-                    tmp2_unique = set(
-                    elem
-                    for row in tmp2[precision_column].dropna()
-                    if isinstance(row, list)
-                    for elem in row)                                
-                else : 
-                    tmp2_unique = tmp2[precision_column].unique()
+                if guess_impacts:
+                    #for impact_cat, impact_types in impact_types_dict.items():
+                    #    answer_impacts = identify_impacts(text, answer_subtypes, location_complete , answer_date, impact_types)
+                    #    if answer_impacts:
+                    #        updated_data = deepcopy(add_key_value_pairs(updated_data, {impact_cat:answer_impacts}))
+                    answer_impacts = identify_impacts(text, answer_subtypes, location_complete , answer_date)
+                    if answer_impacts:
+                        updated_data = deepcopy(add_key_value_pairs(updated_data,answer_impacts))
+                updated_data = deepcopy(add_key_value_pairs(updated_data, reference_info))
+                response.append(deepcopy(updated_data))
 
-                # Create binary vectors for the two lists
-                vector1 = [1 if hazard in sorted(tmp_unique) else 0 for hazard in unique_list]
-                vector2 = [1 if hazard in sorted(tmp2_unique) else 0 for hazard in unique_list]
-    
-                # Convert the vectors to numpy arrays and reshape them
-                vector1 = np.array(vector1).reshape(1, -1)
-                vector2 = np.array(vector2).reshape(1, -1)
-    
-                # Compute the cosine similarity
-                cos_sim = cosine_similarity(vector1, vector2)[0][0]
-                results[precision_column]["psum"] += cos_sim
-                results[precision_column]["count"] += 1
-                
-            #For Location and Date, the accuracy look is a value is found when one should be found
-            #Do not look at the exact value
-            elif precision_column in ['Location', 'Start_Date', 'End_Date'] : 
-                # Create binary vectors for the two lists
-                n_tmp = sum(1 for value in tmp[precision_column] if (value != 'NULL') and (value != np.NaN))
-                n_tmp2 = sum(1 for value in tmp2[precision_column] if (value != 'NULL') and (value != np.NaN))
-                
-                #cos_sim = cosine_similarity(vector1, vector2)[0][0]
-                if n_tmp != 0 :
-                    results[precision_column]["psum"] += n_tmp2/n_tmp
-                    results[precision_column]["count"] += 1
-    # Calculate precision and create a DataFrame
-    precision_values = []
-    for precision_column in precision_columns_list:
-        if results[precision_column]["count"] > 0:
-            precision = results[precision_column]["psum"] / results[precision_column]["count"]
-        else:
-            precision = float('nan')  # Handle case where there is no data to calculate precision
-        precision_values.append(precision)
 
-    precision_df = pd.DataFrame([precision_values], columns=precision_columns_list)
-    return precision_df
-    
+
+
+    response_unnested = list(chain(*response))
+    response_df = pd.DataFrame(response_unnested)
+    return(response, response_df)
