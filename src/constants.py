@@ -1,5 +1,5 @@
 #hazard subtypes directly taken from EMDAT
-hazard_all_subtype_emdat = """["drought", "forest fire", "land fire", "ground movement", "tsunami", "avalanche", "landslide", "rockfall", "sudden subsidence", "mudslide", "ash fall", "lava flow", "pyroclastic flow", "lahar", "coastal flood", "flash flood", "riverine flood", "ice jam flood", "rogue wave", "seiche", "coldwave", "heatwave", "severe winter conditions", "derecho", "hail", "lightning/thunderstorm", "sand/dust storm", "winter storm/blizzard", "storm surge", "tornado", "extra-tropical storm", "tropical cyclone" ]"""
+hazard_all_subtype_emdat = """["drought", "wildfire", "forest fire", "land fire", "ground movement", "tsunami", "avalanche", "landslide", "rockfall", "sudden subsidence", "mudslide", "ash fall", "lava flow", "pyroclastic flow", "lahar", "coastal flood", "flash flood", "riverine flood", "ice jam flood", "rogue wave", "seiche", "coldwave", "heatwave", "severe winter conditions", "derecho", "hail", "lightning", "winterstorm", "storm surge", "tornado", "extra-tropical storm", "tropical storm" ]"""
 
 #dict to match emdat maintypes to there subtypes
 maintype_to_subytpe_emdat = {'Drought': ['drought'],
