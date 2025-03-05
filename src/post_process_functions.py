@@ -14,6 +14,19 @@ def country_name_to_iso3(name):
         return country.alpha_3
     except LookupError:
         return None
+def separate_locs(locations):
+    """Separate locations separated by a comma"""
+    if pd.isnull(locations):
+        return None
+    else:
+        return locations.split(",")
+
+def remove_startspace(loc_list):
+    """Remove space at start of string"""
+    if loc_list is None:
+        return None
+    else:
+        return [loc.strip() for loc in loc_list]
 
 def convert_labelled_chat_format(df_labelled) :
     """
