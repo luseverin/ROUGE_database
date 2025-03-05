@@ -6,6 +6,7 @@ from copy import deepcopy
 from itertools import chain
 from src.constants import *
 from src.prompts import *
+from src.client import CLIENT, MODEL_NAME
 
 def extract_outer_json(text):
     start_index = text.find('{')
@@ -159,7 +160,7 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
         reference_info = {
             "appealCode": row["appealCode"],
             "location": row["location"],
-            "date" : row["date"],
+            "reportDate" : row["reportDate"],
             "disasterType": row["disasterType"]
         }
 
