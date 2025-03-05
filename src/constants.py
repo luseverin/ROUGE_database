@@ -35,3 +35,10 @@ impact_types_dict = {
     "population" : ["displaced", "affected", "deaths", "injured"]
 
 }
+
+#Countries 
+import pycountry
+import re 
+unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
+unique_country_names = [country.name for country in pycountry.countries]
+pattern_country = '|'.join(map(re.escape, unique_country_names))
