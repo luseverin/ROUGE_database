@@ -180,7 +180,7 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
         specific_event = int(''.join(re.findall("[01]", result)))
 
         if not specific_event:
-            print(f"No hazard event identified in{row.index}")
+            print(f"No hazard event identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
             continue
 
         #identify hazards
