@@ -106,8 +106,9 @@ def find_hazard_types(text, hazard_types):
     return prompt
 
 #only one query per hazard location currently; should we do one query per each found subhazard?
-def find_impact_types(text, hazard_subtypes, hazard_location , hazard_date, impact_types):
-    """Find associated impacts from identified hazard subtypes, location, and date"""
+def find_impact_types_list(text, hazard_subtypes, hazard_location , hazard_date, impact_types):
+    """Find associated impacts from identified hazard subtypes, location, and date.
+    Chosing from a list of impact_types"""
     prompt = f"""
     Context information is below.
     ---
@@ -123,8 +124,9 @@ def find_impact_types(text, hazard_subtypes, hazard_location , hazard_date, impa
     """
     return prompt
 
-def find_impact_types2(text, hazard_subtypes, hazard_location , hazard_date):
-    """Find associated impacts from identified hazard subtypes, location, and date"""
+def find_impact_types_unconstrained(text, hazard_subtypes, hazard_location , hazard_date):
+    """Find associated impacts from identified hazard subtypes, location, and date.
+    No constraints on the format."""
     prompt = f"""
     Context information is below.
     ---
@@ -139,6 +141,76 @@ def find_impact_types2(text, hazard_subtypes, hazard_location , hazard_date):
     Provide the answer in JSON format.
     If information is missing, leave it empty. Do not add notes or extra text.
     Here is an example of how the structure of the JSON must be:{example_impacts}
+    """
+    return prompt
+
+def find_impact_types_categories(text, hazard_subtypes, hazard_location , hazard_date):
+    """Find associated impacts from identified hazard subtypes, location, and date.
+    Try to identify impacts from different categories."""
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: For the {hazard_subtypes} event that affected {hazard_location} between
+    the {hazard_date} dates, extract, if possible the list of impact types from the following categories:
+    "Human impacts": The impacts on the human population resulting from the event. Look for words such as "Affected People", "Injured People", "Displaced People"," Homeless People", "Missing People", "Human Deaths".
+    "Transportation Infrastructure": The impacts on the transportation infrastructures resulting from the event. Look for words such as "roads", "bridges", "railways", and "highways".
+    "Water, Sanitation, and Hygiene Infrastructure": The impacts on the water, sanitation, and hygiene infrastructure resulting from the event. Look for words such as "sewage networks", "drainage systems", "wastewater treatment plants", etc.
+    "Healthcare Infrastructure": The impacts on the healthcare infrastructure resulting from the event. Look for words such as "hospitals", "healthcare centers", "pharmacies", "clinics", etc.
+    "IT and Communication Infrastructure": The impacts on the IT and communication infrastructure resulting from the event. Look for words such as "data centers", "communication towers", "cables", etc.
+    "Residential Buildings": The impacts on the residential buildings resulting from the event.
+    "Informal settlements": The impacts on informal settlements resulting from the event. Look for words such as "refugee camps", "slums", "tents", etc.
+    "Education Infrastructure": The impacts on education infrastructure resulting from the event. Look for words such as "schools", "universities", etc.
+    Answer with the list of the impact types.
+    Only include impact categories from the followng list: ["Human impacts","Water, Sanitation, and Hygiene Infrastructure","Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]
+    Provide the answer in python list format.
+    If information is missing, leave it empty. Do not add notes or extra text.
+    Here is an example of how the structure of the python list must be: {example_impact_types}
+    """
+    return prompt
+
+def make_impact_cat_prompt(impact_types):
+    prompt_impact_dict = {
+        "Human impacts":
+        "'Affected People': Total number of individuals impacted by the hazard event (the term affected must be mentioned)."\
+        "'Injured People': Number of people injured, including those hospitalized or admitted (the term injured must be used)."\
+        "'Displaced People': Number of individuals temporarily relocated to safer areas due to the event."\
+        "'Homeless People': Number of individuals who lost their homes."\
+        "'Missing People': Number of people unaccounted for following the event."\
+        "'Human Deaths': Number of fatalities caused by the hazard.",
+        "Transportation Infrastructure": "'Transportation Infrastructure': Location of transportation infrastructure such as roads, bridges, railways, and highways impacted by a hazard. If you identify impacts but the location of the impacts is unknown, write “Location unknown”. Write the different locations in a python list format.",
+        "Water Sanitation and Hygiene Infrastructure": "'Water Sanitation and Hygiene Infrastructure: Number of water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a hazard.",
+        "Healthcare Infrastructure":"'Healthcare Infrastructure': Number of healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc.  impacted by a hazard.",
+        "IT and Communication Infrastructure":"'IT and Communication Infrastructure': Number of IT and communication infrastructure  such as data centers, communication towers, and cables impacted by a hazard.",
+        "Residential Buildings":"'Residential Buildings': Number of residential buildings impacted by a hazard.",
+        "Informal Settlements":"'Informal Settlements': Number of informal settlements such as refugee camps, slums, tents, etc. impacted by a hazard.",
+        "Education Infrastructure":"'Education Infrastructure': Number of education infrastructure such as schools, universities, etc. impacted by a hazard.",
+    }
+    return """\n""".join([prompt_impact_dict[imptype] for imptype in impact_types])
+
+def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impact_types):
+    """Find associated impacts from identified hazard subtypes, location, and date.
+    Try to quantify numerically impacts from different categories."""
+    impact_types_prompt = make_impact_cat_prompt(impact_types)
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: For the {hazard_subtypes} event that affected {hazard_location} between
+    the {hazard_date} dates, extract, if possible information on the following impact categories:
+    {impact_types_prompt}
+
+    If information is missing, leave it empty. Do not add notes or extra text.
+    "impactsAnnotation": Provide the text excerpt from where you extracted the impacts information.
+    General Instructions for Numerical Values: use integers; do not use commas (e.g., 1000 instead of 1,000),
+    sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9),
+    If an impact for an impact category can be identified but not quantified with a numerical value, write "True".
+    Provide the answer in JSON format.
+    Here is an example of how the structure of the JSON must be:{example_impacts_quant}
     """
     return prompt
 
@@ -195,9 +267,32 @@ example_subtypes = """["tornado", "lightning", "hail"]"""
 
 example_impacts = """{"impactSubtypes": [
     {
-     "Population" : "[affected, displaced]"
+     "Population" : "[affected, displaced]",
      "Infrastructures" : "[roads, bridges]",
      "impactsAnnotation :""
      }
     ]
     }"""
+
+example_impact_types = """["Healthcare Infrastructure", "Education Infrastructure"]"""
+
+example_impacts_quant =     """{"impactSubtypes": [
+    {
+      "Affected People": "10000",
+      "Injured People": "2500",
+      "Displaced People": "9000",
+      "Homeless People": "True",
+      "Missing People": True,
+      "Human Deaths": "2",
+      "Transportation Infrastructure": ["Abu Ahmad", "Port Sudan"]
+      "Water Sanitation and Hygiene Infrastructure": "True",
+      "Healthcare Infrastructure": 4,
+      "IT and Communication Infrastructure": "True",
+      "Residential Buildings": "1000",
+      "Informal Settlements": "True",
+      "Education Infrastructure": "1",
+      "impactsAnnotation :""
+     }
+     ]
+     }
+    """

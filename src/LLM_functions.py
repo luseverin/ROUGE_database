@@ -135,14 +135,32 @@ def identify_subtypes(text, hazard, location_complete, answer_date):
     #answer_subtypes = check_result_json(result_json, "hazardSubtypes")
     return result
 
-def identify_impacts(text, hazard_subtypes, location_complete , hazard_date):
-    prompt = find_impact_types2(text, hazard_subtypes, location_complete , hazard_date)
+def identify_impacts_simple(text, hazard_subtypes, location_complete , hazard_date):
+    """simple first version of impact data extraction"""
+    prompt = find_impact_types_unconstrained(text, hazard_subtypes, location_complete , hazard_date)
     result = get_model_response(CLIENT, MODEL_NAME, prompt)
     result_json = extract_outer_json(result)
     answer_subtypes = check_result_json(result_json, "impactSubtypes")
     return answer_subtypes
 
-def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=True, guess_impacts=False):
+def identify_impacts_cat(text, hazard_subtypes, location_complete , hazard_date):
+    """Identify categories of impacts"""
+    prompt = find_impact_types_categories(text, hazard_subtypes, location_complete , hazard_date)
+    result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    #result_json = extract_outer_json(result)
+    #answer_subtypes = check_result_json(result_json, "impactSubtypes")
+    return result
+
+def identify_impacts_quant(text, hazard_subtypes, location_complete , hazard_date, impact_types):
+    """Quantify impacts from identified impact categories"""
+    prompt = quantify_impacts(text, hazard_subtypes, location_complete , hazard_date, impact_types)
+    result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    result_json = extract_outer_json(result)
+    answer_subtypes = check_result_json(result_json, "impactSubtypes")
+    return answer_subtypes
+
+def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=True, guess_impacts_simple=False,
+                          guess_impacts_quant=False):
     """Wrapper function to do all level promptings. Calls seaprate subfunctions per
     each level:
         Check if any hazard -> investigates_specific_events
@@ -204,14 +222,24 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
                     if answer_subtypes:
                         updated_data = deepcopy(add_key_value_pairs(updated_data, {"hazardSubtypes":answer_subtypes}))
 
-                if guess_impacts:
+                if guess_impacts_simple:
                     #for impact_cat, impact_types in impact_types_dict.items():
                     #    answer_impacts = identify_impacts(text, answer_subtypes, location_complete , answer_date, impact_types)
                     #    if answer_impacts:
                     #        updated_data = deepcopy(add_key_value_pairs(updated_data, {impact_cat:answer_impacts}))
-                    answer_impacts = identify_impacts(text, answer_subtypes, location_complete , answer_date)
+                    answer_impacts = identify_impacts_simple(text, answer_subtypes, location_complete , answer_date)
                     if answer_impacts:
                         updated_data = deepcopy(add_key_value_pairs(updated_data,answer_impacts))
+                elif guess_impacts_quant:
+                    answer_impacts_cat = identify_impacts_cat(text, answer_subtypes, location_complete , answer_date)
+                    if answer_impacts_cat:
+                        updated_data = deepcopy(add_key_value_pairs(updated_data, {"impactTypes":answer_impacts_cat}))
+                        answer_impacts_cat = json.loads(answer_impacts_cat) #convert to list
+                        answer_impacts_quant = identify_impacts_quant(text, answer_subtypes, location_complete , answer_date, answer_impacts_cat)
+                        if answer_impacts_quant:
+                            updated_data = deepcopy(add_key_value_pairs(updated_data, answer_impacts_quant))
+
+
                 updated_data = deepcopy(add_key_value_pairs(updated_data, reference_info))
                 response.append(deepcopy(updated_data))
 
