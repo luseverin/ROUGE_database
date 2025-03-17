@@ -25,9 +25,7 @@ maintype_to_subytpe_emdat = {'Drought': ['drought'],
   'tornado',
   'winter storm',
   'extra-tropical storm',
-  'tropical storm',
-  'typhoon',
-  'hurricane']}
+  'tropical storm']}
 
 #impact types dict
 impact_types_dict = {
