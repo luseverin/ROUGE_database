@@ -143,13 +143,23 @@ def identify_impacts_simple(text, hazard_subtypes, location_complete , hazard_da
     answer_subtypes = check_result_json(result_json, "impactSubtypes")
     return answer_subtypes
 
-def identify_impacts_cat(text, hazard_subtypes, location_complete , hazard_date):
+def identify_impacts_cat(text, hazard_subtypes, location_complete , hazard_date, impcat_to_check):
     """Identify categories of impacts"""
-    prompt = find_impact_types_categories(text, hazard_subtypes, location_complete , hazard_date)
-    result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    #result_json = extract_outer_json(result)
-    #answer_subtypes = check_result_json(result_json, "impactSubtypes")
-    return result
+    impcat_identified = []
+    for impcat, imp_description in impcat_to_check.items():
+        #test for event occurence
+        prompt = find_impact_types_categories(text, hazard_subtypes, location_complete , hazard_date, imp_description)
+        result = get_model_response(CLIENT, MODEL_NAME, prompt)
+        impcat_occurrence = int(''.join(re.findall("[01]", result)))
+        if impcat_occurrence == 1:
+            impcat_identified.append(impcat)
+            print(f"{impcat} identified in the report area.")
+    return impcat_identified
+    #prompt = find_impact_types_categories(text, hazard_subtypes, location_complete , hazard_date)
+    #result = get_model_response(CLIENT, MODEL_NAME, prompt)
+    ##result_json = extract_outer_json(result)
+    ##answer_subtypes = check_result_json(result_json, "impactSubtypes")
+    #return result
 
 def identify_impacts_quant(text, hazard_subtypes, location_complete , hazard_date, impact_types):
     """Quantify impacts from identified impact categories"""
@@ -209,7 +219,7 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
             for location_complete, location in locations_identified.items():
 
                 #add data entry
-                data = add_key_value_pairs([{"hazardType": hazard}], location)
+                data = add_key_value_pairs([reference_info, {"hazardType": hazard}], location)
 
                 #try to identify dates
                 ##!assumes only one date per event-location
@@ -231,16 +241,16 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
                     if answer_impacts:
                         updated_data = deepcopy(add_key_value_pairs(updated_data,answer_impacts))
                 elif guess_impacts_quant:
-                    answer_impacts_cat = identify_impacts_cat(text, answer_subtypes, location_complete , answer_date)
+                    answer_impacts_cat = identify_impacts_cat(text, answer_subtypes, location_complete , answer_date, impact_cat_desc_dict)
                     if answer_impacts_cat:
                         updated_data = deepcopy(add_key_value_pairs(updated_data, {"impactTypes":answer_impacts_cat}))
-                        answer_impacts_cat = json.loads(answer_impacts_cat) #convert to list
+                        #answer_impacts_cat = json.loads(answer_impacts_cat) #convert to list
                         answer_impacts_quant = identify_impacts_quant(text, answer_subtypes, location_complete , answer_date, answer_impacts_cat)
                         if answer_impacts_quant:
                             updated_data = deepcopy(add_key_value_pairs(updated_data, answer_impacts_quant))
 
 
-                updated_data = deepcopy(add_key_value_pairs(updated_data, reference_info))
+                #updated_data = deepcopy(add_key_value_pairs(updated_data, reference_info))
                 response.append(deepcopy(updated_data))
 
 
