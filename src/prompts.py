@@ -201,7 +201,8 @@ def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impac
     impactsAnnotation": Provide the text excerpt from where you extracted the impacts information.
     If information is missing, leave it empty. Do not add notes or extra text.
     General Instructions for Numerical Values: use integers; do not use commas (e.g., 1000 instead of 1,000),
-    sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9),
+    sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9).
+    If only the number of affected households or houses is given, assume each unit equals three people.
     If an impact for an impact category can be identified but not quantified with a numerical value, write "True".
     Provide the answer in JSON format.
     Here is an example of how the structure of the JSON must be:{example_impacts_quant}
