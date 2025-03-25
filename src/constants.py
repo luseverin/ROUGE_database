@@ -36,6 +36,16 @@ impact_types_dict = {
 impact_cat_list = ["Human Impacts","Transportation Infrastructure",
                    "Healthcare Infrastructure","IT and Communication Infrastructure",
                    "Residential Buildings","Informal Settlements","Education Infrastructure"]
+impact_cat_desc_dict = {
+    "Human impacts": "The impacts on the human population resulting from the event. Look for words such as 'Affected People', 'Injured People', 'Displaced People','Homeless People', 'Missing People', 'Human Deaths'.",
+    "Transportation Infrastructure": "The impacts on the transportation infrastructures resulting from the event. Look for words such as 'roads', 'bridges', 'railways', and 'highways'.",
+    "Water, Sanitation, and Hygiene Infrastructure": "The impacts on the water, sanitation, and hygiene infrastructure resulting from the event. Look for words such as 'sewage networks', 'drainage systems', 'wastewater treatment plants', etc.",
+    "Healthcare Infrastructure": "The impacts on the healthcare infrastructure resulting from the event. Look for words such as 'hospitals', 'healthcare centers', 'pharmacies', 'clinics', etc.",
+    "IT and Communication Infrastructure": "The impacts on the IT and communication infrastructure resulting from the event. Look for words such as 'data centers', 'communication towers', 'cables', etc.",
+    "Residential Buildings": "The impacts on the residential buildings resulting from the event.",
+    "Informal Settlements": "The impacts on informal settlements resulting from the event. Look for words such as 'refugee camps', 'slums', 'tents', etc.",
+    "Education Infrastructure": "The impacts on education infrastructure resulting from the event. Look for words such as 'schools', 'universities', etc."
+}
 
 #Countries
 import pycountry
