@@ -144,7 +144,7 @@ def find_impact_types_unconstrained(text, hazard_subtypes, hazard_location , haz
     """
     return prompt
 
-def find_impact_types_categories(text, hazard_subtypes, hazard_location , hazard_date):
+def find_impact_types_categories(text, hazard_subtypes, hazard_location , hazard_date, impact_cat):
     """Find associated impacts from identified hazard subtypes, location, and date.
     Try to identify impacts from different categories."""
     prompt = f"""
@@ -154,20 +154,10 @@ def find_impact_types_categories(text, hazard_subtypes, hazard_location , hazard
     ---
     Using information from the text above and no previous knowledge, please answer the query.
     Query: For the {hazard_subtypes} event that affected {hazard_location} between
-    the {hazard_date} dates, extract, if possible the list of impact types from the following categories:
-    "Human impacts": The impacts on the human population resulting from the event. Look for words such as "Affected People", "Injured People", "Displaced People"," Homeless People", "Missing People", "Human Deaths".
-    "Transportation Infrastructure": The impacts on the transportation infrastructures resulting from the event. Look for words such as "roads", "bridges", "railways", and "highways".
-    "Water, Sanitation, and Hygiene Infrastructure": The impacts on the water, sanitation, and hygiene infrastructure resulting from the event. Look for words such as "sewage networks", "drainage systems", "wastewater treatment plants", etc.
-    "Healthcare Infrastructure": The impacts on the healthcare infrastructure resulting from the event. Look for words such as "hospitals", "healthcare centers", "pharmacies", "clinics", etc.
-    "IT and Communication Infrastructure": The impacts on the IT and communication infrastructure resulting from the event. Look for words such as "data centers", "communication towers", "cables", etc.
-    "Residential Buildings": The impacts on the residential buildings resulting from the event.
-    "Informal settlements": The impacts on informal settlements resulting from the event. Look for words such as "refugee camps", "slums", "tents", etc.
-    "Education Infrastructure": The impacts on education infrastructure resulting from the event. Look for words such as "schools", "universities", etc.
-    Answer with the list of the impact types.
-    Only include impact categories from the followng list: ["Human impacts","Water, Sanitation, and Hygiene Infrastructure","Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]
-    Provide the answer in python list format.
-    If information is missing, leave it empty. Do not add notes or extra text.
-    Here is an example of how the structure of the python list must be: {example_impact_types}
+    the {hazard_date} dates, extract, identify if the following type of impact occured:
+    {impact_cat}
+    Answer with 1 or 0. If yes, answer 1. If not, answer 0.
+    Answer with either 1 or 0 and do not add extra text or notes.
     """
     return prompt
 
@@ -181,14 +171,19 @@ def make_impact_cat_prompt(impact_types):
         "'Missing People': Number of people unaccounted for following the event."\
         "'Human Deaths': Number of fatalities caused by the hazard.",
         "Transportation Infrastructure": "'Transportation Infrastructure': Location of transportation infrastructure such as roads, bridges, railways, and highways impacted by a hazard. If you identify impacts but the location of the impacts is unknown, write “Location unknown”. Write the different locations in a python list format.",
-        "Water Sanitation and Hygiene Infrastructure": "'Water Sanitation and Hygiene Infrastructure: Number of water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a hazard.",
+        "Water, Sanitation, and Hygiene Infrastructure": "'Water Sanitation and Hygiene Infrastructure: Number of water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a hazard.",
         "Healthcare Infrastructure":"'Healthcare Infrastructure': Number of healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc.  impacted by a hazard.",
         "IT and Communication Infrastructure":"'IT and Communication Infrastructure': Number of IT and communication infrastructure  such as data centers, communication towers, and cables impacted by a hazard.",
         "Residential Buildings":"'Residential Buildings': Number of residential buildings impacted by a hazard.",
         "Informal Settlements":"'Informal Settlements': Number of informal settlements such as refugee camps, slums, tents, etc. impacted by a hazard.",
         "Education Infrastructure":"'Education Infrastructure': Number of education infrastructure such as schools, universities, etc. impacted by a hazard.",
     }
-    return """\n""".join([prompt_impact_dict[imptype] for imptype in impact_types])
+    try:
+        prompt_impquant = """\n""".join([prompt_impact_dict[imptype] for imptype in impact_types])
+    except ValueError as e:
+        print(e)
+        prompt_impquant = None
+    return prompt_impquant
 
 def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impact_types):
     """Find associated impacts from identified hazard subtypes, location, and date.
@@ -201,11 +196,10 @@ def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impac
     ---
     Using information from the text above and no previous knowledge, please answer the query.
     Query: For the {hazard_subtypes} event that affected {hazard_location} between
-    the {hazard_date} dates, extract, if possible information on the following impact categories:
+    the {hazard_date} dates, extract, if possible information on the following type of  categories:
     {impact_types_prompt}
-
+    impactsAnnotation": Provide the text excerpt from where you extracted the impacts information.
     If information is missing, leave it empty. Do not add notes or extra text.
-    "impactsAnnotation": Provide the text excerpt from where you extracted the impacts information.
     General Instructions for Numerical Values: use integers; do not use commas (e.g., 1000 instead of 1,000),
     sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9),
     If an impact for an impact category can be identified but not quantified with a numerical value, write "True".
