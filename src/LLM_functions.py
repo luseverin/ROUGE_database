@@ -214,18 +214,22 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
         #identify hazards
         hazards_identified = identify_hazards(text, hazards_to_check)
         for hazard in hazards_identified:
-            locations_identified = identify_locations(text, hazard)
+            #add data entry with hazard and reference info
+            data = add_key_value_pairs([reference_info], {"hazardType": hazard})
 
+            #identify locations
+            locations_identified = identify_locations(text, hazard)
+            #loop over identified locations
             for location_complete, location in locations_identified.items():
 
-                #add data entry
-                data = add_key_value_pairs([reference_info, {"hazardType": hazard}], location)
+                #add location to data
+                updated_data = deepcopy(add_key_value_pairs(data, location))
 
                 #try to identify dates
                 ##!assumes only one date per event-location
                 answer_date = identify_dates(text, hazard, location_complete)
                 if answer_date:
-                    updated_data = deepcopy(add_key_value_pairs(data, answer_date))
+                    updated_data = deepcopy(add_key_value_pairs(updated_data, answer_date))
 
                 if guess_subtypes:
                     answer_subtypes = identify_subtypes(text, hazard, location_complete, answer_date)
