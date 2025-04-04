@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import copy as cp
 from constants import *
 import ast
+from geopy.distance import geodesic
 
 
 unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
@@ -206,3 +207,48 @@ def calculate_precision_per_hazardSubtypes(df_chat, df_labelled, precision_colum
         precision_haz = calculate_precision_per_report(df_chat_haz, df_labelled_haz, precision_columns_list, unique_dict)
         precision_dict[hazardSubtype] = precision_haz
     return precision_dict
+
+# Compute distance in locations
+def centeroidnp(arr):
+    length = arr.shape[0]
+    sum_x = np.sum(arr[:, 0])
+    sum_y = np.sum(arr[:, 1])
+    return sum_x/length, sum_y/length
+
+def centroid_per_event(reports, grouping_columns = ["appealCode", "hazardType", "hazardSubtypes", "country"]) :
+    """
+    Group per event defined with grouping columns 
+    """
+    reports_centroids = pd.DataFrame(columns = grouping_columns+["longitude", "latitude"])
+    
+    reports[grouping_columns] = reports[grouping_columns].fillna('missing')
+    reports_events = reports.groupby(grouping_columns)
+
+    #Compute the centroid per event 
+    keys_events = reports_events.groups.keys()
+    
+    #Compute the accuracy per event 
+    for event in keys_events:
+        report_event_loop = reports_events.get_group(event)         
+        coordinates_event_loop = np.column_stack((report_event_loop["longitude"], report_event_loop["latitude"]))
+        centroid = centeroidnp(coordinates_event_loop)
+        
+        report_event_centroid = pd.DataFrame([event], columns=grouping_columns)
+        report_event_centroid['longitude'] = centroid[0]
+        report_event_centroid['latitude'] = centroid[1]
+        reports_centroids = pd.concat([reports_centroids, report_event_centroid], axis=0)
+    return reports_centroids
+
+def compute_distance(df):
+    """
+    Compute the geodesic distance (in km) between two points given by 
+    (longitude, latitude) and (longitude_chat, latitude_chat).
+    Returns NaN if any coordinate is NaN.
+    """
+    def haversine(row):
+        if pd.isna(row['longitude']) or pd.isna(row['latitude']) or pd.isna(row['longitude_chat']) or pd.isna(row['latitude_chat']):
+            return np.nan
+        return geodesic((row['latitude'], row['longitude']), (row['latitude_chat'], row['longitude_chat'])).km
+    
+    df['distance_km'] = df.apply(haversine, axis=1)
+    return df

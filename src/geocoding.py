@@ -51,7 +51,6 @@ def geocoding_labelled_reports(df_labelled_chat, print_info=False) :
         else:
             finest_loc_id = "country"
             finest_loc_vals = row.country
-            # print("No location information for response: ", row.appealCode)
         if finest_loc_id:
             time_last_request = time.time()
             if finest_loc_id != "country" : 
@@ -67,7 +66,8 @@ def geocoding_labelled_reports(df_labelled_chat, print_info=False) :
 
             #If no result for a query with region or city -> Try again a query with country only 
             if (nominatim_result is None) and (finest_loc_id != "country"):
-                print("No results for query: ", nominatim_query, "Try country only")
+                if print_info : 
+                    print("No results for query: ", nominatim_query, "Try country only")
                 #Change to try with country 
                 finest_loc_id = "country"
                 finest_loc_vals = row.country
@@ -81,7 +81,8 @@ def geocoding_labelled_reports(df_labelled_chat, print_info=False) :
                 
             #Test if the query gives a results
             if nominatim_result is None :
-                print("No results for query: ", nominatim_query)
+                if print_info : 
+                    print("No results for query: ", nominatim_query)
             else:
                 ## Double check that the known information is similar to the one found
                 # similarity = Levenshtein.normalized_similarity(finest_loc_vals, nominatim_result.raw['name'])
