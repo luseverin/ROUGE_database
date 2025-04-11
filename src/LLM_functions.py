@@ -56,9 +56,11 @@ def add_key_value_pairs(data, new_pairs):
 
     return data
 
-def check_result_json(result_json, label):
+def check_result_json(result_json, label=None):
     try:
-        answer = json.loads(result_json.replace("\n", ""))[label]
+        answer = json.loads(result_json.replace("\n", ""))
+        if label:
+            answer = answer[label]
     except Exception as e:
         print("An unexpected error occurred:", e)
         return None
