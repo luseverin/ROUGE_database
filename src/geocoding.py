@@ -32,9 +32,11 @@ list_admin_words = [
     "Village", "Hamlet", "Municipality", "Governorate", "Autonomous Region",
     "County Borough", "Council Area", "Federal District", "Locality"
 ]
+
 def remove_admin_words(location_str) :
     for word in list_admin_words:
         location_str = location_str.replace(word, "").strip()
+    location_str = ' '.join(location_str.split())
     return location_str
 
 def geocoding_reports_location(df, print_info=False, locations_levels=['country', 'region', 'state', 'city']) :
@@ -52,7 +54,7 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
         country = row["country"]
         if row.location:
             finest_loc_id = "location"
-            finest_loc_vals = row.city
+            finest_loc_vals = row.location
         else:
             finest_loc_id = "country"
             finest_loc_vals = row.country
