@@ -7,6 +7,7 @@ import pycountry
 from sklearn.metrics.pairwise import cosine_similarity
 import copy as cp
 from constants import *
+from geocoding import remove_admin_words
 import ast
 from geopy.distance import geodesic
 
@@ -15,7 +16,7 @@ unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
 unique_country_names = [country.name for country in pycountry.countries]
 pattern = '|'.join(map(re.escape, unique_country_names))
 unique_dict = {
-    'hazardType' : maintype_to_subytpe_emdat.keys(),
+    'hazardType' : list(maintype_to_subytpe_emdat.keys()),
     'hazardSubtypes' : ast.literal_eval(hazard_all_subtype_emdat),
     'country' : unique_country_names, 
     'startYear' : np.arange(1980, 2025), 
@@ -24,84 +25,20 @@ unique_dict = {
     'endYear' : np.arange(1980, 2025), 
     'endMonth' : np.arange(1, 13), 
     'endDay' : np.arange(1, 32), 
-    
+    'impactSubtypes' : impactSubtype_list
 }
 
-# Functions for accuracy computation
-def calculate_precision_v2(df_chat, df_labelled, precision_columns_list, unique_dict=unique_dict):
-    '''
-    df1 : Test DataFrame
-    df2 : Labbeled DataFrame
+list_hazard_words = [
+    "tropical", "cyclone", "hurricane", "typhoon", "storm", "extra-tropical"
+]
 
-    Look for unique type
-    '''
-    # Replace "nan" with empty string in df2 for specified columns
-    for column in precision_columns_list:
-        df2[column] = ["" if str(value) == "nan" else value for value in df2[column]]
+def remove_hazard_words(hazardName_str) :
+    for word in list_hazard_words:
+        hazardName_str = hazardName_str.replace(word, "").strip()
+    hazardName_str = ' '.join(hazardName_str.split())
+    return hazardName_str
 
-    # Initialize results dictionary
-    results = {col: {"psum": 0, "count": 0} for col in precision_columns_list}
-
-    # Group by 'doi' and calculate precision for each column
-    for id, df in df1.groupby("appealCode"):
-        tmp = df2[df2["appealCode"] == id].reset_index(drop=True)
-        tmp2 = df.reset_index(drop=True)
-
-        for precision_column in precision_columns_list:
-            #For Hazard and Country, accuracy is computed by checking is the found attributes are matching
-            if precision_column in ['Hazard', 'Hazard_subtype', 'Country'] :
-                unique_list = unique_dict[precision_column]
-
-                #Select the unique set
-                tmp_unique  = tmp[precision_column].unique()
-
-                if precision_column == 'Hazard_subtype' :
-                    tmp2_unique = set(
-                    elem
-                    for row in tmp2[precision_column].dropna()
-                    if isinstance(row, list)
-                    for elem in row)
-                else :
-                    tmp2_unique = tmp2[precision_column].unique()
-
-                # Create binary vectors for the two lists
-                vector1 = [1 if hazard in sorted(tmp_unique) else 0 for hazard in unique_list]
-                vector2 = [1 if hazard in sorted(tmp2_unique) else 0 for hazard in unique_list]
-
-                # Convert the vectors to numpy arrays and reshape them
-                vector1 = np.array(vector1).reshape(1, -1)
-                vector2 = np.array(vector2).reshape(1, -1)
-
-                # Compute the cosine similarity
-                cos_sim = cosine_similarity(vector1, vector2)[0][0]
-                results[precision_column]["psum"] += cos_sim
-                results[precision_column]["count"] += 1
-
-            #For Location and Date, the accuracy look is a value is found when one should be found
-            #Do not look at the exact value
-            elif precision_column in ['Location', 'Start_Date', 'End_Date'] :
-                # Create binary vectors for the two lists
-                n_tmp = sum(1 for value in tmp[precision_column] if (value != 'NULL') and (value != np.NaN))
-                n_tmp2 = sum(1 for value in tmp2[precision_column] if (value != 'NULL') and (value != np.NaN))
-
-                #cos_sim = cosine_similarity(vector1, vector2)[0][0]
-                if n_tmp != 0 :
-                    results[precision_column]["psum"] += n_tmp2/n_tmp
-                    results[precision_column]["count"] += 1
-    # Calculate precision and create a DataFrame
-    precision_values = []
-    for precision_column in precision_columns_list:
-        if results[precision_column]["count"] > 0:
-            precision = results[precision_column]["psum"] / results[precision_column]["count"]
-        else:
-            precision = float('nan')  # Handle case where there is no data to calculate precision
-        precision_values.append(precision)
-
-    precision_df = pd.DataFrame([precision_values], columns=precision_columns_list)
-    return precision_df
-
-
-# Functions for accuracy computation with cosine similarity method
+# Functions for accuracy computation with cosine similarity & Jaccard distance
 def calculate_precision_per_report(df_chat, df_labelled, precision_columns_list, 
                                    unique_dict=unique_dict, 
                                   grouping_columns = ["hazardType", "hazardSubtypes", "country", "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]):
@@ -142,6 +79,10 @@ def calculate_precision_per_report(df_chat, df_labelled, precision_columns_list,
                     unique_list = unique_dict[precision_column]
 
                     # Create binary vectors for the two lists
+                    if not isinstance(unique_list[0], str) :
+                        tmp_labelled_event_unique = [x for x in tmp_labelled_event_unique if isinstance(x, (int, float))]
+                        tmp_chat_event_unique = [x for x in tmp_chat_event_unique if isinstance(x, (int, float))]
+
                     vector1 = [1 if hazard in sorted(tmp_labelled_event_unique) else 0 for hazard in unique_list]
                     vector2 = [1 if hazard in sorted(tmp_chat_event_unique) else 0 for hazard in unique_list]
                     
@@ -156,7 +97,8 @@ def calculate_precision_per_report(df_chat, df_labelled, precision_columns_list,
     
                 #For Location and Date, the accuracy look is a value is found when one should be found
                 #Do not look at the exact value
-                elif precision_column in ["startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"] :
+                #elif precision_column in ["startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"] :
+                else : 
                     #Compute the Jaccard distance 
                     set1 = set(tmp_labelled_event_unique)
                     set2 = set(tmp_chat_event_unique)
@@ -179,13 +121,22 @@ def calculate_precision_per_report(df_chat, df_labelled, precision_columns_list,
             #If the column for accuracy is not part of the grouping
             #Compare the list of unique information found and compute the Jaccard Similarity 
             else : 
-                # n_tmp = sum(1 for value in tmp_labelled[precision_column].unique() if (value != 'NULL') and (value != "missing"))
-                # n_tmp2 = sum(1 for value in tmp_chat[precision_column].unique() if (value != 'NULL') and (value != "missing"))
-                # if n_tmp != 0 :
-                #     results[precision_column]["psum"] += n_tmp2/n_tmp
-                #     results[precision_column]["count"] += 1
-                set1 = set(tmp_labelled[precision_column])
-                set2 = set(tmp_chat[precision_column])
+                #Clean string list
+                if precision_column in ['country', 'region', 'city', 'location', 'hazardName'] : 
+                    # Convert to lower cases : 
+                    tmp_labelled_process = [x.lower() for x in tmp_labelled[precision_column].dropna()]
+                    tmp_chat_process     = [x.lower() for x in tmp_chat[precision_column].dropna()]
+                    if precision_column == 'hazardName' : 
+                        tmp_labelled_process = [remove_hazard_words(str(x)) for x in tmp_labelled_process]
+                        tmp_chat_process = [remove_hazard_words(str(x)) for x in tmp_chat_process]
+                    else : 
+                        tmp_labelled_process = [remove_admin_words(str(x)) for x in tmp_labelled_process]
+                        tmp_chat_process     = [remove_admin_words(str(x)) for x in tmp_chat_process]
+                    set1 = set(tmp_labelled_process)
+                    set2 = set(tmp_chat_process)
+                else : 
+                    set1 = set(tmp_labelled[precision_column])
+                    set2 = set(tmp_chat[precision_column])
                 intersection = set1.intersection(set2)
                 union = set1.union(set2)
                 jaccard_dist = len(intersection) / len(union) if union else 0
@@ -222,6 +173,79 @@ def calculate_precision_per_hazardSubtypes(df_chat, df_labelled, precision_colum
         precision_haz = calculate_precision_per_report(df_chat_haz, df_labelled_haz, precision_columns_list, unique_dict)
         precision_dict[hazardSubtype] = precision_haz
     return precision_dict
+
+###### ACCURACY FOR THE IMPACT
+
+def calculate_accuracy_impact_per_report(df_chat, df_labelled, precision_columns_list, 
+                                   unique_dict=unique_dict):
+    '''
+    df_chat : Test DataFrame
+    df_labelled : Labbeled DataFrame
+
+    unique_dist : Dictionnary listing all the possible values. Used of the hazardType, hazardSubtypes and country
+    '''
+    # Replace "nan" with empty string in df2 for specified columns
+    for column in precision_columns_list:
+        df_labelled[column] = ["" if str(value) == "nan" else value for value in df_labelled[column]]
+
+    # Initialize results dictionary
+    results = {col: {"psum": 0, "count": 0} for col in precision_columns_list}
+
+    # Group by 'doi' and calculate precision for each column
+    for id, df_chat_rep in df_chat.groupby("appealCode"):
+        tmp_labelled = df_labelled[df_labelled["appealCode"] == id].reset_index(drop=True)
+        tmp_chat = df_chat_rep.reset_index(drop=True)
+
+        for precision_column in precision_columns_list:
+            # if precision_column in ['country', 'region', 'city', 'location', 'hazardName'] : 
+            #         # Convert to lower cases : 
+            #         tmp_labelled_process = [x.lower() for x in tmp_labelled[precision_column].dropna()]
+            #         tmp_chat_process     = [x.lower() for x in tmp_chat[precision_column].dropna()]
+            #         if precision_column == 'hazardName' : 
+            #             tmp_labelled_process = [remove_hazard_words(str(x)) for x in tmp_labelled_process]
+            #             tmp_chat_process = [remove_hazard_words(str(x)) for x in tmp_chat_process]
+            #         else : 
+            #             tmp_labelled_process = [remove_admin_words(str(x)) for x in tmp_labelled_process]
+            #             tmp_chat_process     = [remove_admin_words(str(x)) for x in tmp_chat_process]
+            #         set1 = set(tmp_labelled_process)
+            #         set2 = set(tmp_chat_process)
+            #     else : 
+            #         set1 = set(tmp_labelled[precision_column])
+            #         set2 = set(tmp_chat[precision_column])
+                    
+            #For Hazard and Country, accuracy is computed by checking is the found attributes are matching
+            if precision_column in ["impactSubtypes", "country"] :
+                unique_list = unique_dict[precision_column]
+
+                # # Create binary vectors for the two lists
+                # if not isinstance(unique_list[0], str) :
+                #     set1 = [x for x in set1 if isinstance(x, (int, float))]
+                #     set2 = [x for x in set2 if isinstance(x, (int, float))]
+
+                vector1 = [1 if hazard in sorted(tmp_labelled[precision_column]) else 0 for hazard in unique_list]
+                vector2 = [1 if hazard in sorted(tmp_chat[precision_column]) else 0 for hazard in unique_list]
+                
+                # Convert the vectors to numpy arrays and reshape them
+                vector1 = np.array(vector1).reshape(1, -1)
+                vector2 = np.array(vector2).reshape(1, -1)
+
+                # Compute the cosine similarity
+                cos_sim = cosine_similarity(vector1, vector2)[0][0]
+                results[precision_column]["psum"] += cos_sim
+                results[precision_column]["count"] += 1
+                    
+    # Calculate precision and create a DataFrame
+    precision_values = []
+    for precision_column in precision_columns_list:
+        if results[precision_column]["count"] > 0:
+            precision = results[precision_column]["psum"] / results[precision_column]["count"]
+        else:
+            precision = float('nan')  # Handle case where there is no data to calculate precision
+        precision_values.append(precision)
+
+    precision_df = pd.DataFrame([precision_values], columns=precision_columns_list)
+    return precision_df
+
 
 from collections import Counter
 # Compute accuracy with recall, precision and f1 score 
