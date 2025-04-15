@@ -62,7 +62,6 @@ def get_event_date(text, hazard_type, hazard_location):
     "endMonth": ending month, one or two numeric values "MM",
     "endDay": ending day, one or two numeric values "DD",
     "hazardName": If the hazard received a special name, such as "Hurricane Harvey" or "Storm Sandy", add it here, enclosed by double quotes
-    If end year, end month, and end day are not mentioned in the text, repeat the values for start year, start month, and start day.
     Provide the answer in JSON format.
     If information is missing, leave it empty. Do not add notes or extra text.
     Here is an example of how the structure of the JSON must be:
