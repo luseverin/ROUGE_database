@@ -127,7 +127,7 @@ def identify_dates(text, hazard, location_complete):
 def identify_subtypes(text, hazard, location_complete, answer_date):
     subtypes = maintype_to_subytpe_emdat[hazard]
     hazard_date = deepcopy(answer_date)
-    if hazard_date:
+    if hazard_date and "hazardName" in hazard_date[0]:
         del hazard_date[0]["hazardName"]
     prompt = get_hazard_subtype(text, hazard, location_complete, hazard_date, subtypes)
     result = get_model_response(CLIENT, MODEL_NAME, prompt)
