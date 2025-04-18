@@ -58,8 +58,10 @@ impact_cat_desc_dict = {
     "Education Infrastructure": "The impacts on education infrastructure resulting from the event. Look for words such as 'schools', 'universities', etc."
 }
 
-impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Affected Families and Households"
-                      "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]
+impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Affected Families and Households", "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]
+
+impactSubtype_mapping = {"Human impact" : ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Affected Families and Households"], 
+                         "Infrastructure impacts" : ["Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]}
 
 #Countries
 import pycountry
