@@ -2,7 +2,7 @@
 hazard_all_subtype_emdat = """["drought", "wildfire", "forest fire", "land fire", "ground movement", "tsunami", "avalanche", "landslide", "rockfall", "sudden subsidence", "mudslide", "ash fall", "lava flow", "pyroclastic flow", "lahar", "coastal flood", "flash flood", "riverine flood", "ice jam flood", "rogue wave", "seiche", "coldwave", "heatwave", "severe winter conditions", "derecho", "hail", "lightning", "winterstorm", "storm surge", "tornado", "extra-tropical storm", "tropical storm" ]"""
 
 #dict to match emdat maintypes to there subtypes
-maintype_to_subytpe_emdat = {'Drought': ['drought'],
+maintype_to_subtype_emdat = {'Drought': ['drought'],
  'Wildfire': ['wildfire', 'forest fire', 'land fire'],
  'Earthquake': ['ground movement', 'tsunami'],
  'Mass movement': ['avalanche',
@@ -61,7 +61,7 @@ impact_cat_desc_dict = {
 impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Affected Families and Households", "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]
 
 impactSubtype_mapping = {"Human impact" : ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Affected Families and Households"], 
-                         "Infrastructure impacts" : ["Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]}
+                         "Infrastructure impacts" : ["Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "WASH infrastructure","Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]}
 
 #Countries
 import pycountry
