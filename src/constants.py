@@ -106,6 +106,9 @@ impact_subtypes_desc_quant_dict = {
         }
     }
 
+impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Affected Families and Households"
+                      "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure", "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure"]
+
 #Countries
 import pycountry
 import re
