@@ -4,9 +4,11 @@ import json as json
 import re
 from copy import deepcopy
 from itertools import chain
+from langchain_groq import ChatGroq
 from src.constants import *
 from src.prompts import *
 from src.client import CLIENT, MODEL_NAME
+from src.classOutput import ImpactList
 
 def extract_outer_json(text):
     start_index = text.find('{')
@@ -18,16 +20,31 @@ def extract_outer_json(text):
     extracted_json = text[start_index:end_index + 1]
     return extracted_json
 
-def get_model_response(CLIENT, MODEL, prompt):
+def get_model_response(CLIENT, MODEL, prompt, kwargs={}):
+
   completion = CLIENT.chat.completions.create(
     model=MODEL,
     messages=[
       {"role": "user", "content": prompt}
     ],
-    temperature=0
+    temperature=0,
+    **kwargs
   )
 
   return completion.choices[0].message.content
+
+def get_model_response_v2(CLIENT, MODEL, prompt):
+
+  """Get model response structured using Groq API"""
+
+  chat = ChatGroq(
+    temperature=0,
+    model=MODEL,
+    api_key="os.getenv("GROQ_API_KEY")" # Optional if not set as an environment variable
+    )
+  structured_llm = chat.with_structured_output(ImpactList, include_raw=True)
+  response = structured_llm.invoke(prompt)
+  return response
 
 def add_key_value_pairs(data, new_pairs):
     """
