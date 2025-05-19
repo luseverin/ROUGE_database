@@ -4,7 +4,7 @@ import instructor
 
 global CLIENT
 global MODEL_NAME
-MODEL_NAME = "llama3-70b-8192"
+MODEL_NAME = "mistral-saba-24b"
 ## Examples of models with Groq :
 MODEL_NAME_LIST = [
     "llama3-70b-8192",
@@ -36,6 +36,7 @@ if MODEL_NAME in ["gpt-4o-mini", "gpt-3.5-turbo-0125"] :
     CLIENT = OpenAI(api_key=API_KEY)
 else :
     API_KEY = os.getenv("GROQ_API_KEY")
+    #"os.getenv("GROQ_API_KEY")" Laura's
     CLIENT = OpenAI(
         api_key=API_KEY,
         base_url="https://api.groq.com/openai/v1"  # <-- Groq’s OpenAI-compatible endpoint
