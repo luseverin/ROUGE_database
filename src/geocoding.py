@@ -5,6 +5,13 @@ import geopy as gpy
 import itertools
 import time
 
+#Countries
+import pycountry
+import re
+unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
+unique_country_names = [country.name for country in pycountry.countries]
+pattern_country = '|'.join(map(re.escape, unique_country_names))
+
 # Add Geolocation and spatial information (region from cities)
 from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
@@ -26,9 +33,9 @@ def rotated_levenshtein_similarity(str1, str2):
 
 list_admin_words = [
     "Regency", "Province", "State", "Department", "Region", "River",
-    "Territory", "County", "District", "Municipality", "Prefecture", 
-    "Canton", "Commune", "Borough", "Parish", "Metropolitan Area", 
-    "Subregion", "Zone", "Subdivision", "Ward", "Township", "City", 
+    "Territory", "County", "District", "Municipality", "Prefecture",
+    "Canton", "Commune", "Borough", "Parish", "Metropolitan Area",
+    "Subregion", "Zone", "Subdivision", "Ward", "Township", "City",
     "Village", "Hamlet", "Municipality", "Governorate", "Autonomous Region",
     "County Borough", "Council Area", "Federal District", "Locality"
 ]
@@ -42,8 +49,8 @@ def remove_admin_words(location_str) :
 def geocoding_reports_location(df, print_info=False, locations_levels=['country', 'region', 'state', 'city']) :
     """
     Use this function if the input df has only the columns ['location'] to describe the location
-    Finer location can be added such as : 
-    - village 
+    Finer location can be added such as :
+    - village
     - suburb
     - road
     """
@@ -58,12 +65,12 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
         else:
             finest_loc_id = "country"
             finest_loc_vals = row.country
-            
+
         if finest_loc_id:
             time_last_request = time.time()
-            if finest_loc_id != "country" : 
+            if finest_loc_id != "country" :
                 nominatim_query=finest_loc_vals+", "+country
-            else : 
+            else :
                 nominatim_query=country
 
             time_new_request = time.time()
@@ -72,24 +79,24 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
             nominatim_result = geolocator.geocode(nominatim_query, exactly_one=True, language="en")
             time_last_request = time_new_request
 
-            #If no result for a query with region or city -> Try again a query with country only 
+            #If no result for a query with region or city -> Try again a query with country only
             if (nominatim_result is None) and (finest_loc_id != "country"):
-                if print_info : 
+                if print_info :
                     print("No results for query: ", nominatim_query, "Try country only")
-                #Change to try with country 
+                #Change to try with country
                 finest_loc_id = "country"
                 finest_loc_vals = row.country
-                
-                nominatim_query = country 
+
+                nominatim_query = country
                 time_new_request = time.time()
                 if time_new_request - time_last_request <= 1:
                     time.sleep(1)#time_new_request - time_last_request)
                 nominatim_result = geolocator.geocode(nominatim_query, exactly_one=True, language="en")
                 time_last_request = time_new_request
-                
+
             #Test if the query gives a results
             if nominatim_result is None :
-                if print_info : 
+                if print_info :
                     print("No results for query: ", nominatim_query)
             else:
                 ## Double check that the known information is similar to the one found
@@ -98,7 +105,7 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
                 similarity = rotated_levenshtein_similarity(finest_loc_vals_cleaned, nominatim_result_cleaned)
 
                 if similarity > 0.4 :
-                    if print_info : 
+                    if print_info :
                         print("CORRECT location "+nominatim_result.raw['name']+" for "+finest_loc_vals+", similarity = "+str(similarity))
                     row["latitude"] = nominatim_result.latitude
                     row["longitude"] = nominatim_result.longitude
@@ -113,9 +120,9 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
                     address = location_details.raw.get("address", {})
 
                     for loc_level in locations_levels :
-                        if loc_level in address.keys() : 
+                        if loc_level in address.keys() :
                             row[loc_level] = address.get(loc_level)
-                        else : 
+                        else :
                             row[loc_level] = None
 
                     #Add the row to the DataFrame with geocoding
@@ -128,8 +135,8 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
 
 def geocoding_reports_region_cities(df, print_info=False, locations_levels=['country', 'region', 'state', 'city']) :
     """
-    Finer location can be added such as : 
-    - village 
+    Finer location can be added such as :
+    - village
     - suburb
     - road
     """
@@ -149,9 +156,9 @@ def geocoding_reports_region_cities(df, print_info=False, locations_levels=['cou
             finest_loc_vals = row.country
         if finest_loc_id:
             time_last_request = time.time()
-            if finest_loc_id != "country" : 
+            if finest_loc_id != "country" :
                 nominatim_query=finest_loc_vals+", "+country
-            else : 
+            else :
                 nominatim_query=country
 
             time_new_request = time.time()
@@ -160,25 +167,25 @@ def geocoding_reports_region_cities(df, print_info=False, locations_levels=['cou
             nominatim_result = geolocator.geocode(nominatim_query, exactly_one=True, language="en")
             time_last_request = time_new_request
 
-            #If no result for a query with region or city -> Try again a query with country only 
+            #If no result for a query with region or city -> Try again a query with country only
             if (nominatim_result is None) and (finest_loc_id != "country"):
-                if print_info : 
+                if print_info :
                     print("No results for query: ", nominatim_query, "Try country only")
-                #Change to try with country 
+                #Change to try with country
                 finest_loc_id = "country"
                 finest_loc_vals = row.country
-                
-                nominatim_query = country 
-                
+
+                nominatim_query = country
+
                 time_new_request = time.time()
                 if time_new_request - time_last_request <= 1.2:
                     time.sleep(1)#time_new_request - time_last_request)
                 nominatim_result = geolocator.geocode(nominatim_query, exactly_one=True, language="en")
                 time_last_request = time_new_request
-                
+
             #Test if the query gives a results
             if nominatim_result is None :
-                if print_info : 
+                if print_info :
                     print("No results for query: ", nominatim_query)
             else:
                 ## Double check that the known information is similar to the one found
@@ -188,7 +195,7 @@ def geocoding_reports_region_cities(df, print_info=False, locations_levels=['cou
                 similarity = rotated_levenshtein_similarity(finest_loc_vals_cleaned, nominatim_result_cleaned)
 
                 if similarity > 0.4 :
-                    if print_info : 
+                    if print_info :
                         print("CORRECT location "+nominatim_result.raw['name']+" for "+finest_loc_vals+", similarity = "+str(similarity))
                     row["latitude"] = nominatim_result.latitude
                     row["longitude"] = nominatim_result.longitude
@@ -200,12 +207,12 @@ def geocoding_reports_region_cities(df, print_info=False, locations_levels=['cou
                         time.sleep(1)#time_new_request - time_last_request)
                     location_details = geolocator.reverse((nominatim_result.latitude, nominatim_result.longitude), exactly_one=True, addressdetails=True, language="en")
                     time_last_request = time_new_request
-                    
+
                     address = location_details.raw.get("address", {})
                     for loc_level in locations_levels :
-                        if loc_level in address.keys() : 
+                        if loc_level in address.keys() :
                             row[loc_level] = address.get(loc_level)
-                        else : 
+                        else :
                             row[loc_level] = None
 
                     #Add the row to the DataFrame with geocoding
