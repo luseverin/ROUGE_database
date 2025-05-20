@@ -25,7 +25,7 @@ impact_subtypes_desc_dict = {
         "Homeless People": "Individuals who lost their homes, to a natural hazard event",
         "Missing People": "People unaccounted for following a natural hazard event.",
         "Human Deaths": "Fatalities caused by a natural hazard event.",
-        "Blocked roads" : "Roads blocked or disrupted traffic due to the natural hazard.",
+        "Blocked roads" : "Roads blocked or disrupted traffic due to a  natural hazard. event.",
         "Airports": "Airports or aerodromes impacted by a natural hazard event.",
         "WASH infrastructure": "Water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a natural hazard event.",
         "Healthcare Infrastructure": "Healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc. impacted by a natural hazard event.",
@@ -33,6 +33,7 @@ impact_subtypes_desc_dict = {
         "Residential Buildings": "Residential buildings impacted by a natural hazard event.",
         "Informal Settlements":"Informal settlements such as refugee camps, slums, tents, etc. impacted by a natural hazard event.",
         "Education Infrastructure": "Education infrastructure such as schools, universities, etc. impacted by a natural hazard event.",
+        "Agriculture": "The impacts on the agriculture such as land, crops, livestock resulting from a natural hazard event.",
         }
 
 impact_subtypes_unit_dict = {
