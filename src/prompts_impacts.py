@@ -1,164 +1,116 @@
-#multi-level prompting from Tais
-def investigates_specific_events(text):
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using only information from the text above, answer the query.
-    Query: Does the text refer to a report that addresses one or more climate hazard events (i.e. it investigates the consequences of one or more events that happened in specific dates and locations)?
-    Answer with 1 or 0. If yes, answer 1. If not, answer 0. Answer with either 1 or 0 and do not add extra text or notes.
-    """
-    return prompt
-
-#Make sure the event detected with the keyword search actually is there in the text
-def check_event_occurrence(text, hazard_type):
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using only information from the text above and no previous knowledge, please answer the query.
-    Query: Did a {hazard_type} event happened in the area investigated in the report?
-    Answer with 1 or 0. If yes, answer 1. If not, answer 0. Answer with either 1 or 0 and do not add extra text or notes.
-    """
-    return prompt
-
-#Get location
-def get_event_location(text, hazard_type):
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using only information from the text above and no previous knowledge, please answer the query.
-    Query: Where happened the {hazard_type} event investigated in the report?
-    For each unique country where the event occurred, extract, if possible:
-    "country": Country affected by the {hazard_type} event, mandatory field
-    "region": Regions within the country affected by the {hazard_type} event
-    "state": States within the country affected by the {hazard_type} event
-    "city": Cities within the country affected by the {hazard_type} event
-    "locationAnnotation": Provide the text excerpt from where you extracted the location information.
-    If any of these information is missing from the text, leave the item empty. Do not add notes or extra text.
-    Provide the answer in JSON format.
-    Here is an example of how the structure of the JSON must be:
-    {str(example_location)}
-    """
-    return prompt
-
-def get_event_date(text, hazard_type, hazard_location):
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using only information from the text above and no previous knowledge, please answer the query.
-    Query: When did the {hazard_type} event that affected {hazard_location} investigated in the study happened?
-    The date in which the hazard happened should be described by:
-    "startYear": starting year, four numeric values "YYYY",
-    "startMonth": starting month, one or two numeric values "MM",
-    "startDay": starting day, one or two numeric values "DD",
-    "endYear": ending year, four numeric values "YYYY",
-    "endMonth": ending month, one or two numeric values "MM",
-    "endDay": ending day, one or two numeric values "DD",
-    "hazardName": If the hazard received a special name, such as "Hurricane Harvey" or "Storm Sandy", add it here, enclosed by double quotes
-    Provide the answer in JSON format.
-    If information is missing, leave it empty. Do not add notes or extra text.
-    Here is an example of how the structure of the JSON must be:
-    {str(example_date)}
-    """
-    return prompt
-
-def get_hazard_subtype(text, hazard_type, hazard_location , hazard_date, subtypes):
-    """Find associated hazard subtype from identified main hazard type"""
+#Prompts for impact extraction
+def find_impact_types_categories(text, impact_cat, impact_desc):
+    """Try to identify impacts from different categories. Based on impact categories
+    dict"""
     prompt = f"""
     Context information is below.
     ---
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Find the associated hazard subtypes associated with the {hazard_type}
-    event that affected {hazard_location} between the {hazard_date} dates.
-    Select one or more subtypes from the list {subtypes}.
-    Provide the answer in python list format.
-    If information is missing, leave it empty. Do not add notes or extra text.
-    Here is an example of how the structure of the python list must be:{example_subtypes}
-    """
-    #If information is missing, leave it empty. Do not add notes or extra text.
-    #Here is an example of how the structure of the python list must be: {example_types}
-    return prompt
+    Query: Based on the following description of the impact type {impact_cat}  "{impact_cat}": {impact_desc},
+    identify if an impact of the type {impact_cat} occurred in the report area described in the text above.
 
-def find_hazard_types(text, hazard_types):
-    """Find if hazard events from hazard_types list occured in the report"""
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using only information from the text above and no previous knowledge, please answer the query.
-    Query: Did any hazard event involving one or more hazard types from the list {hazard_types} happened in the area investigated in the report?
-    Answer with the list of the hazard types
-    Provide the answer in python list format.
-    If information is missing, leave it empty. Do not add notes or extra text.
-    Here is an example of how the structure of the python list must be: {example_types}
-    """
-    return prompt
-
-#only one query per hazard location currently; should we do one query per each found subhazard?
-def find_impact_types_list(text, hazard_subtypes, hazard_location , hazard_date, impact_types):
-    """Find associated impacts from identified hazard subtypes, location, and date.
-    Chosing from a list of impact_types"""
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using information from the text above and no previous knowledge, please answer the query.
-    Query: Find the associated impacts resulting from the {hazard_subtypes}
-    event that affected {hazard_location} between the {hazard_date} dates.
-    Select one or more subtypes from the list {impact_types}.
-    Provide the answer in JSON format.
-    If information is missing, leave it empty. Do not add notes or extra text.
-    Here is an example of how the structure of the JSON must be:{example_impacts}
-    """
-    return prompt
-
-def find_impact_types_unconstrained(text, hazard_subtypes, hazard_location , hazard_date):
-    """Find associated impacts from identified hazard subtypes, location, and date.
-    No constraints on the format."""
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using information from the text above and no previous knowledge, please answer the query.
-    Query: For the {hazard_subtypes} event that affected {hazard_location} between
-    the {hazard_date} dates, extract, if possible:
-    "Population": The impacts on the population resulting from the event,
-    "Infrastructures": The impacts on the infrastructures resulting from the event,
-    "impactsAnnotation": Provide the text excerpt from where you extracted the impacts information.
-    Provide the answer in JSON format.
-    If information is missing, leave it empty. Do not add notes or extra text.
-    Here is an example of how the structure of the JSON must be:{example_impacts}
-    """
-    return prompt
-
-def find_impact_types_categories(text, hazard_subtypes, hazard_location , hazard_date, impact_cat):
-    """Find associated impacts from identified hazard subtypes, location, and date.
-    Try to identify impacts from different categories."""
-    prompt = f"""
-    Context information is below.
-    ---
-    {text}
-    ---
-    Using information from the text above and no previous knowledge, please answer the query.
-    Query: For the {hazard_subtypes} event that affected {hazard_location} between
-    the {hazard_date} dates, extract, identify if the following type of impact occured:
-    {impact_cat}
     Answer with 1 or 0. If yes, answer 1. If not, answer 0.
     Answer with either 1 or 0 and do not add extra text or notes.
     """
     return prompt
+
+def make_impact_cat_prompt(impact_subType_dict):
+
+    try:
+        prompt_impquant = """\n""".join([impact_subType_dict[imptype] for imptype in impact_types])
+    except ValueError as e:
+        print(e)
+        prompt_impquant = None
+    return prompt_impquant
+
+def quantify_impacts_value_loc_date_haz(text, impact_type, impact_type_desc):
+    """Find associated impacts from different impactTypes identified.
+    Try to quantify numerically impacts from different categories."""
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: For the type of impact {impact_type}, described as follow: {impact_type_desc}, extract from the above text
+    all descriptions and mentions of this specific impact, including:
+    "impactValue"       : The quantified value of the described impact. If no quantified value can be identified, write null,
+    "impactUnit         : The unit of the quantified impact value. If no unit can be identified, write null.
+    "location"          : The locations for which the impact value is described. If no location can be identified, write null.
+                          If multiple locations are described, write them in a python list format [location1, location2],
+
+    "startYear"    : The year during which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "startMonth"  : The month during which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "startDay"    : The day at which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "endYear"    : The year during which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "endMonth"  : The month during which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "endDay"    : The day at which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "hazards"           : The natural hazards that are thought to have caused the described impacts.
+                          If no hazard can be identified, write null, if more than one natural hazard can be identified,
+                          write the hazards in a python list format [hazard1, hazard2]. Chose from the list {hazard_all_subtype_emdat}.
+                          Do not include hazard types that are not from the list. Write the hazard exactly as they are written in the list.
+    "impactsAnnotation" : Provide the text excerpt from where you extracted the impacts information.
+
+    If information is missing, leave it empty.
+    Do not reuse or count the same impactValue twice.
+    For numerical values, use integers; do not use commas (e.g., 1000 instead of 1,000),
+    sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9).
+    If only the number of affected households or houses is given, assume each unit equals three people.
+    Provide the answer as a list of JSON i.e. [JSON1, JSON2].
+    Do not add notes or extra text, only output the list of JSONs, without saying "here is the list of JSONs".
+    Here is an example of how the structure of the list of JSONs must be:""" + \
+    """[{
+       "impactValue": 10000,
+       "impactUnit": "people",
+        "location" : ["Abu Hamad", "Tokar"],
+        "startYear" : "2024",
+        "startMonth" : "08",
+        "startDay" : "29",
+        "endYear" : "null",
+        "endMonth" : "null",
+        "endDay" : "null",
+        "hazards" : ["flash flood"],
+        "impactAnnotation" : ["Flash floods impacted 10000 people in the cities of Abu Hamad and Tokar on the 29 August 2024",]
+      },
+      {
+       "impactValue": 100002,
+       "impactUnit": "people",
+        "location" : ["Red Sea State"],
+        "startYear" : "2024",
+        "startMonth" : "08",
+        "startDay" : "null",
+        "endYear" : "2024",
+        "endMonth" : "10",
+        "endDay" : "null",
+        "hazards" : ["flash flood"],
+        "impactAnnotation" : ["Flash floods impacted 100002 people in Red Sea State between August to October 2024",]
+      },
+      {
+          "impactValue": 4,
+          "impactUnit": "hospitals",
+          "location": ["River Nile State"],
+          "startYear": "null",
+          "startMonth": "null",
+          "startDay": "null",
+          "endYear": "null",
+          "endMonth": "null",
+          "endDay": "null",
+          "hazards" : "null",
+          "impactAnnotation" : ["At least 4 hospitals have been impacted in River Nile State alone."]
+          }]
+
+    """
+    #Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
+    return prompt
+
 
 def make_impact_cat_prompt(impact_types):
     prompt_impact_dict = {
