@@ -4,6 +4,7 @@ import ast
 import geopy as gpy
 import itertools
 import time
+from src.post_process_functions import *
 
 #Countries
 import pycountry
@@ -221,3 +222,54 @@ def geocoding_reports_region_cities(df, print_info=False, locations_levels=['cou
                     if print_info :
                         print("WRONG location "+nominatim_result.raw['name']+" for "+finest_loc_vals+", similarity = "+str(similarity))
     return df_geo
+
+def make_nominatim_query(irow, response_row, geolocator):
+    '''Function to extract geoloactions from text using nominatim'''
+    country = response_row["country"]
+    regions = separate_locs(response_row["region"])
+    states = separate_locs(response_row["state"])
+    cities = separate_locs(response_row["city"])
+    row_rest = response_row.drop(["country","region", "city"])
+    regions = remove_startspace(regions)
+    states = remove_startspace(states)
+    cities =remove_startspace(cities)
+    df_list = []
+    i = 1
+    if cities:
+        finest_loc_id = "city"
+        finest_loc_vals = cities
+    elif states:
+        finest_loc_id = "state"
+        finest_loc_vals = states
+    elif regions:
+        finest_loc_id = "region"
+        finest_loc_vals = regions
+    else:
+        finest_loc_id = None
+    print("No location information for response: ", response_row.appealCode)
+
+    if finest_loc_id:
+        time_last_request = time.time()
+        for ctry, loc in itertools.product([country], finest_loc_vals):#zip([country]*len(regions), regions, states, cities):
+            nominatim_query = {
+                "country": ctry,
+                finest_loc_id: loc
+            }
+
+            time_new_request = time.time()
+            if time_new_request - time_last_request < 2:
+                time.sleep(time_new_request - time_last_request)
+            nominatim_result = geolocator.geocode(nominatim_query)
+            time_last_request = time_new_request
+            if nominatim_result is None:
+                print("No results for query: ", nominatim_query)
+                continue
+            else:
+                nominatim_query["latitude"] = nominatim_result.latitude
+                nominatim_query["longitude"] = nominatim_result.longitude
+                nominatim_query.update(row_rest.to_dict())
+                new_row = pd.DataFrame(nominatim_query, index=pd.MultiIndex.from_tuples([(response_row.appealCode, irow+i+1)], names=['appealCode', 'index']))
+                df_list.append(new_row)
+            i+=1
+
+    return df_list
