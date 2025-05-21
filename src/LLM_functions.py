@@ -6,10 +6,11 @@ from copy import deepcopy
 from itertools import chain
 from langchain_groq import ChatGroq
 import instructor
-from src.constants import *
+from src.hazard_def import *
+from src.impact_def import *
 from src.data import *
-from prompts_hazards import *
-from prompts_impacts import *
+from src.prompts_hazards import *
+from src.prompts_impacts import *
 from src.client import CLIENT, MODEL_NAME
 from src.classOutput import ImpactList
 
