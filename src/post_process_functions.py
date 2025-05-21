@@ -28,6 +28,58 @@ def remove_startspace(loc_list):
     else:
         return [loc.strip() for loc in loc_list]
 
+import copy as cp
+def format_output(df, num_cols):
+    """
+    Format output of the final report
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to be formatted
+    num_cols : list
+        List of columns to be converted to float
+
+    Returns
+    -------
+    pd.DataFrame
+        Formatted DataFrame
+    """
+    df = df.replace(["null", "None", None], np.nan)
+    df[num_cols] = df[num_cols].astype(float)
+    return df
+
+def explode_lists(df):
+    """
+    Explodes columns containing lists in a DataFrame, creating separate rows for each element in the lists.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns that may contain lists.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame where each list element in the specified columns is expanded into its own row.
+    """
+    # Identify columns with lists
+    list_columns = [col for col in df.columns if df[col].apply(lambda x: isinstance(x, list)).any()]
+
+    # Replace `None` or `NaN` with empty lists for exploding
+    for col in list_columns:
+        df[col] = df[col].apply(lambda x: x if isinstance(x, list) else [])
+
+    # Create the repeated index based on the maximum lengths of lists in the list columns
+    repeat_counts = df[list_columns].applymap(len).max(axis=1)
+    df = df.loc[df.index.repeat(repeat_counts)].reset_index(drop=True)
+
+    # Explode each list column
+    for col in list_columns:
+        df[col] = df[col].explode(ignore_index=True)
+
+    return df
+
 def convert_labelled_chat_format(df_labelled) :
     """
     Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.

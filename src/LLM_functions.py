@@ -1,12 +1,18 @@
-#Functions to process data using LLMs
+#Functions to extract data with LLMs
 import pandas as pd
 import json as json
 import re
 from copy import deepcopy
 from itertools import chain
-from src.constants import *
-from src.prompts import *
+from langchain_groq import ChatGroq
+import instructor
+from src.hazard_def import *
+from src.impact_def import *
+from src.data import *
+from src.prompts_hazards import *
+from src.prompts_impacts import *
 from src.client import CLIENT, MODEL_NAME
+from src.classOutput import ImpactList
 
 def extract_outer_json(text):
     start_index = text.find('{')
@@ -18,16 +24,55 @@ def extract_outer_json(text):
     extracted_json = text[start_index:end_index + 1]
     return extracted_json
 
-def get_model_response(CLIENT, MODEL, prompt):
+def get_model_response(CLIENT, MODEL, prompt, kwargs={}):
+
   completion = CLIENT.chat.completions.create(
     model=MODEL,
     messages=[
       {"role": "user", "content": prompt}
     ],
-    temperature=0
+    temperature=0,
+    **kwargs
   )
 
   return completion.choices[0].message.content
+
+def get_model_response_v2(CLIENT, MODEL, prompt):
+
+  """Get model response structured using Groq API"""
+
+  chat = ChatGroq(
+    temperature=0,
+    model=MODEL,
+    api_key="os.getenv("GROQ_API_KEY")" # Optional if not set as an environment variable
+    )
+  structured_llm = chat.with_structured_output(ImpactList, include_raw=True)
+  response = structured_llm.invoke(prompt)
+  return response
+
+def get_model_response_v3(CLIENT, MODEL, prompt, kwargs={}):
+   """Get model response structured using OpenAI API"""
+   prompt_system = """
+    You are an assistant that analyzes impacts. Use the following function to structure your response:
+
+    Function: ImpactList
+    Parameters: {"impacts": [{impactValue: int, impactUnit: str, location : list, startYear : int, startMonth : int, startDay : int, endYear : int, endMonth : int, endDay : int, hazards : list, impactAnnotation : list}]}
+
+    Analyze the impacts and return results in the above format.
+    """
+   try:
+      completion = CLIENT.chat.completions.create(
+           model=MODEL,
+           messages=[
+                     {"role": "system", "content": prompt_system},
+                     {"role": "user", "content": prompt}
+                     ],
+            temperature=0,
+            response_model = ImpactList
+            )
+   except instructor.exceptions.InstructorRetryException as e:
+       print(e)
+   return completion.choices[0].message.content
 
 def add_key_value_pairs(data, new_pairs):
     """
@@ -56,9 +101,11 @@ def add_key_value_pairs(data, new_pairs):
 
     return data
 
-def check_result_json(result_json, label):
+def check_result_json(result_json, label=None):
     try:
-        answer = json.loads(result_json.replace("\n", ""))[label]
+        answer = json.loads(result_json.replace("\n", ""))
+        if label:
+            answer = answer[label]
     except Exception as e:
         print("An unexpected error occurred:", e)
         return None
@@ -143,27 +190,22 @@ def identify_impacts_simple(text, hazard_subtypes, location_complete , hazard_da
     answer_subtypes = check_result_json(result_json, "impactSubtypes")
     return answer_subtypes
 
-def identify_impacts_cat(text, hazard_subtypes, location_complete , hazard_date, impcat_to_check):
+def identify_impacts_cat(text, impcat_to_check):
     """Identify categories of impacts"""
     impcat_identified = []
     for impcat, imp_description in impcat_to_check.items():
         #test for event occurence
-        prompt = find_impact_types_categories(text, hazard_subtypes, location_complete , hazard_date, imp_description)
+        prompt = find_impact_types_categories(text, impcat, imp_description)
         result = get_model_response(CLIENT, MODEL_NAME, prompt)
-        impcat_occurrence = int(''.join(re.findall("[01]", result)))
+        impcat_occurrence = int("".join(re.findall("[01]", result)))
         if impcat_occurrence == 1:
             impcat_identified.append(impcat)
             print(f"{impcat} identified in the report area.")
     return impcat_identified
-    #prompt = find_impact_types_categories(text, hazard_subtypes, location_complete , hazard_date)
-    #result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    ##result_json = extract_outer_json(result)
-    ##answer_subtypes = check_result_json(result_json, "impactSubtypes")
-    #return result
 
-def identify_impacts_quant(text, hazard_subtypes, location_complete , hazard_date, impact_types):
+def identify_impacts_quant(text, impact_types):
     """Quantify impacts from identified impact categories"""
-    prompt = quantify_impacts(text, hazard_subtypes, location_complete , hazard_date, impact_types)
+    prompt = quantify_impacts(text, impact_types)
     result = get_model_response(CLIENT, MODEL_NAME, prompt)
     result_json = extract_outer_json(result)
     answer_subtypes = check_result_json(result_json, "impactSubtypes")
@@ -263,3 +305,53 @@ def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=T
     response_unnested = list(chain(*response))
     response_df = pd.DataFrame(response_unnested)
     return(response, response_df)
+
+def get_event_impacts_v1(df_labelled, res_savename):
+    """Wrapper function to do all level promptings for impact extraction
+    Version 1 doing a separate identification of impact
+
+    """
+    response = []
+    response_df_list = []
+    count = 0
+    for rowid, row in df_labelled.iterrows():
+
+        reference_info = {
+            "appealCode": row["appealCode"],
+            "location": row["location"],
+            "reportDate" : row["reportDate"],
+            "disasterType": row["disasterType"]
+        }
+
+        text = row["nathaz_text"]
+
+        #first identify impact main types or subtypes directly
+        answer_impacts_cat = identify_impacts_cat(text, impact_subtypes_desc_dict)#impact_cat_desc_dict, impact_subtypes_desc_dict
+
+        if len(answer_impacts_cat):
+            print(f"Impacts {answer_impacts_cat} identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        else:
+            print(f"No impacts identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+            pass
+
+        for impcat in answer_impacts_cat:
+
+            #query impact, value, loc, date haz altogether
+            impdesc = impact_subtypes_desc_dict[impcat]
+            prompt = quantify_impacts_value_loc_date_haz(text, impcat, impdesc)
+            #prompt = "List impacts with their location, value, and date in JSON format from the text below:\n" \
+            #"Flood damage occured in Abu Hamad and Tokar on 29 August 2024. 10000 people were impacted. Other impacts occured"
+            result = get_model_response(CLIENT, MODEL_NAME, prompt)
+            answer_impacts = check_result_json(result)
+
+            if answer_impacts:
+                data = add_key_value_pairs([reference_info], {"impactType": impcat})
+                updated_data = deepcopy(add_key_value_pairs(data, answer_impacts))
+                response.append(updated_data)
+
+        response_unnested = list(chain(*response))
+        response_df_list.append(pd.DataFrame(response_unnested))
+        all_response_df = pd.concat(response_df_list, ignore_index=True, axis=0)
+        all_response_df.to_csv(DATA_OUT_LLMS + res_savename, index=False)
+
+    return (response, all_response_df)
