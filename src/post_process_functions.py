@@ -28,6 +28,58 @@ def remove_startspace(loc_list):
     else:
         return [loc.strip() for loc in loc_list]
 
+import copy as cp
+def format_output(df, num_cols):
+    """
+    Format output of the final report
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to be formatted
+    num_cols : list
+        List of columns to be converted to float
+
+    Returns
+    -------
+    pd.DataFrame
+        Formatted DataFrame
+    """
+    df = df.replace(["null", "None", None], np.nan)
+    df[num_cols] = df[num_cols].astype(float)
+    return df
+
+def explode_lists(df):
+    """
+    Explodes columns containing lists in a DataFrame, creating separate rows for each element in the lists.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with columns that may contain lists.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame where each list element in the specified columns is expanded into its own row.
+    """
+    # Identify columns with lists
+    list_columns = [col for col in df.columns if df[col].apply(lambda x: isinstance(x, list)).any()]
+
+    # Replace `None` or `NaN` with empty lists for exploding
+    for col in list_columns:
+        df[col] = df[col].apply(lambda x: x if isinstance(x, list) else [])
+
+    # Create the repeated index based on the maximum lengths of lists in the list columns
+    repeat_counts = df[list_columns].applymap(len).max(axis=1)
+    df = df.loc[df.index.repeat(repeat_counts)].reset_index(drop=True)
+
+    # Explode each list column
+    for col in list_columns:
+        df[col] = df[col].explode(ignore_index=True)
+
+    return df
+
 def convert_labelled_chat_format(df_labelled) :
     """
     Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.
@@ -42,9 +94,9 @@ def convert_labelled_chat_format(df_labelled) :
             #Add region
             if isinstance(row.region, str)  :
                 regions = ast.literal_eval(row.region)
-            elif isinstance(row.region, list) : 
+            elif isinstance(row.region, list) :
                 regions = row.region
-            else : 
+            else :
                 regions = None
 
             if not regions is None:
@@ -52,7 +104,7 @@ def convert_labelled_chat_format(df_labelled) :
                     row_append = row.copy()
                     row_append['region'] = region
                     row_append['city'] = None
-    
+
                     #Find the corresponding locationAnnotation
                     # print(row)
                     # print(row.locationAnnotation)
@@ -67,15 +119,15 @@ def convert_labelled_chat_format(df_labelled) :
                 cities = ast.literal_eval(row.city)
             elif isinstance(row.city, list) :
                 cities = row.city
-            else : 
+            else :
                 cities = None
-                
-            if not cities is None : 
+
+            if not cities is None :
                 for city in cities :
                     row_append = row.copy()
                     row_append['region'] = None
                     row_append['city'] = city
-    
+
                     #Find the corresponding locationAnnotation
                     locationsAnnotations = ast.literal_eval(row.locationAnnotation)
                     for locationAnnot in locationsAnnotations :
@@ -90,15 +142,15 @@ def clean_chat_format(df_labelled) :
     """
     df_labelled_chat = pd.DataFrame(columns=df_labelled.columns)
     for index, row in df_labelled.iterrows():
-        #Loop over the hazardSubtype 
+        #Loop over the hazardSubtype
         hazardsubtypes = ast.literal_eval(row.hazardSubtypes)
         if not hazardsubtypes :
             hazardsubtypes = [None]
-        for subtype in hazardsubtypes : 
+        for subtype in hazardsubtypes :
             #If no regions and cities
             if isinstance(row.region, float) and isinstance(row.city, float) :
                 df_labelled_chat = pd.concat([df_labelled_chat, row.to_frame().T], ignore_index=True)
-    
+
             else :
                 regions = row.region
                 if not regions is None :
@@ -108,10 +160,10 @@ def clean_chat_format(df_labelled) :
                         row_append['city'] = None
                         row_append['hazardSubtypes'] = subtype
                         df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
-    
+
                 #Add location
                 cities = row.city
-                if not cities is None : 
+                if not cities is None :
                     for city in cities :
                         row_append = row.copy()
                         row_append['region'] = None
@@ -119,7 +171,7 @@ def clean_chat_format(df_labelled) :
                         row_append['hazardSubtypes'] = subtype
                         df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
     return df_labelled_chat
-    
+
 ## DEPRECATED
 ## Convert json to dataframe
 #def clean_output_df(results_json, out_cols=['Hazard','Country','Location','Start_Date','End_Date']):
