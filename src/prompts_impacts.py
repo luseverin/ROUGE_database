@@ -1,4 +1,32 @@
 #Prompts for impact extraction
+def make_prompt_system(impact_types, hazard_types):
+    prompt_system = f"""
+    You are an assistant that analyzes impacts. You must output results strictly in the following JSON format:
+
+    [
+        {{
+            "impactType": "<one of {impact_types}>",
+            "impactValue": <integer or null>,
+            "impactUnit": "<string or null>",
+            "location": ["<list of strings>"],
+            "startYear": <integer or null>,
+            "startMonth": <integer or null>,
+            "startDay": <integer or null>,
+            "endYear": <integer or null>,
+            "endMonth": <integer or null>,
+            "endDay": <integer or null>,
+            "hazards": ["<one or more of {hazard_types}>"],
+            "impactsAnnotation": ["<list of strings>"]
+        }}
+    ]
+
+    Rules:
+    1. The `impactType` field must only contain one of the valid values: {impact_types}.
+    2. The `hazards` field must only contain values from {hazard_types}.
+    3. Adhere to the JSON format strictly; no extra fields are allowed.
+    """
+    return prompt_system
+
 def find_impact_types_categories(text, impact_cat, impact_desc):
     """Try to identify impacts from different categories. Based on impact categories
     dict"""
