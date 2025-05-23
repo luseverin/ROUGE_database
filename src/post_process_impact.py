@@ -7,6 +7,7 @@ import re
 import copy as cp
 import ast
 import spacy
+from src.impact_def import *
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -64,4 +65,22 @@ def compute_similarity_per_row(df,
     return df
 
 ## Correct units per impactCategory 
+
+human_units = ["households", "houses", "homes", "families", "family"]
+def correct_units_human(df_input):
+    df = cp.deepcopy(df_input)
+    for id_row, row in df.iterrows():
+        impact_type = row["impactType"]
+        unit = row["impactUnit"]
+        
+        # Check if impactType has a standard unit defined
+        if (impact_type in impact_subtypes_human_desc_dict and
+            unit != impact_subtypes_unit_dict[impact_type]):
+            
+            if unit in human_units:
+                # Multiply the value by 4 and assign the correct unit
+                df.at[id_row, "impactValue"] = row["impactValue"] * 4
+                df.at[id_row, "impactUnit"] = "people"
+    
+    return df
 
