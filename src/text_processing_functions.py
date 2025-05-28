@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import ast
 import spacy
+from number_spacy import find_numbers
+
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -53,12 +55,41 @@ def check_hazard_type_keyword(text, hazard_patterns):
 #    text = re.sub(r'\s+', ' ', text).strip()
 #    return text
 
-def clean_text(text, remove_numbers=False, remove_stopwords=False):
+#format numbers
+def replace_numbers(text_in):
+    """
+    Replace numbers written out in words with their numeric equivalent.
+
+    Args:
+        text_in (str): The text to replace numbers in.
+
+    Returns:
+        str: The text with numbers replaced.
+    """
+    nlp = spacy.blank('en')
+    nlp.add_pipe('find_numbers')
+    doc = nlp(text_in)
+    text_out =  doc.text
+    for ent in doc.ents:
+        if ent.label_ == 'NUMBER':
+            text_out = text_out.replace(ent.text, str(ent._.number))
+    return text_out
+
+def replace_commas_in_numbers(text):
+    # Replace commas in numbers
+    """
+    Replace commas in numbers.
+
+    For example, "1,000" is replaced with "1000".
+    """
+    return re.sub(r'(?<=\d),(?=\d)', '', text)
+
+def clean_text(text, remove_numbers=False, remove_stopwords=False, format_numbers=False):
     # Remove hyperlinks
     text = re.sub(r'http\S+|www\S+', '', text)
 
     # Remove some special characters, leaving basic punctuation (e.g., commas, periods)
-    text = re.sub(r'[^a-zA-Z0-9\s.,!?]', '', text)
+    text = re.sub(r'[^a-zA-Z0-9\s.,!?%]', '', text)
 
     # Remove numbers if the option is enabled
     if remove_numbers:
@@ -74,6 +105,10 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False):
     if remove_stopwords:
         stop_words = set(stopwords.words('english'))
         text = ' '.join([word for word in text.split() if word.lower() not in stop_words])
+
+    if format_numbers:
+        text = replace_numbers(text)
+        text = replace_commas_in_numbers(text)
 
     return text
 
