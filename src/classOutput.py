@@ -1,43 +1,49 @@
-## Define class outputs to format LLM outputs
-from pydantic import BaseModel, model_validator, RootModel
-from typing import List, Optional, Literal
-from src.hazard_def import hazard_subtype_kw_searc
-from src.impact_def import impact_subtypes_desc_dict
+from pydantic import BaseModel, ValidationError, field_validator, RootModel
+from typing import List, Optional, Union
 
-hazardTypes_list = ["drought", "wildfire", "forest fire", "land fire", "ground movement", "tsunami", "avalanche", "landslide", "rockfall", "sudden subsidence", "mudslide", "ash fall", "lava flow", "pyroclastic flow", "lahar", "coastal flood", "flash flood", "riverine flood", "ice jam flood", "rogue wave", "seiche", "coldwave", "heatwave", "severe winter conditions", "derecho", "hail", "lightning", "winterstorm", "storm surge", "tornado", "extra-tropical storm", "tropical storm" ]
-impactTypes_list = impact_subtypes_desc_dict.keys()
+#define nonetype
+global NoneType
+NoneType = type(None)
 class ImpactDetail(BaseModel):
-    impactType: Literal[tuple(impactTypes_list)]  # Accepts only values from impactTypes_list
+    impactType: str
     impactValue: Optional[int] = None
     impactUnit: Optional[str] = None
-    impactValueFlag : Optional[str] = None
-    location : List[str]
-    startYear : Optional[int] = None
-    startMonth : Optional[int] = None
-    startDay : Optional[int] = None
-    endYear : Optional[int] = None
-    endMonth : Optional[int] = None
-    endDay : Optional[int] = None
-    hazards : List[Literal[tuple(hazardTypes_list)]]
-    impactsAnnotation : List[str]
+    impactValueFlag: Optional[str] = None
+    location: Optional[List[str]] = None
+    startYear: Optional[int] = None
+    startMonth: Optional[int] = None
+    startDay: Optional[int] = None
+    endYear: Optional[int] = None
+    endMonth: Optional[int] = None
+    endDay: Optional[int] = None
+    hazards: Optional[List[str]] = None
+    impactsAnnotation: List[str] = None
 
-    #the following should work with output directly as a list
-    @model_validator(mode="before")
-    def validate_fields(cls, values):
-        if "impactType" in values and values["impactType"] not in impactTypes_list:
-            raise ValueError(f"Invalid impactType: {values['impactType']}")
-        if "hazards" in values:
-            invalid_hazards = [
-                hazard for hazard in values["hazards"] if hazard not in hazardTypes_list
-            ]
-            if invalid_hazards:
-                raise ValueError(f"Invalid hazards: {invalid_hazards}")
-        return values
+    # Dynamic constraints
+    _impactTypes_list: Optional[List[str]] = None
+    _hazardTypes_list: Optional[List[str]] = None
 
-#the following expects a dict with "impacts as a key"
-#class ImpactList(BaseModel):
-#    impacts: List[ImpactDetail]
+    @classmethod
+    def set_allowed_classes(cls, impact_types: Union[NoneType, List[str]], hazard_types: List[str]):
+        cls._impactTypes_list = impact_types
+        cls._hazardTypes_list = hazard_types
 
-class ImpactList(BaseModel):
-    RootModel: List[ImpactDetail]
+    @field_validator("impactType")
+    def validate_impact_type(cls, value):
+        if value not in cls._impactTypes_list:
+            raise ValueError(f"Invalid impactType: {value}. Must be one of {cls._impactTypes_list}")
+        return value
+
+    @field_validator("hazards", mode="before")
+    def validate_hazards(cls, value):
+        if not isinstance(value, list):
+            raise ValueError(f"Expected a list for hazards, got {type(value).__name__}")
+        invalid_hazards = [hazard for hazard in value if hazard not in cls._hazardTypes_list]
+        if invalid_hazards:
+            raise ValueError(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
+        return value
+
+
+class ImpactList(RootModel):
+    root: List[ImpactDetail]
 
