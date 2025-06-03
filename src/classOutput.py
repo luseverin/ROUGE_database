@@ -1,12 +1,10 @@
 from pydantic import BaseModel, ValidationError, field_validator, RootModel
 from typing import List, Optional, Union
 
-#define nonetype
-global NoneType
-NoneType = type(None)
+
 class ImpactDetail(BaseModel):
     impactType: str
-    impactValue: Optional[int] = None
+    impactValue: Optional[float] = None
     impactUnit: Optional[str] = None
     impactValueFlag: Optional[str] = None
     location: Optional[List[str]] = None
@@ -24,7 +22,7 @@ class ImpactDetail(BaseModel):
     _hazardTypes_list: Optional[List[str]] = None
 
     @classmethod
-    def set_allowed_classes(cls, impact_types: Union[NoneType, List[str]], hazard_types: List[str]):
+    def set_allowed_classes(cls, impact_types: Union[None, List[str]], hazard_types: List[str]):
         cls._impactTypes_list = impact_types
         cls._hazardTypes_list = hazard_types
 
