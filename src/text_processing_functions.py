@@ -4,6 +4,8 @@ import pandas as pd
 import ast
 import spacy
 from number_spacy import find_numbers
+from pint import UnitRegistry
+
 
 
 nlp = spacy.load("en_core_web_sm")
@@ -83,6 +85,60 @@ def replace_commas_in_numbers(text):
     For example, "1,000" is replaced with "1000".
     """
     return re.sub(r'(?<=\d),(?=\d)', '', text)
+
+
+# Function to convert and replace units in a sentence
+def standardize_units(text):
+
+    ureg = UnitRegistry()
+
+    # Define unit conversion mapping
+    unit_mapping = {
+        "acre": "km**2",
+        "acres": "km**2",
+        "feet": "m",
+        "foot": "m",
+        "ft": "m",
+        "meter": "m",
+        "metres": "m",
+        "kilometers": "km",
+        "kilometres": "km",
+        "hectares": "km**2",
+        "ha": "km**2",
+        "squared kilometers": "km**2",
+        "square kilometers": "km**2",
+        "square km": "km**2",
+        "pounds": "kg",
+        "lbs": "kg",
+        "tons": "ton",
+        "tonnes": "ton"
+    }
+    doc = nlp(text)
+    new_text = text
+
+    for token in doc:
+        # Check if token is a number followed by a unit
+        if token.like_num:
+            num = float(token.text)
+            next_token = token.nbor(1) if token.i + 1 < len(doc) else None
+
+            if next_token and next_token.text.lower() in unit_mapping:
+                unit = next_token.text.lower()
+                si_unit = unit_mapping[unit]
+
+                # Perform conversion
+                quantity = num * ureg(unit)
+                converted_quantity = quantity.to(si_unit)
+                converted_value = converted_quantity.magnitude
+                converted_unit = converted_quantity.units
+
+                # Replace in the text
+                replacement = f"{converted_value:.8g} {converted_unit}"
+                old = f"{token.text} {next_token.text}"
+                new_text = new_text.replace(old, replacement)
+
+    return new_text
+
 
 def clean_text(text, remove_numbers=False, remove_stopwords=False, format_numbers=False):
     # Remove hyperlinks
