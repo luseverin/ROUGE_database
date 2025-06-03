@@ -92,48 +92,6 @@ def replace_numbers(text_in):
     # Join the tokens back into a string
     return " ".join(modified_tokens)
 
-#def replace_numbers(text_in):
-#    """
-#    Replace numbers written out in words with their numeric equivalent.
-#
-#    Args:
-#        text_in (str): The text to replace numbers in.
-#
-#    Returns:
-#        str: The text with numbers replaced.
-#    """
-#    # Load spaCy model
-#    nlp = spacy.blank("en")
-#
-#    # Add a custom number replacement component
-#    @nlp.component("replace_numbers_component")
-#    def replace_numbers_component(doc):
-#        for ent in doc.ents:
-#            if ent.label_ == "NUMBER":
-#                # Use `set_extension` for storing converted number
-#                if not Span.has_extension("number"):
-#                    Span.set_extension("number", default=None)
-#
-#                # Convert text to number and store in the extension
-#                try:
-#                    ent._.number = int(ent.text) if ent.text.isdigit() else text2num(ent.text)
-#                except ValueError:
-#                    ent._.number = None
-#        return doc
-#
-#    nlp.add_pipe("ner")  # Add NER for entity detection
-#    nlp.add_pipe("replace_numbers_component", last=True)
-#
-#    # Parse the text
-#    doc = nlp(text_in)
-#
-#    # Replace numbers in text
-#    text_out = text_in
-#    for ent in doc.ents:
-#        if ent.label_ == "NUMBER" and ent._.number is not None:
-#            text_out = text_out.replace(ent.text, str(ent._.number), 1)
-#
-#    return text_out
 
 def replace_commas_in_numbers(text):
     # Replace commas in numbers
