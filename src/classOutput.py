@@ -19,17 +19,25 @@ class ImpactDetail(BaseModel):
 
     # Dynamic constraints
     _impactTypes_list: Optional[List[str]] = None
+    _impactUnits_list: Optional[List[str]] = None
     _hazardTypes_list: Optional[List[str]] = None
 
     @classmethod
-    def set_allowed_classes(cls, impact_types: Union[None, List[str]], hazard_types: List[str]):
+    def set_allowed_classes(cls, impact_types: Union[None, List[str]], impact_units: Union[None, List[str]], hazard_types: List[str]):
         cls._impactTypes_list = impact_types
+        cls._impactUnits_list = impact_units
         cls._hazardTypes_list = hazard_types
 
     @field_validator("impactType")
     def validate_impact_type(cls, value):
         if value not in cls._impactTypes_list:
             raise ValueError(f"Invalid impactType: {value}. Must be one of {cls._impactTypes_list}")
+        return value
+
+    @field_validator("impactUnit")
+    def validate_impact_unit(cls, value):
+        if value not in cls._impactUnits_list:
+            raise ValueError(f"Invalid impactUnit: {value}. Must be one of {cls._impactUnits_list}")
         return value
 
     @field_validator("hazards", mode="before")
