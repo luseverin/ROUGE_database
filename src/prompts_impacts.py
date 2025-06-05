@@ -26,6 +26,214 @@ def make_prompt_system(impact_types, hazard_types):
     3. Adhere to the JSON format strictly; no extra fields are allowed.
     """
     return prompt_system
+def quantify_impacts_type_value_loc_date_haz(text, impact_cat_desc_dict, hazard_all_subtype_emdat):
+    """Find impact type, values, locs, etc. altogether"""
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Eextract from the above text all descriptions and mentions of impacts resulting from extreme
+    natural hazard events. Focus on the categories of impacts described as follow: {impact_cat_desc_dict}.
+    For each mention of impact that you identify, extract the following information:
+    "impactType"        : The type of impact. If no type of impact can be identified, write null.
+                          Choose from the list {impact_cat_desc_dict.keys()}.
+                          Do not include impact types that are not from the list.
+                          Write the impact exactly as they are written in the list.
+    "impactValue"       : The quantified value of the described impact.
+                          Make sure that the value is consistent with the impactUnit field.
+                          If no quantified value can be identified, write null.
+    "impactUnit         : The unit of the quantified impact value.
+                          Make sure that the value is consistent with the impactValue field.
+                          If no unit can be identified, write null.
+    "impactValueFlag"   : The quality flag for the quantified impact value informing on the confidence
+                          in the quantified value. If the extracted impactValue is exact (e.g. "1001 people have been affected"), write "exact".
+                          If the extracted impactValue is an approximation (e.g. "several hundred people have been affected"), write "approx".
+    "location"          : The locations for which the impact value is described.
+                          Write the locations exactly as they are written in the text.
+                          If no location can be identified, write null.
+                          If multiple locations are described, write them in a python list format [location1, location2],
+
+    "startYear"    : The year during which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "startMonth"  : The month during which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "startDay"    : The day at which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "endYear"    : The year during which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "endMonth"  : The month during which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "endDay"    : The day at which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "hazards"           : The natural hazards that are thought to have caused the described impacts.
+                          If no hazard can be identified, write null, if more than one natural hazard can be identified,
+                          write the hazards in a python list format [hazard1, hazard2].
+                          Choose from the list {hazard_all_subtype_emdat}.
+                          Do not include hazard types that are not from the list. Write the hazard exactly as they are written in the list.
+    "impactsAnnotation" : Provide the text excerpt from where you extracted the impacts information.
+
+    If information is missing, leave it empty.
+    Do not reuse or count the same impactValue twice.
+    For numerical values, use integers; do not use commas (e.g., 1000 instead of 1,000),
+    sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9).
+    If only the number of affected households or houses is given, assume each unit equals three people.
+    Provide the answer as a list of JSON i.e. [JSON1, JSON2].
+    Do not add notes or extra text, only output the list of JSONs, without saying "here is the list of JSONs".
+    Here is an example of how the structure of the list of JSONs must be:""" + \
+    """[{
+       "impactType" : "Affected People",
+       "impactValue": 10000,
+       "impactUnit": "people",
+       "impactValueFlag" : "exact",
+        "location" : ["Abu Hamad", "Tokar"],
+        "startYear" : "2024",
+        "startMonth" : "08",
+        "startDay" : "29",
+        "endYear" : "null",
+        "endMonth" : "null",
+        "endDay" : "null",
+        "hazards" : ["flash flood"],
+        "impactAnnotation" : ["Flash floods impacted 10000 people in the cities of Abu Hamad and Tokar on the 29 August 2024",]
+      },
+      {
+       "impactType" : "Affected People",
+       "impactValue": 100,
+       "impactUnit": "hospitals",
+       "impactValueFlag" : "exact",
+        "location" : ["Red Sea State"],
+        "startYear" : "2024",
+        "startMonth" : "08",
+        "startDay" : "null",
+        "endYear" : "2024",
+        "endMonth" : "10",
+        "endDay" : "null",
+        "hazards" : ["flash flood"],
+        "impactAnnotation" : ["Flash floods impacted 100 hospitals in Red Sea State between August to October 2024",]
+      },
+      {
+          "impactType" : "Healthcare Infrastructure",
+          "impactValue": 4,
+          "impactUnit": "hospitals",
+          "impactValueFlag" : "approx",
+          "location": ["River Nile State"],
+          "startYear": "null",
+          "startMonth": "null",
+          "startDay": "null",
+          "endYear": "null",
+          "endMonth": "null",
+          "endDay": "null",
+          "hazards" : "null",
+          "impactAnnotation" : ["At least 4 hospitals have been impacted in River Nile State alone."]
+          }]
+
+    """
+    #Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
+    return prompt
+
+#without constraint in user prompt
+def quantify_impacts_type_value_loc_date_haz_v2(text, impact_cat_desc_dict, hazard_all_subtype_emdat):
+    """Find impact type, values, locs, etc. altogether"""
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Extract from the above text all descriptions and mentions of impacts resulting from extreme
+    natural hazard events. Focus on the categories of impacts described as follow: {impact_cat_desc_dict}.
+    For each mention of impact that you identify, extract the following information:
+    "impactType"        : The type of impact. If no type of impact can be identified, write null.
+                          Write the impact exactly as they are written in the list.
+    "impactValue"       : The quantified value of the described impact.
+                          Make sure that the value is consistent with the impactUnit field.
+                          If no quantified value can be identified, write null.
+    "impactUnit         : The unit of the quantified impact value.
+                          Make sure that the value is consistent with the impactValue field.
+                          If no unit can be identified, write null.
+    "impactValueFlag"   : The quality flag for the quantified impact value informing on the confidence
+                          in the quantified value. If the extracted impactValue is exact (e.g. "1001 people have been affected"), write "exact".
+                          If the extracted impactValue is an approximation (e.g. "several hundred people have been affected"), write "approx".
+    "location"          : The locations for which the impact value is described.
+                          Write the locations exactly as they are written in the text.
+                          If no location can be identified, write null.
+                          If multiple locations are described, write them in a python list format [location1, location2],
+
+    "startYear"    : The year during which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "startMonth"  : The month during which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "startDay"    : The day at which the described impact is thought to have started.
+                          If you cannot find this information write null.
+    "endYear"    : The year during which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "endMonth"  : The month during which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "endDay"    : The day at which the described impact is thought to have ended.
+                          If you cannot find this information write null.
+    "hazards"           : The natural hazards that are thought to have caused the described impacts.
+                          If no hazard can be identified, write null, if more than one natural hazard can be identified,
+                          write the hazards in a python list format [hazard1, hazard2].
+    "impactsAnnotation" : Provide the text excerpt from where you extracted the impacts information.
+
+    If information is missing, leave it empty.
+    Do not reuse or count the same impactValue twice.
+    For numerical values, use integers; do not use commas (e.g., 1000 instead of 1,000),
+    sum ranges if multiple are provided for the same impact, convert million or mi to six zeros (10^6), billion or bi to nine zeros (10^9).
+    If only the number of affected households or houses is given, assume each unit equals three people.
+    Provide the answer as a list of JSON i.e. [JSON1, JSON2].
+    Do not add notes or extra text, only output the list of JSONs, without saying "here is the list of JSONs".
+    Here is an example of how the structure of the list of JSONs must be:""" + \
+    """[{
+       "impactType" : "Affected People",
+       "impactValue": 10000,
+       "impactUnit": "people",
+       "impactValueFlag" : "exact",
+        "location" : ["Abu Hamad", "Tokar"],
+        "startYear" : "2024",
+        "startMonth" : "08",
+        "startDay" : "29",
+        "endYear" : "null",
+        "endMonth" : "null",
+        "endDay" : "null",
+        "hazards" : ["flash flood"],
+        "impactAnnotation" : ["Flash floods impacted 10000 people in the cities of Abu Hamad and Tokar on the 29 August 2024",]
+      },
+      {
+       "impactType" : "Affected People",
+       "impactValue": 100,
+       "impactUnit": "hospitals",
+       "impactValueFlag" : "exact",
+        "location" : ["Red Sea State"],
+        "startYear" : "2024",
+        "startMonth" : "08",
+        "startDay" : "null",
+        "endYear" : "2024",
+        "endMonth" : "10",
+        "endDay" : "null",
+        "hazards" : ["flash flood"],
+        "impactAnnotation" : ["Flash floods impacted 100 hospitals in Red Sea State between August to October 2024",]
+      },
+      {
+          "impactType" : "Healthcare Infrastructure",
+          "impactValue": 4,
+          "impactUnit": "hospitals",
+          "impactValueFlag" : "approx",
+          "location": ["River Nile State"],
+          "startYear": "null",
+          "startMonth": "null",
+          "startDay": "null",
+          "endYear": "null",
+          "endMonth": "null",
+          "endDay": "null",
+          "hazards" : "null",
+          "impactAnnotation" : ["At least 4 hospitals have been impacted in River Nile State alone."]
+          }]
+
+    """
+    #Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
+    return prompt
 
 def find_impact_types_categories(text, impact_cat, impact_desc):
     """Try to identify impacts from different categories. Based on impact categories
@@ -188,7 +396,41 @@ def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impac
     """
     return prompt
 
-
+#functions to be parsed to chat.completions (do not seem to work)
+functions = [
+    {
+        "name": "ImpactList",
+        "description": "Analyze impacts and structure results.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "impacts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "impactType": {"type": "string", "enum": ["Affected People", "Jeej"]},
+                            "impactValue": {"type": ["integer", "null"]},
+                            "impactUnit": {"type": ["string", "null"]},
+                            "location": {"type": "array", "items": {"type": "string"}},
+                            "startYear": {"type": ["integer", "null"]},
+                            "startMonth": {"type": ["integer", "null"]},
+                            "startDay": {"type": ["integer", "null"]},
+                            "endYear": {"type": ["integer", "null"]},
+                            "endMonth": {"type": ["integer", "null"]},
+                            "endDay": {"type": ["integer", "null"]},
+                            "hazards": {"type": "array", "items": {"type": "string", "enum": ["Flood", "Storm", "Drought"]}},
+                            "impactsAnnotation": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "required": ["impactType", "location", "hazards", "impactsAnnotation"]
+                    }
+                }
+            },
+            "required": ["impacts"]
+        }
+    }
+]
+#examples to prompt llms
 example_location =     """ {"hazardLocation": [
     {
       "country": "Brazil",
