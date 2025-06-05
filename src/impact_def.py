@@ -25,9 +25,10 @@ impact_subtypes_desc_dict = {
         "Homeless People": "Individuals who lost their homes, to a natural hazard event",
         "Missing People": "People unaccounted for following a natural hazard event.",
         "Human Deaths": "Fatalities caused by a natural hazard event.",
-        "Blocked roads" : "Roads blocked or disrupted traffic due to a  natural hazard. event.",
-        "Airports": "Airports or aerodromes impacted by a natural hazard event.",
-        "WASH infrastructure": "Water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a natural hazard event.",
+        "Transportation Infrastructure": "The impacts on the transportation infrastructures resulting from the natural hazard event.",
+        #"Blocked roads" : "Roads blocked or disrupted traffic due to a  natural hazard. event.",
+        #"Airports": "Airports or aerodromes impacted by a natural hazard event.",
+        "Water, Sanitation, and Hygiene Infrastructure": "Water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a natural hazard event.",
         "Healthcare Infrastructure": "Healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc. impacted by a natural hazard event.",
         "IT and Communication Infrastructure": "IT and communication infrastructure such as data centers, communication towers, and cables impacted by a natural hazard event.",
         "Residential Buildings": "Residential buildings impacted by a natural hazard event.",
@@ -35,7 +36,14 @@ impact_subtypes_desc_dict = {
         "Education Infrastructure": "Education infrastructure such as schools, universities, etc. impacted by a natural hazard event.",
         "Agriculture": "The impacts on the agriculture such as land, crops, livestock resulting from a natural hazard event.",
         }
-
+impact_subtypes_unit_list = ["people", "m", "km", "km**2", "kg", "ton", "houses",
+                             "families", "households", "roads", "km of roads",
+                             "railways", "km of railways","airports", "WASH facilities",
+                             "healthcare facilities",
+                             "IT and communication facilities",
+                             "camps", "tents", "education facilities", "kg of crops",
+                             "ton of crops", "km**2 of crops", "livestock heads"
+                             ]
 impact_subtypes_unit_dict = {
         "Affected People": ["people"],
         "Injured People": ["people"],
