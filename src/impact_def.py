@@ -6,7 +6,8 @@ impactType_list = ["Human", "Infrastructure", "Agriculture", "Economy"]
 impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", #"Affected Families and Households"
                       "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
                       "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure",
-                      "Crop production", "Affected livestock", "Economic losses", "Agriculture Infrastructure", "Water Quality and Availability"]
+                      "Crop Production", "Affected Livestock", "Economic Losses", "Agriculture Infrastructure", "Water Quality and Availability",
+                      "Health Impacts"]
 
 impact_cat_desc_dict = {
     "Human impacts": "The impacts on the human population resulting from the natural hazard event. Look for words such as 'Affected People', 'Injured People', 'Displaced People','Homeless People', 'Missing People', 'Human Deaths'.",
@@ -36,7 +37,8 @@ impact_subtypes_desc_dict = {
         "Education Infrastructure": "Education infrastructure such as schools, universities, etc. impacted by a natural hazard event.",
         "Agriculture": "The impacts on the agriculture such as land, crops, livestock resulting from a natural hazard event.",
         }
-impact_subtypes_unit_list = ["people", "families", "households",
+#to use to constraint the units in the user prompt
+impactUnit_list_prompting = ["people", "families", "households",
                              "m", "km", "km**2", "kg", "tons",
                              "roads", "km of roads",
                              "railways", "km of railways",
@@ -46,13 +48,36 @@ impact_subtypes_unit_list = ["people", "families", "households",
                              "IT and communication facilities",
                              "residential facilities",
                              "education facilities",
-                             "agricultural facilities"
+                             "agricultural facilities",
                              "kg of crops",
                              "tons of crops",
                              "km**2 of crops",
-                             "livestock",
+                             "livestock heads",
                              "trees"
                              ]
+#target units for post proc
+impactUnit_list_final = ["people",
+                                   "km",
+                                   "km**2",
+                                   "kg",
+                                   "roads",
+                                   "km of roads",
+                                   "railways",
+                                   "km of railways",
+                                   "transportation facilities",
+                                   "water, sanitation and hygiene facilities",
+                                   "healthcare facilities",
+                                   "IT and communication facilities",
+                                   "residential facilities",
+                                   "education facilities",
+                                   "agricultural facilities",
+                                   "kg of crops",
+                                   "km**2 of crops",
+                                   "livestock heads",
+                                   "trees"
+                             ]
+
+impactUnitType_list = ["count", "distance", "area", "weight", "volume"]
 
 impact_subtypes_unit_dict = {
         "Affected People": ["people"],
