@@ -43,4 +43,4 @@ else :
     )
 
 # Enables `response_model`
-client = instructor.patch(client=CLIENT)
+CLIENT = instructor.patch(client=CLIENT)
