@@ -24,7 +24,7 @@ def extract_outer_json(text):
     extracted_json = text[start_index:end_index + 1]
     return extracted_json
 
-def get_model_response(CLIENT, MODEL, prompt, prompt_system=None):
+def get_model_response(CLIENT, MODEL, prompt, prompt_system=None, response_model=None):
 
   if prompt_system:
       messages = [
@@ -39,6 +39,8 @@ def get_model_response(CLIENT, MODEL, prompt, prompt_system=None):
     model=MODEL,
     messages=messages,
     temperature=0,
+    response_model=response_model,
+    max_retries=2
   )
 
   return completion.choices[0].message.content
