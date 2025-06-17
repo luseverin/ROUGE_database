@@ -112,13 +112,14 @@ def standardize_units(text):
     unit_mapping = {
         "acre": "km**2",
         "acres": "km**2",
-        "feet": "m",
-        "foot": "m",
-        "ft": "m",
-        "meter": "m",
-        "metres": "m",
+        "feet": "km",
+        "foot": "km",
+        "ft": "km",
+        "meter": "km",
+        "metres": "km",
         "kilometers": "km",
         "kilometres": "km",
+        "hectare": "km**2",
         "hectares": "km**2",
         "ha": "km**2",
         "squared kilometers": "km**2",
@@ -126,8 +127,8 @@ def standardize_units(text):
         "square km": "km**2",
         "pounds": "kg",
         "lbs": "kg",
-        "tons": "ton",
-        "tonnes": "ton"
+        "tons": "kg",
+        "tonnes": "kg"
     }
     doc = nlp(text)
     new_text = text
