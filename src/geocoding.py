@@ -4,7 +4,15 @@ import ast
 import geopy as gpy
 import itertools
 import time
+import math
+import pycountry
+import langcodes
+from copy import deepcopy
+from rapidfuzz import fuzz
+import geopandas as gpd
+from shapely.ops import unary_union
 from src.post_process_functions import *
+from src.data import *
 
 #Countries
 import pycountry
@@ -18,6 +26,12 @@ from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
 
 geolocator = gpy.geocoders.Nominatim(user_agent='orienternet')
+LOCATION_LEVEL_MAPPING = {
+    'admin2': {'admin_level': 2, 'nominatim_keys': ['city', 'town', 'village', 'hamlet', 'municipality', 'locality', 'borough', 'suburb', 'neighbourhood']},
+    'admin1': {'admin_level': 1, 'nominatim_keys': ['state', 'province', 'region', 'county', 'territory', 'department', 'governorate', 'autonomous_region', 'state_district', 'district', 'metropolitan_area', 'subregion', 'zone']},
+    'admin0': {'admin_level': 0, 'nominatim_keys': ['country']}
+}
+
 
 def rotated_levenshtein_similarity(str1, str2):
     """Compute the best Levenshtein similarity considering all rotations of words."""
@@ -47,6 +61,276 @@ def remove_admin_words(location_str) :
     location_str = ' '.join(location_str.split())
     return location_str
 
+def get_country_languages_dict():
+    country_languages = {}
+    for country in pycountry.countries:
+        try:
+            lang_code = langcodes.get(country.alpha_2).language
+            if lang_code:
+                country_languages[country.name] = lang_code
+        except:
+            continue
+    return country_languages
+LANGUAGES = get_country_languages_dict()
+
+#### Function to Geocode one location 
+
+def open_admin_gpd(ADMIN_PATH) : 
+    gpd_files = {}
+    try : 
+        ##### ADMIN0 From Natural Earth 
+        gpd_files["ADM_0"] = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
+        gpd_files["ADM_0"] = gpd_files["ADM_0"].rename({"ADMIN":"ADMIN_0"}, axis=1)
+        
+        ##### ADMIN1 From GAUL 
+        gpd_files["ADM_1"] = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
+        gpd_files["ADM_1"] = gpd_files["ADM_1"].rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1"}, axis=1)
+        
+        ##### ADMIN2 From GAUL 
+        gpd_files["ADM_2"] = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")        
+        gpd_files["ADM_2"] = gpd_files["ADM_2"].rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1", "gaul2_name":"ADMIN_2"}, axis=1)
+        
+    except Exception as e:
+        print(f"[open_admin_gpd] Error loading GPD files: {e}")
+        return None
+    return gpd_files
+
+def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
+    """
+    Get polygon for a target_name at a specific level within a country from the full admin GPKG.
+    """
+    try:
+        choices = gdf_file.loc[gdf_file["ADMIN_0"]==country_name]
+        matches = choices[choices[level_name].str.contains(target_name, na=False)]
+        if not matches.empty:
+            return matches.copy()
+
+    except Exception as e:
+        print(f"[get_polygon] Error: {e}")
+    
+    return None
+
+def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_request, print_info=True):
+    # location_levels = ['city', 'state', 'region', 'country'] 
+    nominatim_query = f"{location}, {country}"
+    time_new_request = time.time()
+
+    try :
+        if time_new_request - time_last_request <= 1:
+            time.sleep(1)
+        nominatim_result = geolocator.geocode(nominatim_query, exactly_one=True, language="en")
+        time_last_request = time.time()
+
+        if nominatim_result is None:
+            if print_info:
+                print("No results for query:", nominatim_query)
+            df_gpd = get_polygon(gdf_file["ADM_0"], country, 'ADMIN_0', country, 0)
+            df_gpd["finest_level"] = 0
+            df_gpd["location"] = country
+            df_gpd["geocoding_flag"] = 1
+            return df_gpd
+
+        # Evaluate similarity
+        loc_clean = remove_admin_words(location)
+        result_clean = remove_admin_words(nominatim_result.raw.get('name', ''))
+        similarity = rotated_levenshtein_similarity(loc_clean, result_clean)
+    
+        if similarity < similarity_th:
+            # raise ValueError(f"Low similarity: {similarity}")
+            if print_info:
+                print("Low similarity:", similarity)
+            df_gpd = get_polygon(gdf_file["ADM_0"], country, 'ADMIN_0', country, 0)
+            df_gpd["finest_level"] = 0
+            df_gpd["location"] = country
+            df_gpd["geocoding_flag"] = 1
+            return df_gpd
+
+        # Reverse geocoding to get administrative levels
+        coords = (nominatim_result.latitude, nominatim_result.longitude)
+        time_new_request = time.time()
+        if time_new_request - time_last_request <= 1:
+            time.sleep(1)
+        reverse_result = geolocator.reverse(coords, exactly_one=True, addressdetails=True, language="en")
+        
+        # address = reverse_result.raw.get("address", {})
+        raw_data = reverse_result.raw
+        address = raw_data.get("address", {}) if isinstance(raw_data, dict) else {}
+
+        best_match = None
+        best_sim = 0
+        best_level = 0
+        best_field = None
+        best_name = None
+        best_key_nominatim = None
+        loc_clean = remove_admin_words(location)
+        for loc_level in LOCATION_LEVEL_MAPPING.keys():
+            admin_info = LOCATION_LEVEL_MAPPING[loc_level]
+            admin_level = admin_info['admin_level']
+            admin_field = f"ADMIN_{admin_level}"
+            nominatim_keys = admin_info['nominatim_keys']
+            for key in nominatim_keys:
+                if key in address:
+                    val = address[key]
+                    val_clean = remove_admin_words(str(val))
+                    sim = rotated_levenshtein_similarity(loc_clean, val_clean)
+                    if print_info : 
+                        print("Found geocoding at resolution", best_level, ", Initial location :",  loc_clean, ", Geocoded location :", val, "Similaritt : ", sim)
+                    if sim >= similarity_th and sim > best_sim and admin_level>=best_level:
+                        best_sim = sim
+                        best_match = val
+                        best_level = admin_level
+                        best_field = admin_field
+                        best_name = str(val)
+                        best_key_nominatim = key
+            
+        if best_name is not None:
+            # Try to extract the polygon with english 
+            df_gpd = get_polygon(gdf_file[f"ADM_{best_level}"], country, best_field, best_name, best_level)
+            #If not found, loop over the languages 
+            if df_gpd is None : 
+                language = LANGUAGES.get(country)
+                reverse_result = geolocator.reverse(coords, exactly_one=True, addressdetails=True, language=language)
+                raw_data = reverse_result.raw
+                address = raw_data.get("address", {}) if isinstance(raw_data, dict) else {}
+                
+                df_gpd = get_polygon(gdf_file[f"ADM_{best_level}"], country, best_field, address[best_key], best_level)
+        
+            if df_gpd is not None:
+                if print_info:
+                    print(f"Best match: {best_name} (sim={best_sim:.2f}) at level {best_level}")
+                df_gpd["finest_level"] = best_level
+                df_gpd["location"] = best_name
+                df_gpd["geocoding_flag"] = 0
+            return df_gpd
+            
+    except Exception as e : 
+        if print_info:
+            print(f"[geocode_unique_loc] {e}. Falling back to country level.")
+            
+    # Fallback to country level
+    try : 
+        languages = LANGUAGES.get(country)
+        for lang in languages : 
+            
+            df_gpd = get_polygon(gdf_file["ADM_0"], country, "ADMIN_0", country, 0)
+            if df_gpd is not None : 
+                df_gpd["finest_level"] = 0
+                df_gpd["location"] = country
+                df_gpd["geocoding_flag"] = 1
+                return df_gpd
+    except Exception as e : 
+        print(f"[geocode_unique_loc fallback] Error: {e}")
+        return None
+
+def geocode_df_to_polygon(df, gather_admin_level=False, similarity_th=0.2, print_info=False, DATA_OUT_LLMS=None, res_savename=None) : 
+    """
+    For each row, perform the geocoding and create a polygon corresponding the location found 
+    If the gather_admin_level is True, the polygons are downgraded to the lowest resolution found 
+    """
+    df_geo = deepcopy(df)
+    df_geo["location"] = df_geo["location"].apply(lambda x: ast.literal_eval(x) 
+                                                  if pd.notna(x) and isinstance(x, str) and x.startswith("[") 
+                                                  else ([x] if pd.notna(x) else x))
+    time_last_request = time.time()
+        
+    #Open Polygons 
+    start = time.time()
+    gpd_files = open_admin_gpd(ADMIN_PATH)
+    end = time.time()
+    time_open = (end-start)/60
+    if print_info : 
+        print(f"Time to open files {time_open}mins")
+
+    if gpd_files is not None : 
+        start = time.time()
+        for row_index, row_data in df_geo.iterrows():
+            try : 
+                geocoding_flag = None
+                locations = row_data['location']
+                country = row_data['country']
+                if isinstance(country, float) and math.isnan(country) :
+                    country = row_data['country_kw']
+                    
+                if not isinstance(locations, (list)) :
+                    locations = [country]
+                    geocoding_flag = 1
+        
+                df_locations = []
+                for location in locations : 
+                    df_loc = geocode_unique_loc(gpd_files, location, country, similarity_th, time_last_request, print_info)
+                    time_last_request = time.time()
+                    if df_loc is not None : 
+                        if geocoding_flag is not None : 
+                            df_loc["geocoding_flag"] = geocoding_flag
+                        df_locations.append(df_loc)   
+                if not df_locations : 
+                    continue
+                    
+                df_locations = pd.concat(df_locations, axis=0)
+                df_locations = df_locations[df_locations['geometry'].notnull()]
+                
+                if df_locations.empty:
+                    continue
+    
+                #Retrieve the lowest admin level
+                lowest_level = df_locations["finest_level"].min()
+                layer_name = f"ADM_{lowest_level}"
+        
+                if gather_admin_level : 
+                    df_location_gather_admin = pd.DataFrame(columns = ['geometry'])
+                    for _, row_location_data in df_locations.iterrows() :
+                        try : 
+                            if row_location_data["finest_level"] == lowest_level :
+                                df_location_gather_admin.loc[len(df_location_gather_admin)] = row_location_data['geometry']# = pd.concat([df_location_gather_admin, row_location_data])
+                            else : 
+                                if lowest_level == 0 : 
+                                    row_lower_level = gpd_files[layer_name][gpd_files[layer_name]["COUNTRY"] == row_location_data["COUNTRY"]]
+                                elif lowest_level == 1 : 
+                                    row_lower_level = gpd_files[layer_name][(gpd_files[layer_name]["COUNTRY"] == row_location_data["COUNTRY"]) & 
+                                                                    (gpd_files[layer_name]["ADM_1"] == row_location_data["ADM_1"])]
+                                elif lowest_level == 2 :
+                                    row_lower_level = gpd_files[layer_name][(gpd_files[layer_name]["COUNTRY"] == row_location_data["COUNTRY"]) & 
+                                                                    (gpd_files[layer_name]["ADM_1"] == row_location_data["ADM_1"]) & 
+                                                                    (gpd_files[layer_name]["ADM_2"] == row_location_data["ADM_2"])]
+                                df_location_gather_admin.loc[len(df_location_gather_admin)] = row_lower_level['geometry']# = pd.concat([df_location_gather_admin, row_lower_level])
+                                
+                        except Exception as e : 
+                            print(f"[gather admin fallback] Error: {e}")
+                    merged_geometry = unary_union(df_location_gather_admin['geometry'])
+                else : 
+                    df_locations = df_locations[df_locations['geometry'].notnull()]
+                    merged_geometry = unary_union(df_locations['geometry'])
+        
+                #Update the final database
+                df_geo.loc[row_index, "locationPolygon"] = merged_geometry
+                df_geo.loc[row_index, "locationLowestAdmin"] = layer_name
+    
+                # Combine geocoding_flag info across locations
+                downgrade_flag = 1 if (df_locations['geocoding_flag'] == 1).any() else 0
+                df_geo.loc[row_index, "geocoding_flag"] = downgrade_flag
+    
+                # Save 
+                if DATA_OUT_LLMS and res_savename:
+                    save_df = df_geo.copy()
+                    save_df["location"] = save_df["location"].apply(lambda x: str(x) if isinstance(x, list) else x)
+                    save_gdf = gpd.GeoDataFrame(save_df, geometry='locationPolygon')
+                    try:
+                        if gather_admin_level :
+                            save_gdf.to_file(DATA_OUT_LLMS + res_savename + "_geo_gather.gpkg", layer='multipolygons', driver="GPKG")
+                        else : 
+                            save_gdf.to_file(DATA_OUT_LLMS + res_savename + "_geo.gpkg", layer='multipolygons', driver="GPKG")
+                    except Exception as e:
+                        print(f"[GeoPackage Save Error] {e}")
+                        
+            except Exception as e : 
+                print(f"[Row {row_index}] Error: {e}")
+                continue
+        df_geo["location"] = df_geo["location"].apply(lambda x: str(x) if isinstance(x, list) else x)
+        return df_geo
+    else :
+        return None 
+
+######### OLD FUNCTIONS #########
 def geocoding_reports_location(df, print_info=False, locations_levels=['country', 'region', 'state', 'city']) :
     """
     Use this function if the input df has only the columns ['location'] to describe the location
@@ -132,7 +416,6 @@ def geocoding_reports_location(df, print_info=False, locations_levels=['country'
                     if print_info :
                         print("WRONG location "+nominatim_result.raw['name']+" for "+finest_loc_vals+", similarity = "+str(similarity))
     return df_geo
-
 
 def geocoding_reports_region_cities(df, print_info=False, locations_levels=['country', 'region', 'state', 'city']) :
     """
@@ -222,7 +505,6 @@ def geocoding_reports_region_cities(df, print_info=False, locations_levels=['cou
                     if print_info :
                         print("WRONG location "+nominatim_result.raw['name']+" for "+finest_loc_vals+", similarity = "+str(similarity))
     return df_geo
-
 
 # Geocoding of impact
 # For impact we cannot separate the locations to have only one location per row --> Need to keep as a list
