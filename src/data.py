@@ -15,3 +15,4 @@ DATA_IN_JSONS = DATA_PATH + 'report_jsons/'
 DATA_OUT_LLMS = DATA_PATH + 'results_llm/'
 DATA_LABELLED = DATA_PATH + 'labelled/'
 DATA_FIGURE = DATA_PATH + 'figure/'
+ADMIN_PATH = DATA_PATH+"admin_files/"
