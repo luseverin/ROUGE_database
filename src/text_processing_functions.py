@@ -1,4 +1,4 @@
-import re
+import regex as re
 import numpy as np
 import pandas as pd
 import ast
@@ -8,7 +8,52 @@ from number_spacy import find_numbers
 from spacy.tokens import Span
 from pint import UnitRegistry
 
-
+# Define unit conversion mapping
+unit_mapping = {
+    'km': 'km',
+    'km**2': 'km**2',
+    'miles': 'km',
+    'kg': 'kg',
+    'm**3': 'm**3',
+    "acre": "km**2",
+    "feet": "km",
+    "meter": "km",
+    "hectare": "km**2",
+    "ha": "km**2",
+    "mi**2": "km**2",
+    "m**2": "km**2",
+    "ft**2": "km**2",
+    "pound": "kg",
+    "ton": "kg",
+    "tonne": "kg",
+    "liter": "m**3",
+    "l": "m**3",
+    "gallon": "m**3",
+}
+unit_type_kw_reclass = {
+                    'km' : [r"(?<!\b(squared?)\b)\s\b(kilometers?|kilometres?|kms?)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2)\b)"],
+                    'km**2' : [r"\b(?<=(squared?))\s*(kilometers?|kilometres?|kms?)\b",
+                            r"\b(kilometers?|kilometres?|kms?)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
+                    'm**2' : [r"\b(?<=(squared?)\b)\s*\b(meters?|metres?|m)\b",
+                            r"\b(meters?|metres?|m)\s?\b\b(\*\*\s*2|\*\*2|\^2|²|square|squared|2)\b(?<!\.\d)"],
+                    'mi**2' : [r"\b(?<=(squared?))\s*(mile|miles|mi)\b",
+                            r"\b(mile|miles|mi)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
+                    'ft**2' : [r"\b(?<=(squared?))\s*(feet|foot|ft)\b",
+                            r"\b(feet|foot|ft)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
+                    'kg' : [r"\b(kgs?|kilograms?)\b"],
+                    'm**3' : [r"\b(?<=(cube|cubic))\s*(meters?|metres?|m)\b",
+                            r"\b(meters?|metres?|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)\b(?<!\.\d)"],
+                    "acre": [r"\b(acres?)\b"],
+                    "feet": [r"\b(feet|foot|ft)\b"],
+                    "hectare": [r"\b(hectares?|ha)\b"],
+                    "ton": [r"\b(?<!\b(metric)\s*)(ton|tons)\b"],
+                    "tonne": [r"\b(tonne|tonnes|metric ton|metric tons)\b"],
+                    "pound": [r"\b(pounds|lbs?)\b"],
+                    "meter": [r"(?<!\b(squared?|cube|cubic)\s*)\b(meters?|metres?|m)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
+                    "liter": [r"\b(liters?|litres?)\b"],
+                    "miles": [r"\b(miles?|mi)\b"],
+                    "gallon": [r"\b(gallons|gal)\b"],
+}
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -47,17 +92,13 @@ def check_hazard_type_keyword(text, hazard_patterns):
 
     return hazards
 
-# Function to clean the text
-#def clean_text(text):
-#    # Remove hyperlinks
-#    text = re.sub(r'http\S+|www\S+', '', text)
-#    # Remove special characters except for basic punctuation (e.g., commas, periods)
-#    #text = re.sub(r'[^a-zA-Z0-9\s.,!?]', '', text)
-#    # Remove newlines
-#    text = text.replace('\n', ' ')
-#    # Remove multiple spaces
-#    text = re.sub(r'\s+', ' ', text).strip()
-#    return text
+def like_num(text, lang="en"):
+    """Version of like_num using text2num as able to handle more formulations"""
+    try:
+        text2num(text, lang)
+        return True
+    except ValueError:
+        return False
 
 #format numbers
 def replace_numbers(text_in):
@@ -79,10 +120,15 @@ def replace_numbers(text_in):
     # Reconstruct text by replacing numbers
     modified_tokens = []
     for token in doc:
-        if token.like_num:  # Check if the token is like a number and convert if possible
+        if token.like_num or like_num(token.text):  # Check if the token is like a number and convert if possible
             try:
                 # Convert the token's text to a number
-                number = int(token.text) if token.text.isdigit() else text2num(token.text, "en")
+                number = float(token.text) if token.text.isdigit() else text2num(token.text, "en")
+                prev_token = token.nbor(-1) if token.i > 0 else None
+                if prev_token and (prev_token.like_num or like_num(prev_token.text)):
+                    # If the previous token is like a number, multiply the current number
+                    prev_number = float(modified_tokens.pop())
+                    number *= prev_number
                 modified_tokens.append(str(number))
             except ValueError:
                 modified_tokens.append(token.text)  # If conversion fails, keep the original
@@ -102,34 +148,33 @@ def replace_commas_in_numbers(text):
     """
     return re.sub(r'(?<=\d),(?=\d)', '', text)
 
+def replace_count_suffixes(text):
+    """
+    Replace count suffixes in text such as 10k => 10000, 1.5m => 1500000.
+    """
+    return re.sub(
+        r'(\d+(\.\d+)?)([kKmM])\b',  # Updated regex for floating-point numbers
+        lambda match: str(
+            float(match.group(1)) * {'k': 1000, 'K': 1000, 'm': 1000000, 'M': 1000000}[match.group(3).upper()]
+        ),
+        text
+    )
 
 # Function to convert and replace units in a sentence
+def take_n_next_tokesn(token, n):
+    """Return n next tokens of a spacy token"""
+    next_tokens = []
+    for i in range(1 ,n+1):
+        try:
+            next_tokens.append(token.nbor(i))
+        except IndexError:
+            break
+    return next_tokens
+
 def standardize_units(text):
+    """Standardize units to a common baseline in text"""
 
     ureg = UnitRegistry()
-
-    # Define unit conversion mapping
-    unit_mapping = {
-        "acre": "km**2",
-        "acres": "km**2",
-        "feet": "km",
-        "foot": "km",
-        "ft": "km",
-        "meter": "km",
-        "metres": "km",
-        "kilometers": "km",
-        "kilometres": "km",
-        "hectare": "km**2",
-        "hectares": "km**2",
-        "ha": "km**2",
-        "squared kilometers": "km**2",
-        "square kilometers": "km**2",
-        "square km": "km**2",
-        "pounds": "kg",
-        "lbs": "kg",
-        "tons": "kg",
-        "tonnes": "kg"
-    }
     doc = nlp(text)
     new_text = text
 
@@ -141,10 +186,17 @@ def standardize_units(text):
                 num = float(token.text)
             except ValueError:
                 continue
-            next_token = token.nbor(1) if token.i + 1 < len(doc) else None
+            next_tokens = take_n_next_tokesn(token, 2) # take next 2 tokens
 
-            if  next_token and next_token.text.lower() in unit_mapping:
-                unit = next_token.text.lower()
+            if len(next_tokens):
+                next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
+                pot_units = [target_unit for target_unit, unit_patterns in unit_type_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
+                if len(pot_units) == 0:
+                    continue
+                elif len(pot_units) > 1:
+                    raise ValueError(f"Multiple potential units found for token: {token.text} {next_tokens}")
+
+                unit = pot_units[0]
                 si_unit = unit_mapping[unit]
 
                 # Perform conversion
@@ -155,7 +207,7 @@ def standardize_units(text):
 
                 # Replace in the text
                 replacement = f"{converted_value:.8g} {converted_unit}"
-                old = f"{token.text} {next_token.text}"
+                old = f"{token.text} {next_tokens}"
                 new_text = new_text.replace(old, replacement)
 
     return new_text
@@ -166,7 +218,9 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False, format_number
     text = re.sub(r'http\S+|www\S+', '', text)
 
     # Remove some special characters, leaving basic punctuation (e.g., commas, periods)
-    text = re.sub(r'[^a-zA-Z0-9\s.,!?%]', '', text)
+    text = re.sub(r"ﬀ", "ff", text) #need to replace special ff and ae first
+    text = re.sub(r"æ", "ae", text)
+    text = re.sub(r'[^a-zA-Z0-9\s.,!?%\\]', '', text)
 
     # Remove numbers if the option is enabled
     if remove_numbers:
@@ -186,6 +240,7 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False, format_number
     if format_numbers:
         text = replace_numbers(text)
         text = replace_commas_in_numbers(text)
+        text = replace_count_suffixes(text)
 
     return text
 
