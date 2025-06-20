@@ -3,7 +3,7 @@ import pandas as pd
 import json
 from collections import Counter
 import numpy as np
-import re
+import regex as re
 import copy as cp
 import ast
 

@@ -1,7 +1,7 @@
 #Functions to extract data with LLMs
 import pandas as pd
 import json as json
-import re
+import regex as re
 from copy import deepcopy
 from itertools import chain
 from langchain_groq import ChatGroq
