@@ -7,7 +7,7 @@ class ImpactDetail(BaseModel):
     impactSubtype: str
     impactValue: Optional[float] = None
     impactUnit: Optional[str] = None
-    impactUnitType: Optional[str] = None
+    #impactUnitType: Optional[str] = None
     impactValueFlag: Optional[str] = None
     location: Optional[List[str]] = None
     startYear: Optional[int] = None
@@ -36,7 +36,7 @@ class ImpactDetail(BaseModel):
             raise ValueError(f"Invalid impactType: {value}. Must be one of {cls._impactTypes_list}")
         return value
     @field_validator("impactSubtype")
-    def validate_impact_type(cls, value):
+    def validate_impact_subtype(cls, value):
         if value not in cls._impactSubtypes_list:
             raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
         return value
