@@ -50,7 +50,13 @@ def pop_cntry_check(extracted_data, country_pop):
     def check_pop(x):
         year = str(pd.to_datetime(x["reportDate"]).year)
         year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else "2023"
-        pop_year = country_pop[country_pop["Country Code"] == x["country_iso3_kw"]][year_check].values[0]
+        if year != year_check:
+            print(f"Warning: year {year} not in population data for {x['country_iso3_kw']}")
+        if  x["country_iso3_kw"] not in country_pop["Country Code"].unique():
+            print(f"Warning: country {x['country_iso3_kw']} not in population data")
+            pop_year = np.nan
+        else:
+            pop_year = country_pop[country_pop["Country Code"] == x["country_iso3_kw"]][year_check].values[0]
         return x["impactValue"] < pop_year if (x["impactUnit"] == "people" and not np.isnan(x["impactValue"]))  else np.nan
     extracted_data["pop_cntry_check"] = np.nan
     extracted_data["pop_cntry_check"] = extracted_data.apply(check_pop, axis=1)
@@ -76,6 +82,6 @@ def flag_hazard(extracted_data, hazard_list):
     """
     def check_haz(x):
         return any(haz not in hazard_list for haz in x["hazards"])
-    extracted_data["haz_check"] = np.nan
-    extracted_data["haz_check"] = extracted_data.apply(check_haz, axis=1)
+    extracted_data["unknown_haz"] = np.nan
+    extracted_data["unknown_haz"] = extracted_data.apply(check_haz, axis=1)
     return extracted_data
