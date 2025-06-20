@@ -5,9 +5,9 @@ impactType_list = ["Human", "Infrastructure", "Agriculture", "Economy"]
 
 impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", #"Affected Families and Households"
                       "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
-                      "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure",
-                      "Crop Production", "Affected Livestock", "Economic Losses", "Agriculture Infrastructure", "Water Quality and Availability",
-                      "Health Impacts"]
+                      "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Energy Production Infrastructure "
+                      "Crop Production and Forestry", "Affected Animals", "Economic Losses", "Agriculture Infrastructure", "Water Quality and Availability"]
+                      #"Health Impacts"]
 
 impact_cat_desc_dict = {
     "Human impacts": "The impacts on the human population resulting from the natural hazard event. Look for words such as 'Affected People', 'Injured People', 'Displaced People','Homeless People', 'Missing People', 'Human Deaths'.",
@@ -57,25 +57,25 @@ impactUnit_list_prompting = ["people", "families", "households",
                              ]
 #target units for post proc
 impactUnit_list_final = ["people",
-                                   "km",
-                                   "km**2",
-                                   "kg",
-                                   "roads",
-                                   "km of roads",
-                                   "railways",
-                                   "km of railways",
-                                   "transportation facilities",
-                                   "water, sanitation and hygiene facilities",
-                                   "healthcare facilities",
-                                   "IT and communication facilities",
-                                   "residential facilities",
-                                   "education facilities",
-                                   "agricultural facilities",
-                                   "kg of crops",
-                                   "km**2 of crops",
-                                   "livestock heads",
-                                   "trees"
-                             ]
+                         "km",
+                         "km**2",
+                         "kg",
+                         "roads",
+                         "km of roads",
+                         "railways",
+                         "km of railways",
+                         "transportation facilities",
+                         "water, sanitation and hygiene facilities",
+                         "healthcare facilities",
+                         "IT and communication facilities",
+                         "residential facilities",
+                         "education facilities",
+                         "agricultural facilities",
+                         "kg of crops",
+                         "km**2 of crops",
+                         "affected animals",
+                         "trees"
+                        ]
 
 impactUnitType_list = ["count", "distance", "area", "weight", "volume"]
 
