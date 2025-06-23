@@ -44,14 +44,14 @@ unit_type_kw_reclass = {
                     'm**3' : [r"\b(?<=(cube|cubic))\s*(meters?|metres?|m)\b",
                             r"\b(meters?|metres?|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)\b(?<!\.\d)"],
                     "acre": [r"\b(acres?)\b"],
-                    "feet": [r"\b(feet|foot|ft)\b"],
+                    "feet": [r"(?<!\b(squared?|cube|cubic)\s*)\b(feet|foot|ft)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
                     "hectare": [r"\b(hectares?|ha)\b"],
                     "ton": [r"\b(?<!\b(metric)\s*)(ton|tons)\b"],
                     "tonne": [r"\b(tonne|tonnes|metric ton|metric tons)\b"],
                     "pound": [r"\b(pounds|lbs?)\b"],
                     "meter": [r"(?<!\b(squared?|cube|cubic)\s*)\b(meters?|metres?|m)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
-                    "liter": [r"\b(liters?|litres?)\b"],
-                    "miles": [r"\b(miles?|mi)\b"],
+                    "liter": [r"\b(liters?|litres?|l)\b"],
+                    "miles": [r"(?<!\b(squared?|cube|cubic)\s*)\b(miles?|mi)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
                     "gallon": [r"\b(gallons|gal)\b"],
 }
 
@@ -92,8 +92,9 @@ def check_hazard_type_keyword(text, hazard_patterns):
 
     return hazards
 
-def like_num(text, lang="en"):
-    """Version of like_num using text2num as able to handle more formulations"""
+def written_num(text, lang="en"):
+    """Version of like_num using text2num. Able to handle plurals but does not
+    detect literal number (e.g. "3")"""
     try:
         text2num(text, lang)
         return True
@@ -113,30 +114,53 @@ def replace_numbers(text_in):
     """
     nlp = spacy.blank('en')
     nlp.add_pipe('find_numbers')
-    doc = nlp(text_in)
     # Process the text
     doc = nlp(text_in)
 
     # Reconstruct text by replacing numbers
     modified_tokens = []
     for token in doc:
-        if token.like_num or like_num(token.text):  # Check if the token is like a number and convert if possible
-            try:
-                # Convert the token's text to a number
-                number = float(token.text) if token.text.isdigit() else text2num(token.text, "en")
-                prev_token = token.nbor(-1) if token.i > 0 else None
-                if prev_token and (prev_token.like_num or like_num(prev_token.text)):
-                    # If the previous token is like a number, multiply the current number
-                    prev_number = float(modified_tokens.pop())
-                    number *= prev_number
-                modified_tokens.append(str(number))
-            except ValueError:
-                modified_tokens.append(token.text)  # If conversion fails, keep the original
-        else:
+
+        #first replace written-out numbers
+        if written_num(token.text):
+            number = float(text2num(token.text, "en"))
+            #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
+            next_tokens = take_n_neighb_tokens(token, 2)
+            next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
+            prev_token = take_n_neighb_tokens(token, -1)
+            if could_be_unit(next_tokens) and prev_token and prev_token.like_num:
+                if modified_tokens[-1] == " ": #remove whitespace
+                    modified_tokens.pop()
+                prev_number = float(modified_tokens.pop())
+                number *= prev_number
+            modified_tokens.append(str(number))
+
+        else: #if no number identified, keep as is
             modified_tokens.append(token.text)
 
+        if token.whitespace_:#keep whitespace
+            modified_tokens.append(token.whitespace_)
+
+        #if token.like_num or like_num(token.text):  # Check if the token is like a number and convert if possible
+        #    try:
+        #        # Convert the token's text to a number
+        #        number = float(token.text) if token.text.isdigit() else text2num(token.text, "en")
+        #        prev_token = token.nbor(-1) if token.i > 0 else None
+        #        if prev_token and (prev_token.like_num or like_num(prev_token.text)):
+        #            # If the previous token is like a number, multiply the current number
+        #            prev_number = float(prev_token.text)
+        #            number *= prev_number
+        #        #modified_tokens.append(str(number))
+        #        print(f"text_out, token.text, str(number): {text_out, token.text, str(number)}")
+        #        text_out = re.sub(token.text, str(number), str(number))
+        #    except ValueError:
+        #        pass
+        #        #modified_tokens.append(token.text)  # If conversion fails, keep the original
+        #else:
+        #    modified_tokens.append(token.text)
+
     # Join the tokens back into a string
-    return " ".join(modified_tokens)
+    return "".join(modified_tokens)
 
 
 def replace_commas_in_numbers(text):
@@ -149,6 +173,7 @@ def replace_commas_in_numbers(text):
     return re.sub(r'(?<=\d),(?=\d)', '', text)
 
 def replace_count_suffixes(text):
+    #do not convert m to milions as might be metre unit!
     """
     Replace count suffixes in text such as 10k => 10000, 1.5m => 1500000.
     """
@@ -161,15 +186,22 @@ def replace_count_suffixes(text):
     )
 
 # Function to convert and replace units in a sentence
-def take_n_next_tokesn(token, n):
-    """Return n next tokens of a spacy token"""
-    next_tokens = []
-    for i in range(1 ,n+1):
+def take_n_neighb_tokens(token, n):
+    """Return n neighboring tokens of a spacy token"""
+    neighb_tokens = []
+    trange = range(1, n+1) if n > 0 else range(-n, 0)
+    for i in trange:
         try:
-            next_tokens.append(token.nbor(i))
+            neighb_tokens.append(token.nbor(i))
         except IndexError:
             break
-    return next_tokens
+    if len(neighb_tokens) == 0:
+        return None
+    return neighb_tokens
+
+def could_be_unit(text):
+    pot_units = [target_unit for target_unit, unit_patterns in unit_type_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
+    return len(pot_units) > 0
 
 def standardize_units(text):
     """Standardize units to a common baseline in text"""
@@ -186,9 +218,9 @@ def standardize_units(text):
                 num = float(token.text)
             except ValueError:
                 continue
-            next_tokens = take_n_next_tokesn(token, 2) # take next 2 tokens
+            next_tokens = take_n_neighb_tokens(token, 2) # take next 2 tokens
 
-            if len(next_tokens):
+            if next_tokens:
                 next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
                 pot_units = [target_unit for target_unit, unit_patterns in unit_type_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
                 if len(pot_units) == 0:
@@ -238,9 +270,9 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False, format_number
         text = ' '.join([word for word in text.split() if word.lower() not in stop_words])
 
     if format_numbers:
-        text = replace_numbers(text)
         text = replace_commas_in_numbers(text)
         text = replace_count_suffixes(text)
+        text = replace_numbers(text)
 
     return text
 
