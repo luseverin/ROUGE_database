@@ -3,12 +3,10 @@ from typing import List, Optional, Union
 
 
 class ImpactDetail(BaseModel):
-    impactType: str
     impactSubtype: str
-    impactValue: Optional[float] = None
+    impactValue: Optional[str] = None
     impactUnit: Optional[str] = None
-    #impactUnitType: Optional[str] = None
-    impactValueFlag: Optional[str] = None
+    impactValueApprox: bool
     location: Optional[List[str]] = None
     startYear: Optional[int] = None
     startMonth: Optional[int] = None
@@ -20,21 +18,14 @@ class ImpactDetail(BaseModel):
     impactsAnnotation: List[str] = None
 
     # Dynamic constraints
-    _impactTypes_list: Optional[List[str]] = None
     _impactSubtypes_list: Optional[List[str]] = None
     _hazardTypes_list: Optional[List[str]] = None
 
     @classmethod
-    def set_allowed_classes(cls, impact_types: List[str], impact_subtypes: List[str], hazard_types: Union[None, List[str]]):
-        cls._impactTypes_list = impact_types
+    def set_allowed_classes(cls, impact_subtypes: List[str], hazard_types: Union[None, List[str]]):
         cls._impactSubtypes_list = impact_subtypes
         cls._hazardTypes_list = hazard_types
 
-    @field_validator("impactType")
-    def validate_impact_type(cls, value):
-        if value not in cls._impactTypes_list:
-            raise ValueError(f"Invalid impactType: {value}. Must be one of {cls._impactTypes_list}")
-        return value
     @field_validator("impactSubtype")
     def validate_impact_subtype(cls, value):
         if value not in cls._impactSubtypes_list:
@@ -50,7 +41,27 @@ class ImpactDetail(BaseModel):
             raise ValueError(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
         return value
 
+class ImpactDetailTypeSubType(ImpactDetail):
+    impactType: str
+
+    # Dynamic constraints
+    _impactTypes_list: Optional[List[str]] = None
+
+    @classmethod
+    def set_allowed_classes(cls, impact_types: List[str], impact_subtypes: List[str], hazard_types: Union[None, List[str]]):
+        cls._impactTypes_list = impact_types
+        cls._impactSubtypes_list = impact_subtypes
+        cls._hazardTypes_list = hazard_types
+
+    @field_validator("impactType")
+    def validate_impact_type(cls, value):
+        if value not in cls._impactTypes_list:
+            raise ValueError(f"Invalid impactType: {value}. Must be one of {cls._impactTypes_list}")
+        return value
+
 class ImpactDetailConstUnit(ImpactDetail):
+    impactUnitType: Optional[str] = None
+
     # Dynamic constraints
     _impactUnits_list: Optional[List[str]] = None
 
@@ -67,9 +78,20 @@ class ImpactDetailConstUnit(ImpactDetail):
             raise ValueError(f"Invalid impactUnit: {value}. Must be one of {cls._impactUnits_list}")
         return value
 
+class ImpactDetailRange(ImpactDetail):
+    impactValueMin: Optional[float] = None
+    impactValueMax: Optional[float] = None
+
+
 class ImpactList(RootModel):
     root: List[ImpactDetail]
 
+class ImpactListTypeSubType(RootModel):
+    root: List[ImpactDetailTypeSubType]
+
 class ImpactListConstUnit(RootModel):
     root: List[ImpactDetailConstUnit]
+
+class ImpactListRange(RootModel):
+    root: List[ImpactDetailRange]
 
