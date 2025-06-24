@@ -4,9 +4,10 @@
 impactType_list = ["Human", "Infrastructure", "Agriculture", "Economy"]
 
 impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", #"Affected Families and Households"
-                      "Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
-                      "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Energy Production Infrastructure "
-                      "Crop Production and Forestry", "Affected Animals", "Economic Losses", "Agriculture Infrastructure", "Water Quality and Availability"]
+                      "Road Infrastructure", "Other Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
+                      "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Energy Production Infrastructure",
+                      "Crop Production and Forestry", "Affected Animals", "Economic Losses", "Agriculture Infrastructure", "Water Quality and Availability", "Energy",
+                      "Recreation, Tourism, and Culture", "Market"]
                       #"Health Impacts"]
 
 impact_cat_desc_dict = {
