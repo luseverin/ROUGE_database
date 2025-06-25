@@ -252,7 +252,7 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False, format_number
     # Remove some special characters, leaving basic punctuation (e.g., commas, periods)
     text = re.sub(r"ﬀ", "ff", text) #need to replace special ff and ae first
     text = re.sub(r"æ", "ae", text)
-    text = re.sub(r'[^a-zA-Z0-9\s.,!?%\\]', '', text)
+    text = re.sub(r'[^a-zA-Z0-9\s.,!?%-\\]', '', text)
 
     # Remove numbers if the option is enabled
     if remove_numbers:
