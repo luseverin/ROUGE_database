@@ -3,11 +3,11 @@
 
 impactType_list = ["Human", "Infrastructure", "Agriculture", "Economy"]
 
-impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", #"Affected Families and Households"
+impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Human Health and Wellbeing",#"Affected Families and Households"
                       "Road Infrastructure", "Other Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
-                      "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Energy Production Infrastructure",
-                      "Crop Production and Forestry", "Affected Animals", "Economic Losses", "Agriculture Infrastructure", "Water Quality and Availability", "Energy",
-                      "Recreation, Tourism, and Culture", "Market"]
+                      "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Power and Energy Production Infrastructure",
+                      "Agriculture Infrastructure", "Crop Production and Forestry", "Affected Livestock and Animals", "Economy and Market", "Recreation, Tourism, and Culture",
+                      "Access to Healthcare", "Access to transport and Mobility", "Water Quality and Availability", "Access to Education", "Access to Power and Energy"]
                       #"Health Impacts"]
 
 impact_cat_desc_dict = {
@@ -21,22 +21,32 @@ impact_cat_desc_dict = {
     "Education Infrastructure": "The impacts on education infrastructure resulting from the natural hazard event. Look for words such as 'schools', 'universities', etc."
 }
 impact_subtypes_desc_dict = {
-        "Affected People": "Individuals impacted by a natural hazard event (the term affected must be mentioned).",
-        "Injured People": "People injured, including those hospitalized or admitted (the term injured must be used), to a natural hazard event.",
-        "Displaced People": "Individuals temporarily relocated to safer areas due to a natural hazard event.",
-        "Homeless People": "Individuals who lost their homes, to a natural hazard event",
-        "Missing People": "People unaccounted for following a natural hazard event.",
-        "Human Deaths": "Fatalities caused by a natural hazard event.",
-        "Transportation Infrastructure": "The impacts on the transportation infrastructures resulting from the natural hazard event.",
-        #"Blocked roads" : "Roads blocked or disrupted traffic due to a  natural hazard. event.",
-        #"Airports": "Airports or aerodromes impacted by a natural hazard event.",
-        "Water, Sanitation, and Hygiene Infrastructure": "Water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a natural hazard event.",
-        "Healthcare Infrastructure": "Healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc. impacted by a natural hazard event.",
-        "IT and Communication Infrastructure": "IT and communication infrastructure such as data centers, communication towers, and cables impacted by a natural hazard event.",
-        "Residential Buildings": "Residential buildings impacted by a natural hazard event.",
-        "Informal Settlements":"Informal settlements such as refugee camps, slums, tents, etc. impacted by a natural hazard event.",
-        "Education Infrastructure": "Education infrastructure such as schools, universities, etc. impacted by a natural hazard event.",
-        "Agriculture": "The impacts on the agriculture such as land, crops, livestock resulting from a natural hazard event.",
+        "Affected People": "People impacted by a natural hazard event (the term affected must be mentioned). Reports the impacts in number of people.",
+        "Injured People": "People injured, including those hospitalized or admitted (the term injured must be used), to a natural hazard event. Reports the impacts in number of people.",
+        "Displaced People": "People forcefully displaced or evacuated before or following the event. Reports the impacts in number of people.",
+        "Homeless People": "People who lost their homes, to a natural hazard event. Reports the impacts in number of people.",
+        "Missing People": "People unaccounted for following a natural hazard event. Reports the impacts in number of people.",
+        "Human Deaths": "Fatalities caused by a natural hazard event. Reports the impacts in number of deaths.",
+        "Human Health and Wellbeing": "The impacts on human health and wellbeing such as infection, illness, etc. resulting from a natural hazard event. Reports the impacts in number of people.",
+        "Roads" : "Roads (including bridges and highways) blocked or damaged or disrupted traffic due to a natural hazard event. Reports the impacts in number of , kilometers of, or damage cost of roads or bridges affected.",
+        "Other Transportation Infrastructure": "The impacts on the transportation infrastructures other than roads such as airports, railways, etc. resulting from the natural hazard event. Reports the impacts in number of or kilometers of or damage cost of facilities affected.",
+        "Water, Sanitation, and Hygiene Infrastructure": "Water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a natural hazard event.  Reports the impacts in number of or damage cost of facilities affected.",
+        "Healthcare Infrastructure": "Healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc. impacted by a natural hazard event. Reports the impacts in number of or damage cost of facilities affected.",
+        "IT and Communication Infrastructure": "IT and communication infrastructure such as data centers, communication towers, and cables impacted by a natural hazard event. Reports the impacts in number of or damage cost of facilities affected.",
+        "Residential Buildings": "Residential buildings impacted by a natural hazard event. Reports the impacts in number of or damage cost of buildings affected.",
+        "Informal Settlements":"Informal settlements such as refugee camps, slums, tents, etc. impacted by a natural hazard event. Reports the impacts in number of or damage cost of settlements affected.",
+        "Education Infrastructure": "Education infrastructure such as schools, universities, etc. impacted by a natural hazard event. Reports the impacts in number of or damage cost of facilities affected.",
+        "Agriculture Infrastucture": "Agriculture infrastuctures such as farms, silos, irrigation systems, greenhouses, etc. impacted by a natural hazard event. Reports the impacts in number of or damage cost of facilities affected.",
+        "Power and Energy Production Infrastucture": "Power and energy production infrastuctures such as power plants, grids, wind farms, solar farms, etc. impacted by a natural hazard event. Reports the impacts in number of or damage cost of facilities affected.",
+        "Crop Production and Forestry": "The impacts on crop production and forestry such as trees, crops, kg of crops, etc. resulting from a natural hazard event. Reports the impacts in number of, kilometer ** 2 of, kilograms of, or damage cost of crops or trees affected.",
+        "Affected Livestock and Animals": "The impacts on livestock and animals such as cattles, pigs, sheeps, fishes, etc. impacted by a natural hazard event. Reports the impacts in number of or damage cost of livestock or animals affected.",
+        "Economy and Market": "Changes in prices or market instability resulting from a natural hazard event. Reports the impacts in percentage of price changes.",
+        "Recreation, Tourism, and Culture": "The impacts on recreation, tourism, and culture such as cultural heritage sites, tourist attractions, etc. resulting from a natural hazard event. Reports the impacts in number of or damage cost of facilities affected.",
+        "Access to Healthcare": "People losing access to healthcare resulting from a natural hazard event. Reports the impacts in number of people losing access to healthcare.",
+        "Access to transport and Mobility": "People losing access to transport or being stranded resulting from a natural hazard event. Reports the impacts in number of people losing access to transport or being stranded.",
+        "Water Quality and Availability": "Changes in the quality and availability of water resulting from a natural hazard event. Reports the impacts in percentage of water quality changes.",
+        "Access to Education": "People losing access to education resulting from a natural hazard event. Reports the impacts in number of people losing access to education.",
+        "Access to Power and Energy": "People losing access to power or energy resulting from a natural hazard event. Reports the impacts in number of people losing access to power or energy.",
         }
 #to use to constraint the units in the user prompt
 impactUnit_list_prompting = ["people", "families", "households",
@@ -87,14 +97,26 @@ impact_subtypes_unit_dict = {
         "Homeless People": ["people"],
         "Missing People": ["people"],
         "Human Deaths": ["people"],
-        "Blocked roads" : ["km", "nb."],
-        "Airports": ["nb."],
-        "WASH infrastructure": ["nb."],
-        "Healthcare Infrastructure": ["nb."],
-        "IT and Communication Infrastructure": ["nb."],
-        "Residential Buildings": ["nb."],
-        "Informal Settlements": ["nb."],
-        "Education Infrastructure": ["nb."],
+        "Human Health and Wellbeing": ["people", "cases"],
+        "Roads" : ["roads", "km of roads", "CHF"],
+        "Other transportation infrastructure" : ["transportation facilities", "km of transportation facilities", "CHF"],
+        "Water, Sanitation, and Hygiene Infrastructure": ["WASH facilities","CHF"],
+        "Healthcare Infrastructure": ["healthcare facilities","CHF"],
+        "IT and Communication Infrastructure": ["IT and communication facilities","CHF"],
+        "Residential Buildings": ["houses","CHF"],
+        "Informal Settlements": ["informal settlements","CHF"],
+        "Education Infrastructure": ["education facilities","CHF"],
+        "Agricultural Infrastructure": ["agricultural facilities","CHF"],
+        "Power and Energy Production Infrastructure": ["power and energy production facilities","CHF"],
+        "Crop Production and Forestry": ["kg of crops", "km**2 of crops", "trees", "CHF"],
+        "Affected Livestock and Animals": ["affected animals","CHF"],
+        "Recreation, Tourism, and Culture": ["recreation, tourisme and culture facilities", "CHF"],
+        "Economy and Market": ["CHF"],
+        "Access to Healthcare": ["people"],
+        "Access to transport and Mobility": ["people"],
+        "Water Quality and Availability": ["people", "m**3"],
+        "Access to Education": ["people"],
+        "Access to Power and Energy": ["people"],
         }
 
 impact_subtypes_desc_quant_dict = {
