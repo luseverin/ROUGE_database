@@ -13,7 +13,7 @@ hazard_all_subtype_emdat = ["drought", "wildfire", "forest fire", "land fire",
 hazard_main_types_emdat_extended = ["Drought", "Wildfire", "Earthquake", "Mass movement",
                                     "Volcanic activity", "Flood", "Wave action", "Extreme warm temperature",
                                     "Extreme cold temperature", "Convective Storm", "Extra-tropical storm",
-                                    "Tropical storm", "Epidemic"]
+                                    "Tropical storm", "Epidemic", "Conflict"]
 
 #dict to match emdat maintypes to there subtypes
 maintype_to_subytpe_emdat = {'Drought': ['drought'],
