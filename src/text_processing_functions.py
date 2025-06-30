@@ -129,7 +129,7 @@ def replace_numbers(text_in):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.blank('en')
+    nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
     nlp.add_pipe('find_numbers')
     # Process the text
     doc = nlp(text_in)
@@ -140,7 +140,7 @@ def replace_numbers(text_in):
     for token in doc:
 
         #first replace written-out numbers
-        if written_num(token.text):
+        if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
             number = float(text2num(token.text, "en"))
             #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
             next_tokens = take_n_neighb_tokens(token, 2)
