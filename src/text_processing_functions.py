@@ -119,6 +119,7 @@ def replace_numbers(text_in):
 
     # Reconstruct text by replacing numbers
     modified_tokens = []
+    last_token_modified = False
     for token in doc:
 
         #first replace written-out numbers
@@ -127,16 +128,19 @@ def replace_numbers(text_in):
             #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
             next_tokens = take_n_neighb_tokens(token, 2)
             next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
-            prev_token = take_n_neighb_tokens(token, -1)
-            if could_be_unit(next_tokens) and prev_token and prev_token.like_num:
+            prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
+            prev_token = prev_token[0] if prev_token else None
+            if last_token_modified or (prev_token and prev_token.like_num):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
                 if modified_tokens[-1] == " ": #remove whitespace
                     modified_tokens.pop()
                 prev_number = float(modified_tokens.pop())
                 number *= prev_number
             modified_tokens.append(str(number))
+            last_token_modified = True #mark that the last token was modified
 
         else: #if no number identified, keep as is
             modified_tokens.append(token.text)
+            last_token_modified = False
 
         if token.whitespace_:#keep whitespace
             modified_tokens.append(token.whitespace_)
@@ -189,7 +193,7 @@ def replace_count_suffixes(text):
 def take_n_neighb_tokens(token, n):
     """Return n neighboring tokens of a spacy token"""
     neighb_tokens = []
-    trange = range(1, n+1) if n > 0 else range(-n, 0)
+    trange = range(1, n+1) if n > 0 else range(n, 0)
     for i in trange:
         try:
             neighb_tokens.append(token.nbor(i))
