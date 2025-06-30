@@ -101,6 +101,23 @@ def written_num(text, lang="en"):
     except ValueError:
         return False
 
+def is_float_digit(text):
+    """
+    Check if the given text can be converted to a float.
+
+    Args:
+        text (str): The text to check.
+
+    Returns:
+        bool: True if the text can be converted to a float, False otherwise.
+    """
+
+    try:
+        float(text)  # Attempt to convert the text to a float
+        return True
+    except ValueError:
+        return False
+
 #format numbers
 def replace_numbers(text_in):
     """
@@ -130,7 +147,7 @@ def replace_numbers(text_in):
             next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
-            if last_token_modified or (prev_token and prev_token.like_num):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
+            if last_token_modified or (prev_token and is_float_digit(prev_token.text)):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
                 if modified_tokens[-1] == " ": #remove whitespace
                     modified_tokens.pop()
                 prev_number = float(modified_tokens.pop())
