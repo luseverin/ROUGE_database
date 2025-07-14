@@ -1,13 +1,18 @@
 #Constants for impact definition
 
 
-impactType_list = ["Human", "Infrastructure", "Agriculture", "Economy"]
+impactType_list = ["Human",
+"Service Access",
+"Infrastructure",
+"Agriculture",
+"Economic Activity & Livelihood Production"]
+
 
 impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Human Health and Wellbeing",#"Affected Families and Households"
                       "Road Infrastructure", "Other Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
                       "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Power and Energy Production Infrastructure",
-                      "Agriculture Infrastructure", "Crop Production and Forestry", "Affected Livestock and Animals", "Economy and Market", "Recreation, Tourism, and Culture",
-                      "Access to Healthcare", "Access to transport and Mobility", "Water Quality and Availability", "Access to Education", "Access to Power and Energy"]
+                      "Agriculture Infrastructure", "Crop Production and Forestry", "Affected Livestock and Animals", "Economy and Livelihood ", "Recreation, Tourism, and Culture",
+                      "Access to Healthcare", "Access to transport and Mobility", "Water Quality and Availability", "Access to Education", "Access to Power and Energy", "Access to Food"]
                       #"Health Impacts"]
 
 impact_cat_desc_dict = {
