@@ -30,7 +30,7 @@ unit_mapping = {
     "l": "m**3",
     "gallon": "m**3",
 }
-unit_type_kw_reclass = {
+std_unit_kw_reclass = {
                     'km' : [r"(?<!\b(squared?)\b)\s\b(kilometers?|kilometres?|kms?)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2)\b)"],
                     'km**2' : [r"\b(?<=(squared?))\s*(kilometers?|kilometres?|kms?)\b",
                             r"\b(kilometers?|kilometres?|kms?)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
@@ -221,7 +221,7 @@ def take_n_neighb_tokens(token, n):
     return neighb_tokens
 
 def could_be_unit(text):
-    pot_units = [target_unit for target_unit, unit_patterns in unit_type_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
+    pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
     return len(pot_units) > 0
 
 def standardize_units(text):
@@ -243,7 +243,7 @@ def standardize_units(text):
 
             if next_tokens:
                 next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
-                pot_units = [target_unit for target_unit, unit_patterns in unit_type_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
+                pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
                 if len(pot_units) == 0:
                     continue
                 elif len(pot_units) > 1:
@@ -273,7 +273,7 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False, format_number
     # Remove some special characters, leaving basic punctuation (e.g., commas, periods)
     text = re.sub(r"ﬀ", "ff", text) #need to replace special ff and ae first
     text = re.sub(r"æ", "ae", text)
-    text = re.sub(r'[^a-zA-Z0-9\s.,!?%-\\]', '', text)
+    #text = re.sub(r'[^a-zA-Z0-9\s.,!?%-/]', '', text)
 
     # Remove numbers if the option is enabled
     if remove_numbers:
@@ -336,7 +336,7 @@ def select_hazard_description(text):
         if (re.search(r"the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)) and (id_top==None):
             #Save where the text should begin
             id_top = id_s
-        if (re.search(r"coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
+        if (re.search(r"operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
             # Fix a minimum of 5 sentences for the description of the hazard
             if ((id_s-id_top) >= 5) :
                 id_end = id_s
