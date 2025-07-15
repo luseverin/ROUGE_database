@@ -4,9 +4,10 @@ from typing import List, Optional, Union
 
 class ImpactDetail(BaseModel):
     impactSubtype: str
-    impactValue: Optional[str] = None
+    impactValue: Optional[float] = None
     impactUnit: Optional[str] = None
-    impactValueApprox: bool
+    impactValuePrecision: Optional[str] = None
+    country: List[str]
     location: Optional[List[str]] = None
     startYear: Optional[int] = None
     startMonth: Optional[int] = None
@@ -15,10 +16,10 @@ class ImpactDetail(BaseModel):
     endMonth: Optional[int] = None
     endDay: Optional[int] = None
     hazards: Optional[List[str]] = None
-    impactsAnnotation: List[str] = None
+    impactsAnnotation: List[str]
 
     # Dynamic constraints
-    _impactSubtypes_list: Optional[List[str]] = None
+    _impactSubtypes_list: List[str]
     _hazardTypes_list: Optional[List[str]] = None
 
     @classmethod
