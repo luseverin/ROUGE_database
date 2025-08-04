@@ -333,12 +333,17 @@ def select_hazard_description(text):
     id_end = None
     for id_s, sentence in enumerate(text) :
         sentence = sentence.lower()
-        if (re.search(r"the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)) and (id_top==None):
+        match_top = re.search(r"(?:the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster|description of the event)\s*(.*)", sentence, re.IGNORECASE)
+        if match_top and (id_top==None):
             #Save where the text should begin
             id_top = id_s
-        if (re.search(r"operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
-            # Fix a minimum of 5 sentences for the description of the hazard
-            if ((id_s-id_top) >= 5) :
-                id_end = id_s
-    return text[id_top:id_end]
+            text[id_top] = match_top.group(1)
+
+        match_end = re.search(r"^(.*?)(?=\s*(operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions))", sentence, re.IGNORECASE)
+        if match_end and (id_end==None):
+            id_end = id_s
+            text[id_end] = match_end.group(0)
+    id_top = 0 if id_top == None else id_top
+    id_end = len(text)-1 if id_end == None else id_end
+    return text[id_top:id_end+1]
 
