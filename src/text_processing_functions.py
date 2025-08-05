@@ -338,12 +338,16 @@ def select_hazard_description(text):
         if match_top and (id_top==None):
             #Save where the text should begin
             id_top = id_s
+            continue
             #text[id_top] = match_top.group(1)
 
         #match_end = re.search(r"^(.*?)(?=\s*(operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions))", sentence, re.IGNORECASE)
-        match_end = re.search(r"operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions", sentence, re.IGNORECASE)
-        if match_end and (id_end==None):
+        match_end = re.search(r"operational strategy|coordination and partnerships|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions", sentence, re.IGNORECASE)#summary of
+        if match_end and (id_end==None and id_top!=None):
+            if id_s - id_top < 10:
+                continue #too short
             id_end = id_s
+            break
             #text[id_end] = match_end.group(0)
     #keep everything if no match
     id_top = 0 if id_top == None else id_top
