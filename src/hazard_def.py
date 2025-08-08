@@ -15,6 +15,22 @@ hazard_main_types_emdat_extended = ["Drought", "Wildfire", "Earthquake", "Mass m
                                     "Extreme cold temperature", "Other storm",
                                     "Tropical storm", "Epidemic", "Conflict"]
 
+hazard_main_types_emdat_desc = {
+    "Drought": "Prolonged lack of precipitation",
+    "Wildfire": "Uncontrolled natural fires",
+    "Earthquake": "Sudden tectonic shifting. Include as well tsunami",
+    "Mass movement": "Any type of downslope movement of earth materials. Includes Landslides and rockfalls",
+    "Volcanic activity": "Eruptions and related phenomena",
+    "Flood": "River, coastal, flash and ice jam flooding",
+    "Wave action": "Wind-generated surface waves (e.g. Rogue waves, seiche)",
+    "Extreme warm temperature": "Prolonged, abnormally high heat, heatwaves",
+    "Extreme cold temperature": "Prolonged, abnormally low cold temperatures, coldwaves",
+    "Other storm": "Any type of storm which does not correspond to a tropical cyclone (e.g. extra-tropical storm, snow storm, derechos, hailstorm, tornado…)",
+    "Tropical storm": "Tropical cyclonic storms (also includes hurricanes, typhoons)",
+    "Epidemic": "Widespread occurrence of an infectious disease in a community",
+    "Conflict": "Disagreements or disputes between different groups, organizations, or states"
+}
+
 #dict to match emdat maintypes to there subtypes
 maintype_to_subytpe_emdat = {'Drought': ['drought'],
  'Wildfire': ['wildfire', 'forest fire', 'land fire'],
