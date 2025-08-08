@@ -31,6 +31,7 @@ MODEL_NAME_LIST = [
     "meta-llama/llama-prompt-guard-2-86m",
     "qwen-qwq-32b",
     "qwen/qwen3-32b"
+    "moonshotai/kimi-k2-instruct"
 
 ]
 
