@@ -22,6 +22,13 @@ class ImpactDetail(BaseModel):
     _impactSubtypes_list: List[str]
     _hazardTypes_list: Optional[List[str]] = None
 
+    #marker to do hazard validation or not
+    _validate_hazards = True
+
+    @classmethod
+    def turn_off_hazard_validation(cls):
+        cls._validate_hazards = False
+
     @classmethod
     def set_allowed_classes(cls, impact_subtypes: List[str], hazard_types: Union[None, List[str]]):
         cls._impactSubtypes_list = impact_subtypes
@@ -39,7 +46,10 @@ class ImpactDetail(BaseModel):
             raise ValueError(f"Expected a list for hazards, got {type(value).__name__}")
         invalid_hazards = [hazard for hazard in value if hazard not in cls._hazardTypes_list]
         if invalid_hazards:
-            raise ValueError(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
+            if cls._validate_hazards:
+                raise ValueError(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
+            else:
+                print(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
         return value
 
 class ImpactDetailTypeSubType(ImpactDetail):
