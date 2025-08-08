@@ -334,7 +334,7 @@ def select_hazard_description(text):
     for id_s, sentence in enumerate(text) :
         sentence = sentence.lower()
         #match_top = re.search(r"(?:situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event)\s*(.*)", sentence, re.IGNORECASE)#the situation|the disaster
-        match_top = re.search(r"situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)
+        match_top = re.search(r"operation summary|situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)
         if match_top and (id_top==None):
             #Save where the text should begin
             id_top = id_s
@@ -342,7 +342,7 @@ def select_hazard_description(text):
             #text[id_top] = match_top.group(1)
 
         #match_end = re.search(r"^(.*?)(?=\s*(operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions))", sentence, re.IGNORECASE)
-        match_end = re.search(r"operational strategy|coordination and partnerships|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions", sentence, re.IGNORECASE)#summary of
+        match_end = re.search(r"coordination and partnerships|operational strategy|coordination and partnerships|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions", sentence, re.IGNORECASE)#summary of
         if match_end and (id_end==None and id_top!=None):
             if id_s - id_top < 10:
                 continue #too short
