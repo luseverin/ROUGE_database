@@ -10,7 +10,7 @@ import langcodes
 from copy import deepcopy
 from rapidfuzz import fuzz
 import geopandas as gpd
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
 from src.post_process_functions import *
 from src.data import *
@@ -105,6 +105,11 @@ def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
     try:
         choices = gdf_file.loc[gdf_file["ADMIN_0"]==country_name]
         matches = choices[choices[level_name].str.contains(target_name, na=False)]
+
+        #Try for new matches, removing the admin words 
+        if matches.empty : 
+            target_name_modified = remove_admin_words(target_name)
+            matches = choices[choices[level_name].str.contains(target_name_modified, na=False)]
         if not matches.empty:
             return matches.copy()
 
@@ -112,6 +117,53 @@ def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
         print(f"[get_polygon] Error: {e}")
 
     return None
+
+def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
+    """
+    Find the administrative polygon containing the geometry at the specified level.
+    
+    Parameters:
+    - geom: shapely Point or Polygon
+    - country_name: string, country name matching 'NAME_0' in ADM_0 layer
+    - gpd_files: dict with keys 'ADM_0', 'ADM_1', 'ADM_2' holding GeoDataFrames
+    - level: str, either "ADM_1" or "ADM_2" (default is "ADM_2")
+    
+    Returns:
+    - GeoDataFrame with matching polygon(s) at requested level, or None if not found
+    """
+    assert level in [1, 2], "level must be '1' or '2'"
+
+    adm0_gdf = gpd_files["ADM_0"]
+    adm1_gdf = gpd_files["ADM_1"]
+    adm2_gdf = gpd_files["ADM_2"]
+
+    # Filter country in ADM_0
+    adm0_country = adm0_gdf[adm0_gdf["ADMIN_0"] == country_name]
+    if adm0_country.empty:
+        return None  # country not found
+
+    # Filter ADM_1 to those inside the country
+    adm1_country = adm1_gdf[adm1_gdf["ADMIN_0"] == country_name]
+
+    if level == 1 :
+        # Return adm1 polygons intersecting geometry
+        adm1_match = adm1_country[adm1_country.intersects(geom)]
+        return adm1_match if not adm1_match.empty else None
+
+    elif level == 2:
+        # Find matching ADM_1 polygon(s) first
+        adm1_match = adm1_country[adm1_country.intersects(geom)]
+        if adm1_match.empty:
+            return None
+
+        # Filter ADM_2 to those inside matched ADM_1
+        adm2_candidates = adm2_gdf[
+            adm2_gdf["ADMIN_1"].isin(adm1_match["ADMIN_1"].unique())
+        ]
+
+        # Find ADM_2 polygons intersecting the geometry
+        adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
+        return adm2_match if not adm2_match.empty else None
 
 def query_nominatim(location, country, last_request_time, delay=1):
     """
@@ -283,6 +335,9 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                 if print_info:
                     print(f"No results for query: {location}, {curr_country}")
                 continue
+            else : 
+                if print_info:
+                    print(f"Result of the query: {nom_result}")
 
             # Evaluate similarity
             loc_clean = remove_admin_words(location)
@@ -312,7 +367,8 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
 
         # If a satisfactory matching is found, and it doesn't correspond to an ADMIN 3 level, look for a GADM polygon
         if (best_result) and (best_result["admin_level"]!=3) :
-            # print(best_result)
+            if print_info : 
+                print("Best result :", best_result, " Search for polygon") 
             # Try to extract the polygon with English
             adm_lev = best_result["admin_level"]
             df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["admin_field"], best_result["name"], adm_lev)
@@ -320,15 +376,22 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
             #If no polygon found, loop over the languages
             if df_gpd is None :
                 language = LANGUAGES.get(best_result["country"])
-                address, _ = query_reverse_geocode(best_result['coords'], time_last_request, best_result["country"], language)
-                fallback_name = address.get(best_result['key'])
-                df_gpd = get_polygon(
-                    gdf_file[f"ADM_{best_result['admin_level']}"],
-                    best_result["country"],
-                    best_result["admin_field"],
-                    fallback_name,
-                    best_result["admin_level"]
-                )
+                # print(f"Tested languages : {language}, type {type(language)}")
+                languages = [language, "fr", "es", "de"]
+                for lang in languages : 
+                    # print(lang)
+                    address, _ = query_reverse_geocode(best_result['coords'], time_last_request, best_result["country"], lang)
+                    fallback_name = address.get(best_result['key'])
+                    # print(f"After changing language, new name : {address}")
+                    df_gpd = get_polygon(
+                        gdf_file[f"ADM_{best_result['admin_level']}"],
+                        best_result["country"],
+                        best_result["admin_field"],
+                        fallback_name,
+                        best_result["admin_level"]
+                    )
+                    if df_gpd is not None:
+                        break
 
             #Add extra informations
             if df_gpd is not None:
@@ -338,52 +401,75 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                 df_gpd["locationGeo"] = best_result["name"]
                 df_gpd["geocoding_country_flag"] = 0
                 df_gpd["geocoding_osm_flag"] = 0
-                # print(df_gpd)
                 return df_gpd
 
         # If not polygon found, look to geojson output from nominatim directly
+        # Use Nominatim Point/Polygon to retrive the GAUL geometry
+        # print(best_nomin.raw.keys())
         if "geojson" in best_nomin.raw.keys() :
-            # print(f"Use nominatim polygon for {best_result}")
-            # print(best_nomin.raw["geojson"]["type"].strip().lower())
-            if best_nomin.raw["geojson"]["type"].strip().lower() != "point" :
-                # print("Extract Geometry")
-                geometry = pd.DataFrame(result.raw['geojson']['coordinates']).transpose().apply(Polygon)
+            coords = best_nomin.raw['geojson']['coordinates']
 
-                print("Create the df_gpd")
-                df_gpd = best_result.copy()
-                df_gpd["locationPolygon"] = geometry
+            if best_nomin.raw['geojson']['type'].strip().lower() == 'point':
+                geom = Point(coords[0], coords[1])
+            else : 
+                geom = pd.DataFrame(coords).transpose().apply(Polygon).iloc[0]
+
+            # print("Look for polygon with Spatial matching for ", best_result['name'])
+            df_gpd = get_polygon_for_geometry(geom, best_result["country"], gdf_file, level=best_result['admin_level'])
+
+            # print("Find polygon with spatial matching for ", best_result['name'], " admin level", best_result['admin_level'])
+
+            if df_gpd is not None:
+                # if print_info:
+                # print(f"Best match: {best_result['name']} (sim={best_result['sim']:.2f}) at level {best_result['admin_level']}")
                 df_gpd["finest_level"] = best_result["admin_level"]
                 df_gpd["locationGeo"] = best_result["name"]
                 df_gpd["geocoding_country_flag"] = 0
                 df_gpd["geocoding_osm_flag"] = 1
-                print(df_gpd)
                 return df_gpd
-            #If the geometry is only a Point, look for the admin2 in the GADM fies
-            else :
-                #Loop over the field which should correspond to an ADMIN_2 level in GADM
-                for admin_lev in range(2, -1, -1) :
-                    for admin_fld in LOCATION_LEVEL_MAPPING["admin2"]["nominatim_keys"] :
-                        if admin_field in best_nomin.raw.address.keys() :
-                            admin_value = best_nomin.raw.address["admin_field"]
-                            df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], admin_fld, admin_value, adm_lev)
 
-                            #Otherwise try with langugage conversion
-                            if df_gpb is None :
-                                language = LANGUAGES.get(best_result["country"])
-                                address, _ = query_reverse_geocode(best_result['coords'], time_last_request, best_result["country"], language)
-                                fallback_name = address.get(best_result['key'])
-                                df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], admin_fld, fallback_name,best_result["admin_level"])
+            # print(f"Use nominatim polygon for {best_result}")
+            # # print(best_nomin.raw["geojson"]["type"].strip().lower())
+            # # print("[Nominatim polygon] type of polygon : ", best_nomin.raw["geojson"]["type"].strip().lower())
+            # if best_nomin.raw["geojson"]["type"].strip().lower() != "point" :
+            #     # print("[Nominatim polygon] best nomin")
+            #     geometry = pd.DataFrame(best_nomin.raw['geojson']['coordinates']).transpose().apply(Polygon)
+            #     df_gpd = best_result.copy()
+            #     df_gpd = pd.DataFrame.from_dict(df_gpd) 
+            #     df_gpd = df_gpd[['admin_level', 'admin_field', 'name', 'key', 'country']]
+            #     df_gpd = df_gpd.drop_duplicates()
+            #     df_gpd["geometry"] = geometry
+            #     df_gpd["finest_level"] = best_result["admin_level"]
+            #     df_gpd["locationGeo"] = best_result["name"]
+            #     df_gpd["geocoding_country_flag"] = 0
+            #     df_gpd["geocoding_osm_flag"] = 1
+            #     # print(df_gpd)
+            #     df_gpd = gpd.GeoDataFrame(df_gpd, geometry="geometry", crs="EPSG:4326")
+            #     # print("[Nominatim poygon] Return polygon")
+            #     return df_gpd
+            # #If the geometry is only a Point, look for the admin2 in the GADM fies
+            # else :
+            #     #Loop over the field which should correspond to an ADMIN_2 level in GADM
+            #     for adm_lev in range(2, -1, -1) :
+            #         for admin_fld in LOCATION_LEVEL_MAPPING["admin2"]["nominatim_keys"] :
+            #             if admin_field in best_nomin.raw.address.keys() :
+            #                 admin_value = best_nomin.raw.address["admin_field"]
+            #                 df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], admin_fld, admin_value, adm_lev)
 
-                            if df_gpd is not None :
-                                df_gpd["finest_level"] = best_result["admin_level"]
-                                df_gpd["locationGeo"] = admin_value
-                                df_gpd["geocoding_country_flag"] = 0
-                                df_gpd["geocoding_osm_flag"] = 0
-                                print(df_gpd)
-                                return df_gpd
+            #                 #Otherwise try with langugage conversion
+            #                 if df_gpb is None :
+            #                     language = LANGUAGES.get(best_result["country"])
+            #                     address, _ = query_reverse_geocode(best_result['coords'], time_last_request, best_result["country"], language)
+            #                     fallback_name = address.get(best_result['key'])
+            #                     df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], admin_fld, fallback_name,best_result["admin_level"])
 
-
-
+            #                 if df_gpd is not None :
+            #                     df_gpd["finest_level"] = best_result["admin_level"]
+            #                     df_gpd["locationGeo"] = admin_value
+            #                     df_gpd["geocoding_country_flag"] = 0
+            #                     df_gpd["geocoding_osm_flag"] = 0
+            #                     print(df_gpd)
+            #                     return df_gpd
     except Exception as e :
         if print_info:
             print(f"[geocode_unique_loc] {e}. Falling back to country level.")
