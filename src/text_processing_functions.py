@@ -113,12 +113,20 @@ def select_hazard_description(text):
     id_end = None
     for id_s, sentence in enumerate(text) :
         sentence = sentence.lower()
-        if (re.search(r"the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)) and (id_top==None):
+        # if (re.search(r"the situation|the disaster|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)) and (id_top==None):
+        #     #Save where the text should begin
+        #     id_top = id_s
+        match_top = re.search(r"situation analysis|the disaster|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)
+        if match_top and (id_top==None):
             #Save where the text should begin
             id_top = id_s
-        if (re.search(r"coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions", sentence, re.IGNORECASE)) and (id_end==None) and (id_top!=None):
-            # Fix a minimum of 5 sentences for the description of the hazard
-            if ((id_s-id_top) >= 5) :
-                id_end = id_s
+        match_end = re.search(r"operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of response|summary of the|previous operations|national society actions", sentence, re.IGNORECASE)
+        if match_end and (id_end==None) and (id_top!=None):
+            if id_s - id_top < 10:
+                continue #too short
+            id_end = id_s+2
+            break
+    id_top = 0 if id_top == None else id_top
+    id_end = len(text)-1 if id_end == None else id_end
     return text[id_top:id_end]
 
