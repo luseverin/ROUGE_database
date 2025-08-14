@@ -2,7 +2,7 @@ from pydantic import BaseModel, ValidationError, field_validator, RootModel
 from typing import List, Optional, Union
 
 class ImpactSubtype(BaseModel):
-    impactSubtype: str
+    impactSubtype: List[str]
     # Dynamic constraints
     _impactSubtypes_list: List[str]
 
@@ -21,6 +21,7 @@ class ImpactValue(BaseModel):
     impactValueMin: Optional[float] = None
     impactValueMax: Optional[float] = None
     impactValuePrecision: Optional[str] = None
+    impactUnit: Optional[str] = None
     valueAnnotation: List[str]
 
 class ImpactLocation(BaseModel):
@@ -66,7 +67,8 @@ class ImpactHazards(BaseModel):
                 print(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
         return value
 class ImpactDetail(ImpactSubtype, ImpactValue, ImpactLocation, ImpactDates, ImpactHazards):
-    pass
+    impactSubtype: str
+
 
 #class ImpactDetail(BaseModel):
 #    impactSubtype: str
