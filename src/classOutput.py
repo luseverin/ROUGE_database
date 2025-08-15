@@ -2,7 +2,7 @@ from pydantic import BaseModel, ValidationError, field_validator, RootModel
 from typing import List, Optional, Union
 
 class ImpactSubtype(BaseModel):
-    impactSubtype: List[str]
+    impactSubtype: Optional[List[str]] = None
     # Dynamic constraints
     _impactSubtypes_list: List[str]
 
@@ -12,8 +12,11 @@ class ImpactSubtype(BaseModel):
 
     @field_validator("impactSubtype")
     def validate_impact_subtype(cls, value):
-        if value not in cls._impactSubtypes_list:
-            raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
+        if not isinstance(value, list) or isinstance(value, type(None)):
+            raise ValueError(f"Expected a list or NoneType for impactSubtype, got {type(value).__name__}")
+        invalid_types = [types for types in value if types not in cls._impactSubtypes_list]
+        if invalid_types:
+            raise ValueError(f"Invalid impactSubtype: {invalid_types}. Must be one or more of {cls._impactSubtypes_list}")
         return value
 
 class ImpactValue(BaseModel):
@@ -68,6 +71,12 @@ class ImpactHazards(BaseModel):
         return value
 class ImpactDetail(ImpactSubtype, ImpactValue, ImpactLocation, ImpactDates, ImpactHazards):
     impactSubtype: str
+
+    @field_validator("impactSubtype")
+    def validate_impact_subtype(cls, value):
+        if value not in cls._impactSubtypes_list:
+            raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
+        return value
 
 
 #class ImpactDetail(BaseModel):
