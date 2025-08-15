@@ -25,7 +25,8 @@ hazard_main_types_emdat_desc = {
     "Wave action": "Wind-generated surface waves (e.g. Rogue waves, seiche)",
     "Extreme warm temperature": "Prolonged, abnormally high heat, heatwaves",
     "Extreme cold temperature": "Prolonged, abnormally low cold temperatures, coldwaves",
-    "Other storm": "Any type of storm which does not correspond to a tropical cyclone (e.g. extra-tropical storm, snow storm, derechos, hailstorm, tornado…)",
+    "Convective storm": "Convective storms (e.g. tornadoes, thunderstorms, derechos, hailstorms...)",
+    "Other storm": "Any type of storm which does not correspond to a tropical cyclone or a convective storm (e.g. extra-tropical storm, snow storm, ...)",
     "Tropical storm": "Tropical cyclonic storms (also includes hurricanes, typhoons)",
     "Epidemic": "Widespread occurrence of an infectious disease in a community",
     "Conflict": "Disagreements or disputes between different groups, organizations, or states"
