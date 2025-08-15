@@ -2,8 +2,32 @@ from pydantic import BaseModel, ValidationError, field_validator, RootModel
 from typing import List, Optional, Union
 
 class ImpactSubtype(BaseModel):
-    impactSubtype: Optional[List[str]] = None
+    impactSubtypes: Optional[List[str]] = None
     # Dynamic constraints
+    _impactSubtypes_list: List[str]
+
+    @classmethod
+    def set_allowed_subtypes(cls, impact_subtypes: List[str]):
+        cls._impactSubtypes_list = impact_subtypes
+
+    @field_validator("impactSubtypes")
+    def validate_impact_subtype(cls, value):
+        if not isinstance(value, list) or isinstance(value, type(None)):
+            raise ValueError(f"Expected a list or NoneType for impactSubtypes, got {type(value).__name__}")
+        invalid_types = [types for types in value if types not in cls._impactSubtypes_list]
+        if invalid_types:
+            raise ValueError(f"Invalid impactSubtypes: {invalid_types}. Must be one or more of {cls._impactSubtypes_list}")
+        return value
+
+class ImpactValue(BaseModel):
+    impactSubtype: str
+    impactValue: Optional[float] = None
+    impactValueMin: Optional[float] = None
+    impactValueMax: Optional[float] = None
+    impactValuePrecision: Optional[str] = None
+    impactUnit: Optional[str] = None
+    valueAnnotation: List[str]
+
     _impactSubtypes_list: List[str]
 
     @classmethod
@@ -12,20 +36,10 @@ class ImpactSubtype(BaseModel):
 
     @field_validator("impactSubtype")
     def validate_impact_subtype(cls, value):
-        if not isinstance(value, list) or isinstance(value, type(None)):
-            raise ValueError(f"Expected a list or NoneType for impactSubtype, got {type(value).__name__}")
-        invalid_types = [types for types in value if types not in cls._impactSubtypes_list]
-        if invalid_types:
-            raise ValueError(f"Invalid impactSubtype: {invalid_types}. Must be one or more of {cls._impactSubtypes_list}")
+        if value not in cls._impactSubtypes_list:
+            raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
         return value
 
-class ImpactValue(BaseModel):
-    impactValue: Optional[float] = None
-    impactValueMin: Optional[float] = None
-    impactValueMax: Optional[float] = None
-    impactValuePrecision: Optional[str] = None
-    impactUnit: Optional[str] = None
-    valueAnnotation: List[str]
 
 class ImpactLocation(BaseModel):
     country: List[str]
@@ -39,7 +53,7 @@ class ImpactDates(BaseModel):
     endYear: Optional[int] = None
     endMonth: Optional[int] = None
     endDay: Optional[int] = None
-    datesAnnotation: List[str]
+    dateAnnotation: List[str]
 
 class ImpactHazards(BaseModel):
     hazards: Optional[List[str]] = None
@@ -69,14 +83,8 @@ class ImpactHazards(BaseModel):
             else:
                 print(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
         return value
-class ImpactDetail(ImpactSubtype, ImpactValue, ImpactLocation, ImpactDates, ImpactHazards):
-    impactSubtype: str
-
-    @field_validator("impactSubtype")
-    def validate_impact_subtype(cls, value):
-        if value not in cls._impactSubtypes_list:
-            raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
-        return value
+class ImpactDetail(ImpactValue, ImpactLocation, ImpactDates, ImpactHazards):
+    pass
 
 
 #class ImpactDetail(BaseModel):
@@ -173,6 +181,9 @@ class ImpactDetailRange(ImpactDetail):
 
 class ImpactList(RootModel):
     root: List[ImpactDetail]
+
+class ImpactValueList(RootModel):
+    root: List[ImpactValue]
 
 class ImpactListTypeSubType(RootModel):
     root: List[ImpactDetailTypeSubType]
