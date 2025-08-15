@@ -95,6 +95,35 @@ def explode_lists(df):
 
     return df
 
+def parse_impact_value_precision(x):
+    """Parse impact values given precision levels.
+    Ensures that min are mins, max are maxs.
+    """
+    # Extract scalars if x is a DataFrame
+    if isinstance(x, pd.DataFrame):
+        vals = [
+            x["impactValueMin"].iloc[0] if "impactValueMin" in x else None,
+            x["impactValueMax"].iloc[0] if "impactValueMax" in x else None,
+            x["impactValue"].iloc[0] if "impactValue" in x else None,
+        ]
+    else:  # assume dict or Series-like
+        vals = [x.get("impactValueMin"), x.get("impactValueMax"), x.get("impactValue")]
+
+    # Convert all to floats, None → NaN
+    all_values = pd.to_numeric(pd.Series(vals), errors="coerce").to_numpy(dtype=float)
+
+    min_value = np.nanmin(all_values)
+    max_value = np.nanmax(all_values)
+
+    imp_value_min = min_value if not pd.isna(vals[0]) else vals[0]
+    imp_value_max = max_value if not pd.isna(vals[1]) else vals[1]
+    imp_value = imp_value_max if not pd.isna(imp_value_max) else max_value
+
+    return pd.Series(
+        [imp_value, imp_value_min, imp_value_max],
+        index=["impactValue", "impactValueMin", "impactValueMax"]
+    )
+
 def convert_labelled_chat_format(df_labelled) :
     """
     Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.
