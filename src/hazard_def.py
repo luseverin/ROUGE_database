@@ -3,6 +3,16 @@
 #hazard subtypes directly taken from EMDAT
 hazard_all_subtype_emdat = """["drought", "wildfire", "forest fire", "land fire", "ground movement", "tsunami", "avalanche", "landslide", "rockfall", "sudden subsidence", "mudslide", "ash fall", "lava flow", "pyroclastic flow", "lahar", "coastal flood", "flash flood", "riverine flood", "ice jam flood", "rogue wave", "seiche", "coldwave", "heatwave", "severe winter conditions", "derecho", "hail", "lightning", "winterstorm", "storm surge", "tornado", "extra-tropical storm", "tropical storm" ]"""
 
+hazard_mapping_emdat = {'Drought': ['Drought'],
+                        'Wildfire': ['Wildfire', 'forest fire', 'land fire'],
+                        'Earthquake': ['Earthquake'],
+                        'Mass movement': ['Mass movement', 'Mass movement (dry)', 'Mass movement (wet)'],
+                        'Volcanic activity': ['Volcanic activity'], 
+                        'Flood': ['Flood', 'Glacial lake outburst flood'], 
+                        'Wave action': ['rogue wave', 'seiche'],
+                        'Extreme temperature': ['Extreme warm temperature', 'Extreme cold temperature', 'Extreme temperature'],
+                        'Storm': ['Storm', 'Other storm', 'Tropical storm', 'Convective storm']}
+
 #dict to match emdat maintypes to there subtypes
 maintype_to_subytpe_emdat = {'Drought': ['drought'],
  'Wildfire': ['wildfire', 'forest fire', 'land fire'],
@@ -39,5 +49,3 @@ hazard_subtype_kw_searc ={
                         'Wave action' : r"rogue wave.|seiche",
                         'Extreme temperature' : r"cold wave.*|coldwave.*|cold spell.*|heat wave.*|heatwave.*|heat episode.*|((heat|hot) spell).*|heat stress.*|severe winter conditions.",
                         'Storm' : r"derecho.|hail.|lightning.|winterstorm.|storm surge.|tornado.|winter storm.|extra-tropical storm.|tropical storm.|typhoon.|hurricane.|storm.*|superstorm.*|windstorm.*|snowstorm.*|blizzard.*|thunderstorm.*" }
-
-
