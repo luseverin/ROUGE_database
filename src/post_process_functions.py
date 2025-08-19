@@ -3,7 +3,7 @@ import pandas as pd
 import json
 from collections import Counter
 import numpy as np
-import re
+import regex as re
 import copy as cp
 import ast
 
@@ -28,8 +28,7 @@ def remove_startspace(loc_list):
     else:
         return [loc.strip() for loc in loc_list]
 
-import copy as cp
-def format_output(df, num_cols):
+def format_output(df, num_cols, list_cols=None):
     """
     Format output of the final report
 
@@ -45,8 +44,24 @@ def format_output(df, num_cols):
     pd.DataFrame
         Formatted DataFrame
     """
+    def listify_strings(x):
+        if isinstance(x, str):
+            try :
+                x = json.loads(x.replace("'", '"'))
+            except :
+                x = [x]
+            return x
+        elif isinstance(x, list):
+            return x
+        elif pd.isna(x) or x is None:
+            return []
+        else:
+            return x
     df = df.replace(["null", "None", None], np.nan)
     df[num_cols] = df[num_cols].astype(float)
+    if list_cols is None:
+        return df
+    df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
     return df
 
 def explode_lists(df):

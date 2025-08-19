@@ -5,8 +5,7 @@ import getpass
 
 global CLIENT
 global MODEL_NAME
-MODEL_NAME = "mistral-saba-24b"
-user = getpass.getuser()
+MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"#"meta-llama/llama-4-scout-17b-16e-instruct"
 ## Examples of models with Groq :
 MODEL_NAME_LIST = [
     "llama3-70b-8192",
@@ -29,6 +28,12 @@ MODEL_NAME_LIST = [
     "meta-llama/llama-guard-4-12b",
     "compound-beta",
     "whisper-large-v3-turbo",
+    "meta-llama/llama-prompt-guard-2-22m",
+    "meta-llama/llama-prompt-guard-2-86m",
+    "qwen-qwq-32b",
+    "qwen/qwen3-32b"
+    "moonshotai/kimi-k2-instruct"
+
 ]
 
 
@@ -37,14 +42,13 @@ if MODEL_NAME in ["gpt-4o-mini", "gpt-3.5-turbo-0125"] :
     API_KEY = os.getenv("GROQ_API_KEY")
     CLIENT = OpenAI(api_key=API_KEY)
 else :
-    if user == "lhasbini" : 
-        API_KEY = os.getenv("GROQ_API_KEY")
-    elif user == "lseverino" : 
-        API_KEY = os.getenv("GROQ_API_KEY")
+    API_KEY = os.getenv("GROQ_API_KEY")
+    #"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" #Luca's
+    #"os.getenv("GROQ_API_KEY")" Laura's
     CLIENT = OpenAI(
         api_key=API_KEY,
         base_url="https://api.groq.com/openai/v1"  # <-- Groq’s OpenAI-compatible endpoint
     )
 
 # Enables `response_model`
-client = instructor.patch(client=CLIENT)
+CLIENT = instructor.patch(client=CLIENT)

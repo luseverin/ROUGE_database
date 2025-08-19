@@ -1,7 +1,7 @@
 #Functions to extract data with LLMs
 import pandas as pd
 import json as json
-import re
+import regex as re
 from copy import deepcopy
 from itertools import chain
 from langchain_groq import ChatGroq
@@ -24,15 +24,23 @@ def extract_outer_json(text):
     extracted_json = text[start_index:end_index + 1]
     return extracted_json
 
-def get_model_response(CLIENT, MODEL, prompt, kwargs={}):
+def get_model_response(CLIENT, MODEL, prompt, prompt_system=None, response_model=None):
 
+  if prompt_system:
+      messages = [
+          {"role": "system", "content": prompt_system},
+          {"role": "user", "content": prompt}
+      ]
+  else:
+      messages = [
+          {"role": "user", "content": prompt}
+      ]
   completion = CLIENT.chat.completions.create(
     model=MODEL,
-    messages=[
-      {"role": "user", "content": prompt}
-    ],
+    messages=messages,
     temperature=0,
-    **kwargs
+    response_model=response_model,
+    max_retries=2
   )
 
   return completion.choices[0].message.content
