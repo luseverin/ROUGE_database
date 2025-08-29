@@ -32,14 +32,20 @@ hazard_main_types_emdat_desc = {
 }
 
 hazard_mapping_emdat = {'Drought': ['Drought'],
-                        'Wildfire': ['Wildfire', 'forest fire', "Forest fire", 'land fire', "Land fire"],
+                        'Wildfire': ['Wildfire', 'forest fire', "Forest fire", 'land fire', "Land fire", "fire"],
                         'Earthquake': ['Earthquake', "Tsunami"],
-                        'Mass movement': ['Mass movement', 'Mass movement (dry)', 'Mass movement (wet)', "Landslide", "Mud flow/slide", "Avalanche"],
-                        'Volcanic activity': ['Volcanic activity'], 
-                        'Flood': ['Flood', 'Glacial lake outburst flood', "Flash flood", "Riverine flood", "Coastal flood", "Ice jam flood", ], 
+                        'Mass movement': ['Mass movement', 'Mass movement (dry)', 'Mass movement (wet)', "Landslide", "Mud flow/slide", "Avalanche", 
+                                          "Alluvion", "Coastal erosion", "Subsidence", "Erosion", "Sedimentation"],
+                        'Volcanic activity': ['Volcanic activity', "Eruption", "Liquefaction", "Lahar"], 
+                        'Flood': ['Flood', 'Glacial lake outburst flood', "Flash flood", "Riverine flood", "Coastal flood", "Ice jam flood", 
+                                  "Rain", "Heavy rain", "Heavy rains", "Overflow"], 
                         'Wave action': ['rogue wave', 'seiche'],
-                        'Extreme temperature': ['Extreme warm temperature', 'Extreme cold temperature', 'Extreme temperature', "Cold wave", "Heat wave", "Severe winter conditions"],
-                        'Storm': ['Storm', 'Other storm', 'Tropical storm', 'Convective storm', "Extra-tropical cyclone", "Severe local storm", "Violent wind", "Lightning", "Hail", "Storm surge", "Storm tides", "Tornado", "Tropical cyclone", "Fog", "Blizzard"]}
+                        'Extreme temperature': ['Extreme warm temperature', 'Extreme cold temperature', 'Extreme temperature', "Cold wave", "Heat wave", 
+                                                "Severe winter conditions", "Frost"],
+                        'Storm': ['Storm', 'Other storm', 'Tropical storm', 'Convective storm', "Extra-tropical cyclone", "Severe local storm", 
+                                  "Violent wind", "Lightning", "Hail", "Storm surge", "Storm tides", "Tornado", "Tropical cyclone", "Fog", "Blizzard", 
+                                  "Windstorm", "Electric storm", "Snowstorm", "Hail storm", "Cyclone", "Surge", "Cond.Atmosph.", "Atmospheric cond.", 
+                                  "Sandstorm", "Tropical depression", "Atmosphcondition", "Strong wind"]}
 
 emdat_undrr_to_name = {
     # Cold wave
