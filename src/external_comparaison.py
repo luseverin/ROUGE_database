@@ -48,6 +48,20 @@ def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def consolidate_startYear(row):
+    """
+    If no startYear has been detected, take the year of the report 
+    """
+    # Check if 'startYear' exists in row
+    if 'startYear' in row and pd.isna(row['startYear']):
+        return pd.to_datetime(row['reportDate']).year
+    elif 'startYear' in row:
+        return row['startYear']
+    else:
+        # If column doesn't exist, just return None (or could return reportDate year instead)
+        return pd.to_datetime(row['reportDate']).year
+
+
 def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
     """
     Converts the 'locationLowestAdmin' column (format 'ADM_0') 
@@ -149,6 +163,7 @@ def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_group(df_impact) : 
     df_output = df_impact.copy()
+    df_output['startYear'] = df_output.apply(consolidate_startYear, axis=1)
     df_output = add_location_admin_num(df_output)
     df_output = consolidate_impact_value(df_output)
     df_output = group_quanti_country_level(df_output)
