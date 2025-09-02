@@ -12,18 +12,17 @@ from src.data import *
 from src.hazard_def import *
 from src.impact_def import *
 
-mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "num_affected"}, 
-                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "num_injured"}, 
-                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "num_displaced" }, 
-                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "num_dead" }, 
-                       "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "num_missing"}, 
-                       "Infected and Ill People" : {"monty_ifrc" : None, "go_ifrc" : "epi_cases"}
-                       }
-
 go_ifrc_impact_source = {"report" : "field_reports_", 
                          "gov" : "field_reports_gov_", 
                          "other" : "field_reports_other_"
                          }
+
+mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "field_reports_num_affected", "emdat" : "Total Affected"}, 
+                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "field_reports_num_injured", "emdat" : None}, 
+                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "field_reports_num_displaced", "emdat" : None}, 
+                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "field_reports_num_dead", "emdat" : "Total Deaths"}, 
+                       "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "field_reports_num_missing", "emdat" : None}
+                       }
 
 ### LABELLED AND LLM DATAFRAMES 
 def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
