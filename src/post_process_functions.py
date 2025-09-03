@@ -216,6 +216,37 @@ def clean_chat_format(df_labelled) :
                         df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
     return df_labelled_chat
 
+def make_date(report_df):
+    """
+    Make start and end dates from the separate columns in the report DataFrame.
+
+    Parameters
+    ----------
+    report_df : DataFrame
+        The DataFrame containing the report data.
+
+    Returns
+    -------
+    DataFrame
+        The DataFrame with the new columns "startDate" and "endDate".
+    """
+    def get_date(df, prefix):
+        year = df[f'{prefix}Year']
+        month = df[f'{prefix}Month']
+        day = df[f'{prefix}Day']
+
+        if pd.isna(year) or year is None:
+            return ""
+        elif pd.isna(month) or month is None:
+            return f"{int(df[f'{prefix}Year'])}"
+        elif pd.isna(day) or day is None:
+            return f"{int(df[f'{prefix}Year'])}-{int(df[f'{prefix}Month'])}"
+        return f"{int(df[f'{prefix}Year'])}-{int(df[f'{prefix}Month'])}-{int(df[f'{prefix}Day'])}"
+
+    report_df["startDate"] = report_df.apply(lambda x: get_date(x, prefix='start'), axis=1)
+    report_df["endDate"] = report_df.apply(lambda x: get_date(x, prefix='end'), axis=1)
+    return report_df
+
 ## DEPRECATED
 ## Convert json to dataframe
 #def clean_output_df(results_json, out_cols=['Hazard','Country','Location','Start_Date','End_Date']):
