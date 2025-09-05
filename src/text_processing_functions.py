@@ -45,7 +45,7 @@ std_unit_kw_reclass = {
                             r"\b(meters?|metres?|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)\b(?<!\.\d)"],
                     "acre": [r"\b(acres?)\b"],
                     "feet": [r"(?<!\b(squared?|cube|cubic)\s*)\b(feet|foot|ft)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
-                    "hectare": [r"\b(hectares?|ha)\b"],
+                    "hectare": [r"\b(hectares?|ha|hectors?)\b"],
                     "ton": [r"\b(?<!\b(metric)\s*)(ton|tons)\b"],
                     "tonne": [r"\b(tonne|tonnes|metric ton|metric tons)\b"],
                     "pound": [r"\b(pounds|lbs?)\b"],
@@ -130,7 +130,7 @@ def replace_numbers(text_in):
         str: The text with numbers replaced.
     """
     nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
-    nlp.add_pipe('find_numbers')
+    #nlp.add_pipe('find_numbers')
     # Process the text
     doc = nlp(text_in)
 
@@ -266,7 +266,7 @@ def standardize_units(text):
     return new_text
 
 
-def clean_text(text, remove_numbers=False, remove_stopwords=False, format_numbers=False):
+def clean_text(text, remove_numbers=False, remove_stopwords=False):
     # Remove hyperlinks
     text = re.sub(r'http\S+|www\S+', '', text)
 
@@ -289,11 +289,6 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False, format_number
     if remove_stopwords:
         stop_words = set(stopwords.words('english'))
         text = ' '.join([word for word in text.split() if word.lower() not in stop_words])
-
-    if format_numbers:
-        text = replace_commas_in_numbers(text)
-        text = replace_count_suffixes(text)
-        text = replace_numbers(text)
 
     return text
 
@@ -328,29 +323,45 @@ def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
 
     return causes
 
-def select_hazard_description(text):
-    id_top = None
+def select_hazard_description(text, match_above=True):
+    """
+    Selects a subset of text that describes the hazard event, given a list of sentences.
+
+    The function searches for the first occurrence of a phrase that matches a description of the hazard event, and then selects all sentences until it reaches a phrase that matches a description of the response. If no phrases are found, the whole text is returned.
+
+    Parameters
+    ----------
+    text : list of str
+        List of sentences to be processed
+    match_above : bool, optional
+        Whether to start the selection from the first match of the hazard description. If False, the function will start from the beginning of the text.
+
+    Returns
+    -------
+    list of str
+        A subset of the original text, describing the hazard event
+    """
+    id_top = 0
     id_end = None
     for id_s, sentence in enumerate(text) :
         sentence = sentence.lower()
         #match_top = re.search(r"(?:situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event)\s*(.*)", sentence, re.IGNORECASE)#the situation|the disaster
         match_top = re.search(r"operation summary|situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)
-        if match_top and (id_top==None):
+        if match_above and match_top and (id_top==0):
             #Save where the text should begin
             id_top = id_s
             continue
             #text[id_top] = match_top.group(1)
 
         #match_end = re.search(r"^(.*?)(?=\s*(operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions))", sentence, re.IGNORECASE)
-        match_end = re.search(r"coordination and partnerships|operational strategy|coordination and partnerships|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions", sentence, re.IGNORECASE)#summary of
-        if match_end and (id_end==None and id_top!=None):
+        match_end = re.search(r"coordination and partnerships|operational strategy|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions", sentence, re.IGNORECASE)#summary of
+        if match_end and id_end==None:
             if id_s - id_top < 10:
                 continue #too short
             id_end = id_s
             break
             #text[id_end] = match_end.group(0)
     #keep everything if no match
-    id_top = 0 if id_top == None else id_top
     id_end = len(text)-1 if id_end == None else id_end
     return text[id_top:id_end+1]
 
