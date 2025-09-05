@@ -26,8 +26,7 @@ impact_cat_desc_dict = {
     "Informal Settlements": "The impacts on informal settlements resulting from the natural hazard event. Look for words such as 'refugee camps', 'slums', 'tents', etc.",
     "Education Infrastructure": "The impacts on education infrastructure resulting from the natural hazard event. Look for words such as 'schools', 'universities', etc."
 }
-
-impact_subtypes_human_desc_dict = {
+impact_subtypes_desc_dict = {
         "Affected People": "Individuals impacted by a natural hazard event (the term affected must be mentioned).",
         "Injured People": "People injured, including those hospitalized or admitted (the term injured must be used), to a natural hazard event.",
         "Displaced People": "Individuals temporarily relocated to safer areas due to a natural hazard event.",

@@ -358,10 +358,10 @@ def select_hazard_description(text, match_above=True):
         if match_end and id_end==None:
             if id_s - id_top < 10:
                 continue #too short
-            id_end = id_s
+            id_end = id_s+2
             break
             #text[id_end] = match_end.group(0)
     #keep everything if no match
     id_end = len(text)-1 if id_end == None else id_end
-    return text[id_top:id_end+1]
+    return text[id_top:id_end]
 
