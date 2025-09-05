@@ -13,7 +13,7 @@ def country_name_to_iso3(name):
         country = pycountry.countries.lookup(name)
         return country.alpha_3
     except LookupError:
-        return None
+        return "Unknown"
 def separate_locs(locations):
     """Separate locations separated by a comma"""
     if pd.isnull(locations):
