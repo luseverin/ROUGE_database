@@ -3,10 +3,22 @@ import numpy as np
 import pandas as pd
 import ast
 import spacy
+import unicodedata
 from text_to_num import text2num
 from number_spacy import find_numbers
 from spacy.tokens import Span
 from pint import UnitRegistry
+
+import nltk
+from nltk.tokenize import sent_tokenize
+nltk.download('punkt_tab')
+nltk.download('punkt')  # Download sentence tokenizer
+nltk.download('stopwords') # Download stopwords
+
+## load spacy nlp
+nlp = spacy.load("en_core_web_sm")
+nlp.add_pipe("language_detector")
+#nlp.add_pipe('find_numbers')
 
 # Define unit conversion mapping
 unit_mapping = {
@@ -55,42 +67,20 @@ std_unit_kw_reclass = {
                     "gallon": [r"\b(gallons|gal)\b"],
 }
 
-nlp = spacy.load("en_core_web_sm")
+## Detect language
+#https://spacy.io/universe/project/spacy_fastlang
+def detect_language(text):
+    """
+    Detects the language of the given text.
 
-# Change the type of hazard to the modified version
-# Caution, several hazards can be present in 'disasterTypeReclassified'
-def change_hazard(reports, dict_hazards_grouped):
-    reports_changed = []
-    hazards = dict_hazards_grouped.keys()
+    Args:
+        text (str): Text to detect the language of.
 
-    #Loop over the repotrs
-    for rep in reports :
-        #Separate the hazards into individual types
-        disasters_list = rep['disasterTypeReclassified'].split(', ')
-        new_disasters = []
-        for disaster in disasters_list :
-            if disaster in hazards :
-                for haz in hazards :
-                    if disaster in dict_hazards_grouped[haz] :
-                        new_disasters.append(disaster)
-        #print(new_disasters)
-        rep['disasterTypeReclassified'] = np.unique(new_disasters).tolist()
-
-        # Save the report if at least one natural hazard is found
-        #print(len(rep['disasterTypeReclassified']))
-        if len(rep['disasterTypeReclassified']) != 0 :
-            reports_changed.append(rep)
-    return reports_changed
-
-# Define hazard types based on keywords
-def check_hazard_type_keyword(text, hazard_patterns):
-    text = text.lower()
-    hazards = []
-    for hazard, pattern in hazard_patterns.items():
-        if re.search(pattern, text, re.IGNORECASE):
-            hazards.append(hazard)
-
-    return hazards
+    Returns:
+        str: Detected language.
+    """
+    doc = nlp(text)
+    return doc._.language  # Check if detected language is English
 
 def written_num(text, lang="en"):
     """Version of like_num using text2num. Able to handle plurals but does not
@@ -129,8 +119,6 @@ def replace_numbers(text_in):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
-    #nlp.add_pipe('find_numbers')
     # Process the text
     doc = nlp(text_in)
 
@@ -161,24 +149,6 @@ def replace_numbers(text_in):
 
         if token.whitespace_:#keep whitespace
             modified_tokens.append(token.whitespace_)
-
-        #if token.like_num or like_num(token.text):  # Check if the token is like a number and convert if possible
-        #    try:
-        #        # Convert the token's text to a number
-        #        number = float(token.text) if token.text.isdigit() else text2num(token.text, "en")
-        #        prev_token = token.nbor(-1) if token.i > 0 else None
-        #        if prev_token and (prev_token.like_num or like_num(prev_token.text)):
-        #            # If the previous token is like a number, multiply the current number
-        #            prev_number = float(prev_token.text)
-        #            number *= prev_number
-        #        #modified_tokens.append(str(number))
-        #        print(f"text_out, token.text, str(number): {text_out, token.text, str(number)}")
-        #        text_out = re.sub(token.text, str(number), str(number))
-        #    except ValueError:
-        #        pass
-        #        #modified_tokens.append(token.text)  # If conversion fails, keep the original
-        #else:
-        #    modified_tokens.append(token.text)
 
     # Join the tokens back into a string
     return "".join(modified_tokens)
@@ -221,6 +191,12 @@ def take_n_neighb_tokens(token, n):
     return neighb_tokens
 
 def could_be_unit(text):
+    """
+    Check if a given string could be a unit.
+
+    Return True if any of the regex patterns in std_unit_kw_reclass
+    match the given string, else False.
+    """
     pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
     return len(pot_units) > 0
 
@@ -268,6 +244,15 @@ def standardize_units(text):
 
 def clean_text(text, remove_numbers=False, remove_stopwords=False):
     # Remove hyperlinks
+    """
+    Clean the text by removing special characters, numbers, newlines, and multiple spaces.
+
+    The function takes an optional argument, `remove_numbers`, which is a boolean that specifies whether numbers should be removed from the text.
+
+    The function takes an optional argument, `remove_stopwords`, which is a boolean that specifies whether stopwords should be removed from the text.
+
+    The function returns the cleaned text.
+    """
     text = re.sub(r'http\S+|www\S+', '', text)
 
     # Remove some special characters, leaving basic punctuation (e.g., commas, periods)
@@ -292,36 +277,27 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False):
 
     return text
 
-def extract_entities(text):
-    # Process the text with spaCy
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
-    return entities
+def fix_pdf_text(text):
+    """
+    Clean up text extracted from PDFs.
 
-def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
-    doc = nlp(sentence)
-    causes = []
+    This function removes invisible characters, removes random whitespaces, and
+    converts to lowercase. It is intended to be used on text extracted from PDFs.
 
-    # Iterate over the tokens in the sentence
-    for token in doc:
-        #prev_token = doc[token.i - 1]
-        #next_token = doc[token.i + 1]
-        # Check if the token is a verb and in the list of causal verbs
-        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
-            # Find the subject (nsubj) and object (dobj) of the verb
-            subject = None
-            effect = None
+    Parameters
+    ----------
+    text : str
+        The text to be cleaned up.
 
-            for child in token.children:
-                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
-                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
-                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-            # If both subject and object (effect) are found, return the relationship
-            if subject and effect:
-                causes.append((subject, token.lemma_, effect))
-
-    return causes
+    Returns
+    -------
+    str
+        The cleaned up text.
+    """
+    text = unicodedata.normalize("NFKC", text)
+    text = text.replace('\x00', '')
+    text= re.sub(r"\s+", " ", text.lower()).strip() #remove random whitespaces
+    return text
 
 def select_hazard_description(text, match_above=True):
     """
@@ -364,4 +340,126 @@ def select_hazard_description(text, match_above=True):
     #keep everything if no match
     id_end = len(text)-1 if id_end == None else id_end
     return text[id_top:id_end]
+
+# Change the type of hazard to the modified version
+# Caution, several hazards can be present in 'disasterTypeReclassified'
+def change_hazard(reports, dict_hazards_grouped):
+    """
+    Changes the type of hazard in the 'disasterTypeReclassified' column of a list of reports based on a dictionary of grouped hazards.
+
+    Args:
+        reports (list): List of reports with 'disasterTypeReclassified' key.
+        dict_hazards_grouped (dict): Dictionary of grouped hazards. The keys are the modified hazard types and the values are lists of the original hazard types.
+
+    Returns:
+        list: List of reports with modified 'disasterTypeReclassified' column.
+    """
+    reports_changed = []
+    hazards = dict_hazards_grouped.keys()
+
+    #Loop over the repotrs
+    for rep in reports :
+        #Separate the hazards into individual types
+        disasters_list = rep['disasterTypeReclassified'].split(', ')
+        new_disasters = []
+        for disaster in disasters_list :
+            if disaster in hazards :
+                for haz in hazards :
+                    if disaster in dict_hazards_grouped[haz] :
+                        new_disasters.append(disaster)
+        #print(new_disasters)
+        rep['disasterTypeReclassified'] = np.unique(new_disasters).tolist()
+
+        # Save the report if at least one natural hazard is found
+        #print(len(rep['disasterTypeReclassified']))
+        if len(rep['disasterTypeReclassified']) != 0 :
+            reports_changed.append(rep)
+    return reports_changed
+
+# Define hazard types based on keywords
+def check_hazard_type_keyword(text, hazard_patterns):
+    """
+    Checks if any of the hazard types in hazard_patterns are present in the text based on their keywords.
+
+    Args:
+        text (str): The text to search for hazard types.
+        hazard_patterns (dict): Dictionary of hazard types and their corresponding keywords.
+
+    Returns:
+        list: List of hazard types found in the text.
+    """
+    text = text.lower()
+    hazards = []
+    for hazard, pattern in hazard_patterns.items():
+        if re.search(pattern, text, re.IGNORECASE):
+            hazards.append(hazard)
+
+    return hazards
+
+def extract_entities(text):
+    # Process the text with spaCy
+    """
+    Extract named entities from a text.
+
+    The function takes a text as input and processes it with spaCy to extract named entities.
+    The function returns a list of tuples, where each tuple contains the text of the entity and its label.
+
+    Parameters
+    ----------
+    text : str
+        The text to be processed.
+
+    Returns
+    -------
+    entities : list of tuples
+        The list of extracted entities, where each tuple contains the text of the entity and its label.
+    """
+    doc = nlp(text)
+    entities = [(ent.text, ent.label_) for ent in doc.ents]
+    return entities
+
+def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
+    """
+    Extract causal relationships from a sentence.
+
+    The function takes a sentence as input and processes it with spaCy to extract causal relationships.
+    The function returns a list of tuples, where each tuple contains the cause, the relationship, and the effect.
+
+    Parameters
+    ----------
+    sentence : str
+        The sentence to be processed.
+    relationship_list : list of str
+        The list of causal verbs to be considered.
+    hazard_patterns : dict
+        A dictionary of patterns to be used to check if a word is a hazard type.
+
+    Returns
+    -------
+    causes : list of tuples
+        The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
+    """
+    doc = nlp(sentence)
+    causes = []
+
+    # Iterate over the tokens in the sentence
+    for token in doc:
+        #prev_token = doc[token.i - 1]
+        #next_token = doc[token.i + 1]
+        # Check if the token is a verb and in the list of causal verbs
+        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
+            # Find the subject (nsubj) and object (dobj) of the verb
+            subject = None
+            effect = None
+
+            for child in token.children:
+                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
+                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
+                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+            # If both subject and object (effect) are found, return the relationship
+            if subject and effect:
+                causes.append((subject, token.lemma_, effect))
+
+    return causes
 
