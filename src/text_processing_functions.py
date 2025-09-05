@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import ast
 import spacy
+import spacy_fastlang
 import unicodedata
 from text_to_num import text2num
 from number_spacy import find_numbers
@@ -16,7 +17,7 @@ nltk.download('punkt')  # Download sentence tokenizer
 nltk.download('stopwords') # Download stopwords
 
 ## load spacy nlp
-nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")#en_core_web_sm
 nlp.add_pipe("language_detector")
 #nlp.add_pipe('find_numbers')
 
