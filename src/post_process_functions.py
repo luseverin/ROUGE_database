@@ -1,19 +1,56 @@
 import pycountry
 import pandas as pd
 import json
-from collections import Counter
 import numpy as np
 import regex as re
 import copy as cp
 import ast
+import regex as re
+from pint import UnitRegistry
+from collections import Counter
+from price_parser import Price
+from currency_converter import CurrencyConverter
+from src.text_processing_functions import *
 
 
 def country_name_to_iso3(name):
+    """
+    Convert a country name to its ISO 3 letter code.
+
+    Parameters
+    ----------
+    name : str
+        The name of the country.
+
+    Returns
+    -------
+    str
+        The ISO 3 letter code of the country, or "Unknown" if not found.
+    """
     try:
         country = pycountry.countries.lookup(name)
         return country.alpha_3
     except LookupError:
         return "Unknown"
+def list_country_name_to_iso3(name):
+    """
+    Convert a list of country names to their ISO 3 letter codes.
+
+    Parameters
+    ----------
+    name : list of str
+        List of country names.
+
+    Returns
+    -------
+    list of str
+        List of ISO 3 letter codes of the countries, or "Unknown" if not found.
+    """
+    if isinstance(name, list):
+        return [country_name_to_iso3(country) for country in name]
+    else:
+        return country_name_to_iso3(name)
+
 def separate_locs(locations):
     """Separate locations separated by a comma"""
     if pd.isnull(locations):
@@ -27,6 +64,7 @@ def remove_startspace(loc_list):
         return None
     else:
         return [loc.strip() for loc in loc_list]
+
 def delistify_cols(df):
     """
     Convert list columns to string columns
@@ -50,6 +88,36 @@ def delistify_cols(df):
         if np.any([isinstance(cell, list) for cell in df[col]]):
             df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
     return df
+def listify_strings(x):
+    """
+    Convert strings to lists if possible
+
+    If a string can be parsed as a list, it is converted to a list. If not,
+    the string is wrapped in a list. If the input is already a list, it is
+    returned as is. If the input is None or NaN, an empty list is returned.
+
+    Parameters
+    ----------
+    x : str or list or None or numpy.nan
+        Element to be converted
+
+    Returns
+    -------
+    list
+        The converted element
+    """
+    if isinstance(x, str):
+        try :
+            x = json.loads(x.replace("'", '"'))
+        except :
+            x = [x]
+        return x
+    elif isinstance(x, list):
+        return x
+    elif pd.isna(x) or x is None:
+        return []
+    else:
+        return x
 def format_output(df, num_cols, list_cols=None):
     """
     Format output of the final report
@@ -66,19 +134,6 @@ def format_output(df, num_cols, list_cols=None):
     pd.DataFrame
         Formatted DataFrame
     """
-    def listify_strings(x):
-        if isinstance(x, str):
-            try :
-                x = json.loads(x.replace("'", '"'))
-            except :
-                x = [x]
-            return x
-        elif isinstance(x, list):
-            return x
-        elif pd.isna(x) or x is None:
-            return []
-        else:
-            return x
     df = df.replace(["null", "None", None], np.nan)
     df[num_cols] = df[num_cols].astype(float)
     if list_cols is None:
@@ -146,97 +201,484 @@ def parse_impact_value_precision(x):
         index=["impactValue", "impactValueMin", "impactValueMax"]
     )
 
-def convert_labelled_chat_format(df_labelled) :
+impact_kw_reclass = {
+    'Affected People': r"\bAffected People\b",
+    'Injured People': r"\bInjured People\b",
+    'Displaced People': r"\bDisplaced People\b",
+    'Homeless People': r"\bHomeless People\b",
+    'Missing People': r"\bMissing People\b",
+    'Human Deaths': r"\bHuman Deaths\b",
+    'Human Health and Wellbeing': r"\bHuman Health and Wellbeing\b",
+    'Infected and Ill People': r"\bInfected and Ill People\b",
+
+    'Road Infrastructure': r"\b(Road Infrastructure|road)s?\b",
+    'Other Transportation Infrastructure': r"\bOther Transportation Infrastructure\b",
+    'Water, Sanitation, and Hygiene Infrastructure': r"\bWater,?\s*Sanitation,?\s*and Hygiene Infrastructure\b",
+    'Healthcare Infrastructure': r"\bHealthcare Infrastructure\b",
+    'IT and Communication Infrastructure': r"\bIT and Communication Infrastructure\b",
+
+    'Residential Buildings': r"\bResidential Buildings\b",
+    'Informal settlements': r"\bInformal settlements\b",
+    'Education Infrastructure': r"\bEducation Infrastructure\b",
+    'Power and Energy Production Infrastructure': r"\bPower and Energy Production Infrastructure\b",
+    'Agriculture Infrastructure': r"\bAgricultur(?:e|al)? Infras(?:tructure|tucture)\b",
+
+    'Crop Production and Forestry': r"\bCrop Production and Forestry\b",
+    'Affected Livestock and Animals': r"\bAffected Livestock and Animals\b",
+
+    'Other Economic and Livelihood Impacts': r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
+    'Recreation, Tourism, and Culture': r"\bRecreation, Tourism, and Culture\b",
+
+    'Access to Healthcare': r"\bAccess to Healthcare\b",
+    'Access to transport and Mobility': r"\b(Access to transport and Mobility|Access to transport|Mobility)\b",
+    'Water Quality and Availability': r"\bWater Quality and Availability\b",
+    'Access to Education': r"\bAccess to Education\b",
+    'Access to Power and Energy': r"\bAccess to Power and Energy\b",
+    'Access to Food': r"\bfood\b",
+    'Access to Water, Sanitation, and Hygiene': r"\bAccess to Water,?\s*Sanitation,?\s*and Hygiene\b",
+
+    'Other Infrastructure Impacts': r"\b(Other Infrastructur(?:e|al)? Impacts?)\b",
+    'Other Human Impacts': r"\bOther Human.* Impacts?\b",
+    'Other Environmental Impacts': r"\bOther Environmental.* Impacts?\b",
+    'Other Service Access Impacts': r"\bOther Service Access(?: Impacts?)?\b",
+    'Other Agricultural Impacts': r"\bOther Agricultural.* Impacts?\b",
+}
+def reclassify_impact_subtype(x, allowed_impact_types, impact_kw_reclass):
     """
-    Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.
+    Reclassify an impact subtype using a dictionary of regular expressions.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        Row of data to be processed
+    allowed_impact_types : list
+        List of allowed impact types
+    impact_kw_reclass : dict
+        Dictionary of regular expressions to match against the impact subtype
+        Values of the dictionary should be regular expressions to match against the impact subtype
+        Keys of the dictionary should be the reclassified impact subtype
+
+    Returns
+    -------
+    str
+        Reclassified impact subtype
     """
-    df_labelled_chat = pd.DataFrame(columns=df_labelled.columns)
-    for index, row in df_labelled.iterrows():
-        #If no regions and cities
-        if isinstance(row.region, float) and isinstance(row.city, float) :
-            df_labelled_chat = pd.concat([df_labelled_chat, row.to_frame().T], ignore_index=True)
+    if x["impactSubtype"] in allowed_impact_types:
+        return x["impactSubtype"]
+    candidates = []
+    for key, value in impact_kw_reclass.items():
+        if re.search(value, x["impactSubtype"], re.IGNORECASE):
+            candidates.append(key)
+    if len(candidates) == 1:
+        return candidates[0]
+    else:
+        return "Unknown"
 
-        else :
-            #Add region
-            if isinstance(row.region, str)  :
-                regions = ast.literal_eval(row.region)
-            elif isinstance(row.region, list) :
-                regions = row.region
-            else :
-                regions = None
+hazard_kw_reclass = {
+    'Drought': r"\bdrought.*|\bdry\s+spell.*",
+    'Wildfire': r"\b(forest\s*fire|wild\s*fire|land\s*fire|bush\s*fire|wildfire|landfire|bushfire|fire)s?\b.*",
+    'Earthquake': r"\b(earthquake|ground\s+movement|tsunami)s?\b.*",
+    'Mass movement': r"\b(mass\s+movement|avalanche|land\s*slide|landslide|rockfall|sudden\s+subsidence|mudslide|rockslide)s?\b.*",
+    'Volcanic activity': r"\b(volcanic|ash\s+fall|lava\s+flow|pyroclastic\s+flow|lahar)s?\b.*",
+    'Flood': r"\b(flood|inundation|coastal\s+flood|flash\s+flood|riverine\s+flood|ice\s+jam\s+flood|heavy rain)s?\b.*",
+    'Wave action': r"\b(wave|rogue\s+wave|seiche)\b.*",
+    'Extreme cold temperature': r"\b(extreme\s+cold\s+temperature|cold\s+wave|coldwave|cold\s+spell|severe\s+winter\s+conditions)s?\b.*",
+    'Extreme warm temperature': r"\b(extreme\s+warm\s+temperature|heat\s+wave|heatwave|heat\s+episode|(?:heat|hot)\s+spell|heat\s+stress)s?\b.*",
+    'Tropical storm': r"\b(tropical\s+storm|typhoon|hurricane|cyclonic\s+storm)s?\b.*",
+    'Convective storm': r"\b(convective\s+storm|derecho|hail|lightning|tornado|superstorm|thunderstorm)s?\b.*",
+    'Other storm': r"\b(extra-?tropical\s+storm|winter\s*storm|storm\s+surge|windstorm|snowstorm|blizzard)s?\b.*",
+    'Epidemics': r"\b(cholera|dengue|outbreak|epidemic)s?\b.*",
+    'Conflict': r"\b(conflict|war|terrorism|unrest)s?\b.*"
+}
 
-            if not regions is None:
-                for region in regions :
-                    row_append = row.copy()
-                    row_append['region'] = region
-                    row_append['city'] = None
-
-                    #Find the corresponding locationAnnotation
-                    # print(row)
-                    # print(row.locationAnnotation)
-                    locationsAnnotations = ast.literal_eval(row.locationAnnotation)
-                    for locationAnnot in locationsAnnotations :
-                        if re.search(region, locationAnnot, re.IGNORECASE) :
-                            row_append['locationAnnotation'] = locationAnnot
-                            df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
-
-            #Add location
-            if isinstance(row.city, str) :
-                cities = ast.literal_eval(row.city)
-            elif isinstance(row.city, list) :
-                cities = row.city
-            else :
-                cities = None
-
-            if not cities is None :
-                for city in cities :
-                    row_append = row.copy()
-                    row_append['region'] = None
-                    row_append['city'] = city
-
-                    #Find the corresponding locationAnnotation
-                    locationsAnnotations = ast.literal_eval(row.locationAnnotation)
-                    for locationAnnot in locationsAnnotations :
-                        if re.search(city, locationAnnot, re.IGNORECASE) :
-                            row_append['locationAnnotation'] = locationAnnot
-                            df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
-    return df_labelled_chat
-
-def clean_chat_format(df_labelled) :
+def reclassify_hazard(x, hazard_kw_reclass):
     """
-    Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.
+    Reclassify a hazard type using a dictionary of regular expressions.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        Row of data to be processed
+    hazard_kw_reclass : dict
+        Dictionary of regular expressions to match against the hazard type
+        Values of the dictionary should be regular expressions to match against the hazard type
+        Keys of the dictionary should be the reclassified hazard type
+
+    Returns
+    -------
+    list
+        Reclassified hazard type
     """
-    df_labelled_chat = pd.DataFrame(columns=df_labelled.columns)
-    for index, row in df_labelled.iterrows():
-        #Loop over the hazardSubtype
-        hazardsubtypes = ast.literal_eval(row.hazardSubtypes)
-        if not hazardsubtypes :
-            hazardsubtypes = [None]
-        for subtype in hazardsubtypes :
-            #If no regions and cities
-            if isinstance(row.region, float) and isinstance(row.city, float) :
-                df_labelled_chat = pd.concat([df_labelled_chat, row.to_frame().T], ignore_index=True)
+    corr_haz = cp.deepcopy(x["hazards"])
+    if any([haz for haz in x["hazards"] if haz not in hazard_kw_reclass.keys()]):
+        for i, haz in enumerate(x["hazards"]):
+            if haz not in hazard_kw_reclass.keys():
+                candidates = [haz_corr for haz_corr in hazard_kw_reclass.keys() if re.search(hazard_kw_reclass[haz_corr], haz, re.IGNORECASE)]
+                if len(candidates) == 1:
+                    corr_haz[i] = candidates[0]
+                else:
+                    corr_haz[i] = "Unknown"
+    return corr_haz
 
-            else :
-                regions = row.region
-                if not regions is None :
-                    for region in regions :
-                        row_append = row.copy()
-                        row_append['region'] = region
-                        row_append['city'] = None
-                        row_append['hazardSubtypes'] = subtype
-                        df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+#reclassify units
+unit_converter = {"families" : (3, "people"),
+                  "households": (3, "people"),
+                  "village": (1000, "people"),
+                  "communities": (100, "people"),
+                  }
 
-                #Add location
-                cities = row.city
-                if not cities is None :
-                    for city in cities :
-                        row_append = row.copy()
-                        row_append['region'] = None
-                        row_append['city'] = city
-                        row_append['hazardSubtypes'] = subtype
-                        df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
-    return df_labelled_chat
+unit_type_kw_reclass = {
+                        'km' : r"\b(kilometer|kilometre|km)s?(?!\s*(\*\*\s*2|\^2|²|square|squared|2))",
+                        'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
+                        'kg' : r"(kg.*|.*kilogram.*)",
+                        'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
+                        '%' : r"(%|perc.*)",
+}
+unit_kw_reclass ={
+                        'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
+                        'roads' : r"road.*|route.*|bridge.*|highway.*|motorway.*",#r"(?<!kilometer|kilometre|km).*(road.*|route.*|.*bridge.*|.*highway.*|.*motorway.*)",
+                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|bus.*|taxi.*|taxicab.*|truck.*",
+                        'water, sanitation and hygiene facilities' : r"water.*|sanitation.*|hygiene.*|latrine.*|well.*|tap.*|reservoir.*|aqueduct.*",
+                        'healthcare facilities' : r"health|hospital.*|clinic.*|maternity.*|medical",
+                        'IT and communication facilities' : r"communication.*|radio.*|tv.*|cell tower.*|antenna.*",
+                        'homes' : r"residential.*|residence.|hous.*|home.*|building.*",
+                        'education facilities' : r"education.*|school.*|university.*|college.*",
+                        'crop production and forestry' : r"crop.*|field.*|forest.*|tree.*|banana.*|coffee.*|cocoa.*|cotton.*|maize.*|rice.*|sorghum.*|soybean.*|sugar.*|tobacco.*|wheat.*",
+                        'agricultural facilities' : r"irrigation.*|barn.*|farm.*",
+                        'affected animals' : r"livestock.*|animal.*|fish.*|cow.*|sheep.*|poult.*|cattle.*|goat.*|pig.*|chick.*|horse.*|heads?",
+                        'informal settlements' : r"camp.?|tent.?|refuge.?|settlement.?"
+                         }
+default_subtype_unit = {
+ 'Affected People': "people",
+ 'Injured People': "people",
+ 'Displaced People': "people",
+ 'Homeless People': "people",
+ 'Missing People': "people",
+ 'Human Deaths': "people",
+ 'Residential Buildings': "homes",
+ 'Informal settlements': "undefined informal settlements",
+ 'Education Infrastructure': "schools",
+ 'Human Health and Wellbeing' : "unknown",
+ 'Infected and Ill People': "people",
+ 'Road Infrastructure' : "roads",
+ 'Other Transportation Infrastructure' : "undefined other transportation infrastructure",
+ 'Water, Sanitation, and Hygiene Infrastructure': "undefined WASH facilities",
+ 'Healthcare Infrastructure': "undefined healthcare facilities",
+ 'IT and Communication Infrastructure': "undefined IT and communication facilities",
+ 'Residential Buildings': "houses",
+ 'Informal settlements': "undefined informal settlements",
+ 'Education Infrastructure': "schools",
+ 'Power and Energy Production Infrastructure' : "undefined power and energy production infrastructure facilities",
+ 'Agriculture Infrastructure': "undefined agricultural facilities",
+ 'Crop Production and Forestry': "undefined crop production and forestry",
+ 'Affected Livestock and Animals': "undefined affected animals",
+ 'Other Economic and Livelihood Impacts': "CHF",
+ 'Recreation, Tourism, and Culture' : "unknown",
+ 'Access to Healthcare': "people",
+ 'Access to transport and Mobility': "people",
+ 'Water Quality and Availability' : "unknown",
+ 'Access to Education':"people",
+ 'Access to Power and Energy':"people",
+ 'Access to Food':"people",
+ 'Access to Water, Sanitation, and Hygiene':"people",
+ 'Other Human Impacts': "unknown",
+ 'Other Infrastructure Impacts': "unknown",
+ 'Other Agricultural Impacts': "unknown",
+ 'Other Service Access Impacts': "people"
+}
+
+def convert_unit(x, unit_converter):
+    """Convert units that can be converted e.g. families => people"""
+
+    unit = x['impactUnit']
+    if not isinstance(unit, str):
+        return x  # skip if unit is None or not a string
+    unit = unit.strip()
+    if unit == "":
+        return x
+    for old_unit, (conv_fact, new_unit) in unit_converter.items():
+        try:
+            if unit == old_unit:
+                x["impactValue"] = float(x["impactValue"]) #force conversion to float
+                x["impactValue"] = conv_fact*x["impactValue"]
+                x["impactUnit"] = new_unit
+        except Exception as e:
+            print(f"Skipping unit conversion for row due to error: {e}")
+            continue
+    return x
+
+
+def assign_unit_type(x, unit_type_kw_reclass):
+    """Detect if dimension of unit can be identified e.g. length, mass,...
+       Default to "other"
+    """
+    unit = str(x["impactUnit"]).lower() #ensure unit is string
+    candidates = [unit_type for unit_type in unit_type_kw_reclass.keys() if re.search(unit_type_kw_reclass[unit_type], unit, re.IGNORECASE)]
+    if len(candidates) == 1:
+        unit_type = candidates[0]
+    elif len(candidates) == 0:
+        unit_type = "other"
+    else:
+        unit_type = "multiple"
+    return unit_type
+
+def reclassify_units(x, unit_kw_reclass, default_subtype_unit, force_unit_to_subtype=True):
+    """
+    Reclassify units based on keywords
+
+    Parameters
+    ----------
+    x : pd.Series
+        row of pandas dataframe
+    unit_kw_reclass : dict
+        dictionary of unit keywords and corresponding unit strings
+    default_subtype_unit : dict
+        dictionary of default subtype units
+    force_unit_to_subtype : bool
+        whether or not to force unit to default unit of subtype when unknown unit
+
+    Returns
+    -------
+    str
+        reclassified unit
+    """
+    unit = str(x["impactUnit"]).lower() #ensure unit is string
+    unit_type = x['unit_type']
+    unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
+    candidates = [unit_corr for unit_corr in unit_kw_reclass.keys() if re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE)]
+    if len(candidates) == 1:
+        reclass_unit = unit_prefix+candidates[0]
+    else:
+        #no unit identified, infer unit from category
+        if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
+            reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
+        else:
+            reclass_unit = unit
+    return reclass_unit
+
+def standardize_units(x, std_unit_kw_reclass, unit_mapping):
+    """Standardize units to a common baseline in text"""
+    value = x["impactValue"]
+    unit = x["impactUnit"]
+    if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
+        return pd.Series({"impactValue": value, "impactUnit": unit})
+    ureg = UnitRegistry()
+    #print(f"{value} {unit}")
+    identified_units = []
+    identified_patterns = []
+    for target_unit, unit_patterns in std_unit_kw_reclass.items():
+        for pattern in unit_patterns:
+            if re.search(pattern, unit, re.IGNORECASE):
+                identified_units.append(target_unit)
+                identified_patterns.append(pattern)
+    #matched = [(target_unit, unit_patterns) for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, unit, re.IGNORECASE) for pattern in unit_patterns])]
+    if len(identified_units) == 0:
+        return pd.Series({"impactValue": value, "impactUnit": unit})
+    elif len(identified_units) > 1:
+        raise ValueError(f"Multiple potential units found for token: {unit}")
+    identified_unit = identified_units[0]
+    identified_pattern = identified_patterns[0]
+    si_unit = unit_mapping[identified_unit]
+    # Perform conversion
+    quantity = float(value) * ureg(identified_unit)
+    converted_quantity = quantity.to(si_unit)
+    converted_value = converted_quantity.magnitude
+    converted_unit = re.sub(identified_pattern, si_unit, unit)
+
+    return pd.Series({"impactValue": converted_value, "impactUnit": converted_unit})
+
+def join_value_units(x):
+        return str(x["impactValue"]) +  "," + str(x["impactUnit"])
+
+def split_value_units(x):
+    return x["value_unit"].split(",")
+
+
+def convert_monetary_units(x):
+    """
+    Convert units that are currencies to a common baseline (EUR) by parsing the string
+    and using a currency converter.
+
+    Parameters
+    ----------
+    x : pd.Series
+        row of dataframe with columns "impactValue", "impactUnit", and "reportDate"
+
+    Returns
+    -------
+    pd.Series
+        modified row with converted value and unit
+    """
+    DEF_CUR = "EUR"
+    value_raw = x["impactValue"]
+    unit_raw = x["impactUnit"]
+    report_date = pd.to_datetime(x["reportDate"])
+    parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
+    unit_parsed = parsed_price.currency
+    value_parsed = parsed_price.amount_float
+    if unit_parsed:
+        try:
+            value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
+            unit_parsed = DEF_CUR
+        except Exception as e:
+            print(e)
+            value_parsed = value_raw
+            unit_parsed = unit_raw
+    else:
+        value_parsed = value_raw
+        unit_parsed = unit_raw
+    return pd.Series({"impactValue": value_parsed, "impactUnit": unit_parsed})
+
+def replace_numbers_unit(x):
+    """
+    Replace numbers written out in words with their numeric equivalent.
+
+    Args:
+        text_in (str): The text to replace numbers in.
+
+    Returns:
+        str: The text with numbers replaced.
+    """
+    nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
+    unit = x["impactUnit"]
+
+    if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
+        return pd.Series({"impactValue": x["impactValue"], "impactUnit": x["impactUnit"]})
+
+    # Process the text
+    doc = nlp(unit)
+
+    # Reconstruct text by replacing numbers
+    modified_tokens = []
+    id_number = None
+    last_token_modified = False
+    for token in doc:
+        #first replace written-out numbers
+        if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
+            id_number = float(text2num(token.text, "en"))
+            #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
+            next_tokens = take_n_neighb_tokens(token, 2)
+            next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
+            prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
+            prev_token = prev_token[0] if prev_token else None
+            if last_token_modified or (prev_token and is_float_digit(prev_token.text)):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
+                if modified_tokens[-1] == " ": #remove whitespace
+                    modified_tokens.pop()
+                prev_number = float(modified_tokens.pop())
+                id_number *= prev_number
+            last_token_modified = True #mark that the last token was modified
+
+        else: #if no number identified, keep as is
+            modified_tokens.append(token.text)
+            last_token_modified = False
+
+        if token.whitespace_:#keep whitespace
+            modified_tokens.append(token.whitespace_)
+
+    #join tokens back to unit
+    cleaned_unit = "".join(modified_tokens)
+    # try to parse new value
+    #keep id_number first if there was no impactValue at first else keep impactValue if no id_number
+    if id_number and x["impactValue"]:
+        new_value = id_number * x["impactValue"]
+    elif id_number and not x["impactValue"]:
+        new_value = id_number
+    else:
+        new_value = x["impactValue"]
+
+    return pd.Series({"impactValue": new_value, "impactUnit": cleaned_unit})
+
+#def convert_labelled_chat_format(df_labelled) :
+#    """
+#    Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.
+#    """
+#    df_labelled_chat = pd.DataFrame(columns=df_labelled.columns)
+#    for index, row in df_labelled.iterrows():
+#        #If no regions and cities
+#        if isinstance(row.region, float) and isinstance(row.city, float) :
+#            df_labelled_chat = pd.concat([df_labelled_chat, row.to_frame().T], ignore_index=True)
+#
+#        else :
+#            #Add region
+#            if isinstance(row.region, str)  :
+#                regions = ast.literal_eval(row.region)
+#            elif isinstance(row.region, list) :
+#                regions = row.region
+#            else :
+#                regions = None
+#
+#            if not regions is None:
+#                for region in regions :
+#                    row_append = row.copy()
+#                    row_append['region'] = region
+#                    row_append['city'] = None
+#
+#                    #Find the corresponding locationAnnotation
+#                    # print(row)
+#                    # print(row.locationAnnotation)
+#                    locationsAnnotations = ast.literal_eval(row.locationAnnotation)
+#                    for locationAnnot in locationsAnnotations :
+#                        if re.search(region, locationAnnot, re.IGNORECASE) :
+#                            row_append['locationAnnotation'] = locationAnnot
+#                            df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+#
+#            #Add location
+#            if isinstance(row.city, str) :
+#                cities = ast.literal_eval(row.city)
+#            elif isinstance(row.city, list) :
+#                cities = row.city
+#            else :
+#                cities = None
+#
+#            if not cities is None :
+#                for city in cities :
+#                    row_append = row.copy()
+#                    row_append['region'] = None
+#                    row_append['city'] = city
+#
+#                    #Find the corresponding locationAnnotation
+#                    locationsAnnotations = ast.literal_eval(row.locationAnnotation)
+#                    for locationAnnot in locationsAnnotations :
+#                        if re.search(city, locationAnnot, re.IGNORECASE) :
+#                            row_append['locationAnnotation'] = locationAnnot
+#                            df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+#    return df_labelled_chat
+#
+#def clean_chat_format(df_labelled) :
+#    """
+#    Convert a labelled report DataFrame with the regions and cities as list into a DataFrame a row for each region and each city.
+#    """
+#    df_labelled_chat = pd.DataFrame(columns=df_labelled.columns)
+#    for index, row in df_labelled.iterrows():
+#        #Loop over the hazardSubtype
+#        hazardsubtypes = ast.literal_eval(row.hazardSubtypes)
+#        if not hazardsubtypes :
+#            hazardsubtypes = [None]
+#        for subtype in hazardsubtypes :
+#            #If no regions and cities
+#            if isinstance(row.region, float) and isinstance(row.city, float) :
+#                df_labelled_chat = pd.concat([df_labelled_chat, row.to_frame().T], ignore_index=True)
+#
+#            else :
+#                regions = row.region
+#                if not regions is None :
+#                    for region in regions :
+#                        row_append = row.copy()
+#                        row_append['region'] = region
+#                        row_append['city'] = None
+#                        row_append['hazardSubtypes'] = subtype
+#                        df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+#
+#                #Add location
+#                cities = row.city
+#                if not cities is None :
+#                    for city in cities :
+#                        row_append = row.copy()
+#                        row_append['region'] = None
+#                        row_append['city'] = city
+#                        row_append['hazardSubtypes'] = subtype
+#                        df_labelled_chat = pd.concat([df_labelled_chat, row_append.to_frame().T], ignore_index=True)
+#    return df_labelled_chat
 
 def make_date(report_df):
     """
