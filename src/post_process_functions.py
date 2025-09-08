@@ -27,7 +27,29 @@ def remove_startspace(loc_list):
         return None
     else:
         return [loc.strip() for loc in loc_list]
+def delistify_cols(df):
+    """
+    Convert list columns to string columns
 
+    This function takes a DataFrame as argument and iterates over all columns.
+    If a column contains any list elements, it converts the whole column to string
+    by applying a lambda function to each element. If the element is a list,
+    it converts it to string, otherwise it leaves it as is.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to be formatted
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with list columns converted to string columns
+    """
+    for col in df.columns:
+        if np.any([isinstance(cell, list) for cell in df[col]]):
+            df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
+    return df
 def format_output(df, num_cols, list_cols=None):
     """
     Format output of the final report
