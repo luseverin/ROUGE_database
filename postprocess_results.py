@@ -45,8 +45,8 @@ list_cols = [key for key in list_cols if key in response_df_proc.columns]
 response_df_proc = format_output(response_df_proc, num_cols=num_cols, list_cols=list_cols)
 
 #add iso3
-response_df_proc["country_iso3"] = response_df_proc["country"].apply(country_name_to_iso3)
-response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
+response_df_proc["country_iso3"] = response_df_proc["country"].apply(list_country_name_to_iso3)
+response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(list_country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
 
 ## Reclassify impacType
 response_df_proc["impactSubtype"] = response_df_proc.apply(reclassify_impact_subtype, allowed_impact_types=impactSubtype_list, impact_kw_reclass=impact_kw_reclass, axis=1)
