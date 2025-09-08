@@ -72,7 +72,8 @@ class TestTextProcessing(unittest.TestCase):
 
     def test_standardize_units_simple(self):
         result = standardize_units("10 miles")
-        self.assertIn("km", result)
+        converted = "kilometer "
+        self.assertIn("16.09344 kilometer", result)
 
     def test_standardize_units_no_units(self):
         text = "There are 5 apples"
@@ -101,9 +102,37 @@ class TestTextProcessing(unittest.TestCase):
 
     # ---------------- Hazard description ----------------
     def test_select_hazard_description_normal(self):
-        sentences = ["background details", "coordination and partnerships info"]
+        sentences = ["background details",
+                     "other stuff",
+                     "other stuff 2",
+                     "other stuff 3",
+                     "other stuff 4",
+                     "other stuff 5",
+                     "other stuff 6",
+                     "other stuff 7",
+                     "other stuff 8",
+                     "other stuff 9",
+                     "other stuff 10",
+                     "other stuff 11",
+                     "coordination and partnerships info",
+                     "blabla",
+                     "blabla 2"]
+        selected = ["background details",
+                     "other stuff",
+                     "other stuff 2",
+                     "other stuff 3",
+                     "other stuff 4",
+                     "other stuff 5",
+                     "other stuff 6",
+                     "other stuff 7",
+                     "other stuff 8",
+                     "other stuff 9",
+                     "other stuff 10",
+                     "other stuff 11",
+                     "coordination and partnerships info",
+                     "blabla"]#buffer of 1
         result = select_hazard_description(sentences)
-        self.assertIn("background details", result)
+        self.assertEqual(selected, result)
 
     def test_select_hazard_description_no_matches(self):
         sentences = ["random text", "other stuff"]
