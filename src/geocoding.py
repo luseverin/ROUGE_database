@@ -85,18 +85,18 @@ def open_admin_gpd(ADMIN_PATH) :
     gpd_files = {}
     try :
         ##### ADMIN2 From GAUL
-        gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
+        gaul2 = gpd.read_file(ADMIN_PATH / "GAUL_2024_L2/GAUL_2024_L2.shp")
         gaul2 = gaul2.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1", "gaul2_name":"ADMIN_2"}, axis=1)
         gpd_files["ADM_2"] = gaul2
 
         ##### ADMIN1 From GAUL
-        gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
+        gaul1 = gpd.read_file(ADMIN_PATH / "GAUL_2024_L1/GAUL_2024_L1.shp")
         gaul1 = gaul1.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1"}, axis=1)
         gaul1["gaul2_code"] = None
         gpd_files["ADM_1"] = gaul1
 
         ##### ADMIN0 From Natural Earth
-        ne_0 = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
+        ne_0 = gpd.read_file(ADMIN_PATH / "ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
         ne_0 = ne_0.rename({"ADMIN":"ADMIN_0", "ISO_A3" : "iso3_code"}, axis=1)
         ne_0["gaul1_code"] = None
         ne_0["gaul2_code"] = None
@@ -116,8 +116,8 @@ def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
         choices = gdf_file.loc[gdf_file["ADMIN_0"]==country_name]
         matches = choices[choices[level_name].str.contains(target_name, na=False)]
 
-        #Try for new matches, removing the admin words 
-        if matches.empty : 
+        #Try for new matches, removing the admin words
+        if matches.empty :
             target_name_modified = remove_admin_words(target_name)
             matches = choices[choices[level_name].str.contains(target_name_modified, na=False)]
         if not matches.empty:
@@ -132,13 +132,13 @@ def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
 def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
     """
     Find the administrative polygon containing the geometry at the specified level.
-    
+
     Parameters:
     - geom: shapely Point or Polygon
     - country_name: string, country name matching 'NAME_0' in ADM_0 layer
     - gpd_files: dict with keys 'ADM_0', 'ADM_1', 'ADM_2' holding GeoDataFrames
     - level: str, either "ADM_1" or "ADM_2" (default is "ADM_2")
-    
+
     Returns:
     - GeoDataFrame with matching polygon(s) at requested level, or None if not found
     """
@@ -312,7 +312,7 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                 if print_info:
                     print(f"No results for query: {location}, {curr_country}")
                 return fallback_country_union(gdf_file, countries)
-            else : 
+            else :
                 if print_info:
                     print(f"Result of the query: {nom_result}")
 
@@ -335,18 +335,18 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
 
         # If a satisfactory matching is found, and it doesn't correspond to an ADMIN 3 level, look for a GADM polygon
         if (best_result) and (best_result["admin_level"]!=3) :
-            if print_info : 
-                print("Best result :", best_result, " Search for polygon") 
+            if print_info :
+                print("Best result :", best_result, " Search for polygon")
             # Try to extract the polygon with English
             adm_lev = best_result["admin_level"]
             df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["admin_field"], best_result["name"], adm_lev)
 
-            #If no polygon found, loop over other nominatim_keys for the same admin 
+            #If no polygon found, loop over other nominatim_keys for the same admin
             if df_gpd is None :
                 fallback_address = best_nomin.raw.get("address", {})
                 for nomin_key_admin in LOCATION_LEVEL_MAPPING[f"admin{adm_lev}"]["nominatim_keys"]:
                     fallback_name = address.get(nomin_key_admin)
-                    if fallback_name is not None : 
+                    if fallback_name is not None :
                         df_gpd = get_polygon(
                             gdf_file[f"ADM_{best_result['admin_level']}"],
                             best_result["country"],
@@ -357,12 +357,12 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                     if df_gpd is not None:
                         best_result["name"] = fallback_name
                         break
-            
+
             #If no polygon found, loop over the languages
-            if df_gpd is None : 
+            if df_gpd is None :
                 language = LANGUAGES.get(best_result["country"])
                 languages = [language, "fr", "es", "de"]
-                for lang in languages : 
+                for lang in languages :
                     address, _ = query_reverse_geocode(best_result['coords'], time_last_request, best_result["country"], lang)
                     fallback_name = address.get(best_result['key'])
                     if fallback_name is None:
@@ -408,7 +408,7 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
 
             if best_nomin.raw['geojson']['type'].strip().lower() == 'point':
                 geom = Point(coords[0], coords[1])
-            else : 
+            else :
                 geom = pd.DataFrame(coords).transpose().apply(Polygon).iloc[0]
 
             df_gpd = get_polygon_for_geometry(geom, best_result["country"], gdf_file, level=best_result['admin_level'])
@@ -420,9 +420,9 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                 df_gpd["geocoding_country_flag"] = 0
                 df_gpd["geocoding_osm_flag"] = 1
                 return df_gpd
-        
-        #If no polygon found, loop for higher levels 
-            
+
+        #If no polygon found, loop for higher levels
+
     except Exception as e :
         if print_info:
             print(f"[geocode_unique_loc] {e}. Falling back to country level.")
@@ -441,20 +441,20 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
     If the gather_admin_level is True, the polygons are downgraded to the lowest resolution found
     """
     df_geo = deepcopy(df)
-    df_geo_output = pd.DataFrame(columns = list(df.columns)+["gaul0_code", "gaul1_code", "gaul2_code", 
-                                                             "locationPolygon", "locationLowestAdmin", 
-                                                             "geocoding_country_flag", "geocoding_osm_flag", 
+    df_geo_output = pd.DataFrame(columns = list(df.columns)+["gaul0_code", "gaul1_code", "gaul2_code",
+                                                             "locationPolygon", "locationLowestAdmin",
+                                                             "geocoding_country_flag", "geocoding_osm_flag",
                                                              "locationOsm", "locationGaul"])
 
     #Convet to list columns related to locations & countries
-    if "country_kw" in df_geo.columns : 
+    if "country_kw" in df_geo.columns :
         col_to_list = ["location", "country", "country_kw"]
         df_type = "llm"
-    else : 
+    else :
         col_to_list = ["location", "country"]
         df_type = "labelled"
 
-    for col in col_to_list : 
+    for col in col_to_list :
         df_geo[col] = df_geo[col].apply(
             lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
         )
@@ -475,53 +475,53 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
 
     start = time.time()
     for row_index, row_data in df_geo.iterrows():
-        try : 
+        try :
             geocoding_country_flag = None
             geocoding_osm_flag = None
             locations = row_data['location']
             country = row_data["country"]
-            if not country and df_type=="llm" : 
+            if not country and df_type=="llm" :
                 country = row_data["country_kw"]
 
-            # If no country is found, don't look for any polygon 
+            # If no country is found, don't look for any polygon
             if not country:
                 df_row_append = df_geo.loc[row_index].copy()
                 df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
                 continue
 
             # If no location, change to have it as a list
-            if not locations : 
+            if not locations :
                 locations = [None]
-            
+
             df_locations = []
 
-            count_geocoding_osm_flag = 0 
-            count_geocoding_country_flag = 0 
-            for location in locations : 
+            count_geocoding_osm_flag = 0
+            count_geocoding_country_flag = 0
+            for location in locations :
                 df_loc = geocode_unique_loc(gpd_files, location, country, similarity_th, time_last_request, print_info)
                 time_last_request = time.time()
-                if df_loc is not None : 
-                    if (df_loc["geocoding_osm_flag"] == 1).any() : 
+                if df_loc is not None :
+                    if (df_loc["geocoding_osm_flag"] == 1).any() :
                         count_geocoding_osm_flag+=1
-                    if (df_loc["geocoding_country_flag"] == 1).any() : 
+                    if (df_loc["geocoding_country_flag"] == 1).any() :
                         count_geocoding_country_flag+=1
-                    df_locations.append(df_loc)   
-            if not df_locations : 
+                    df_locations.append(df_loc)
+            if not df_locations :
                 continue
-                
+
             df_locations = pd.concat(df_locations, axis=0)
             df_locations = df_locations[df_locations['geometry'].notnull()]
 
             if df_locations.empty:
                 continue
-                
+
             #Retrieve the lowest admin level
             lowest_level = df_locations["finest_level"].min()
             highest_level = df_locations["finest_level"].max()
-            
-            if split_lowest_levels : 
+
+            if split_lowest_levels :
                 highest_level = df_locations["finest_level"].max()
-            else : 
+            else :
                 highest_level = lowest_level
 
             #Merge all the locs to the lewest admin levels
@@ -529,7 +529,7 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
                 layer_name = f"ADM_{merge_level}"
                 df_location_subset = df_locations.loc[df_locations.finest_level>=merge_level]
                 merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
-                
+
                 df_row_append = df_geo.loc[row_index].copy()
                 df_row_append.loc["locationPolygon"] = merged_geometry
                 df_row_append.loc["locationLowestAdmin"] = layer_name
@@ -541,51 +541,45 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
                 df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
                 df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
                 df_row_append.loc["locationGaul"] = df_location_subset["locationGaul"].unique().tolist()
-                # For the codes, take the list 
-                for code in ["iso3_code", "gaul0_code", "gaul1_code", "gaul2_code"] : 
+                # For the codes, take the list
+                for code in ["iso3_code", "gaul0_code", "gaul1_code", "gaul2_code"] :
                     df_row_append.loc[code] = df_location_subset[code].unique().tolist()
 
                 # Remove the impact value if it's not the lowest admin level
-                if merge_level != lowest_level : 
+                if merge_level != lowest_level :
                     df_row_append.loc["impactValue"] = np.nan
                     df_row_append.loc["impactUnit"] = np.nan
                     df_row_append.loc["impactValueApprox"] = np.nan
-                    
+
                 # Align columns to df_geo_output
                 df_row_append = pd.DataFrame([df_row_append])
                 common_cols = df_geo_output.columns.intersection(df_row_append.columns)
                 df_row_append = df_row_append[common_cols]
                 df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
-        
-        except Exception as e : 
+
+        except Exception as e :
             print(f"[Row {row_index}] Error: {e}")
             continue
 
-    # Save 
+    # Save
     if save_path and res_savename:
         save_df = df_geo_output.copy()
-        if df_type=="llm" : 
-            columns_list_to_str = ['location', 'locationOsm', 'country', 'country_kw', 'gaul0_code', 'gaul1_code', 'gaul2_code']
-        else : 
-            columns_list_to_str = ['location', 'locationOsm', 'country', 'gaul0_code', 'gaul1_code', 'gaul2_code']
 
-        for col in columns_list_to_str : 
-            save_df[col] = save_df[col].apply(lambda x: str(x) if isinstance(x, list) else x)  
-
+        save_df = delistify_cols(save_df)
         save_gdf = gpd.GeoDataFrame(save_df, geometry='locationPolygon')
         save_gdf = save_gdf.set_crs("EPSG:4326", allow_override=True)
         try:
             suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
 
             #Save gpkg
-            gpkg_path = f"{save_path}{res_savename}{suffix}.gpkg"
+            gpkg_path = save_path / f"{res_savename}{suffix}.gpkg"
             if not atomic_gpkg_save(save_gdf, gpkg_path):
                 raise Exception(f"[GeoPackage Save Error] Failed to save GeoPackage to {gpkg_path}")
             # if os.path.exists(gpkg_path):
             #     os.remove(gpkg_path)
             # save_gdf.to_file(gpkg_path,
             #                 layer="multipolygons", driver="GPKG")
-            
+
             # #Save shp
             # shp_path = f"{save_path}{res_savename}{suffix}.shp"
             # if os.path.exists(shp_path):
@@ -596,17 +590,17 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
     return df_geo_output
 
 def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
-    """Save to a temporary file then rename (atomic operation)"""    
+    """Save to a temporary file then rename (atomic operation)"""
     temp_dir = tempfile.mkdtemp()
     try:
         # Save to temp file
         temp_path = os.path.join(temp_dir, "temp.gpkg")
         gdf.to_file(temp_path, layer=layer_name, driver="GPKG")
-        
+
         # Remove existing file if it exists
         if os.path.exists(target_path):
             os.remove(target_path)
-            
+
         # Move to final location (atomic on Unix, may need copy on Windows)
         shutil.move(temp_path, target_path)
         return True
