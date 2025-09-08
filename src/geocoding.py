@@ -18,6 +18,8 @@ import os
 import tempfile
 import shutil
 
+import multiprocessing as mp
+
 #Countries
 import pycountry
 import re
@@ -81,31 +83,52 @@ LANGUAGES = get_country_languages_dict()
 
 #### Function to Geocode one location
 
-def open_admin_gpd(ADMIN_PATH) :
+def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
     gpd_files = {}
-    try :
-        ##### ADMIN2 From GAUL
-        gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
-        gaul2 = gaul2.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1", "gaul2_name":"ADMIN_2"}, axis=1)
-        gpd_files["ADM_2"] = gaul2
+    if polygon_source == "GAUL" : 
+        try :
+            ##### ADMIN2 From GAUL
+            gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
+            gaul2 = gaul2.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1", "gaul2_name":"ADMIN_2"}, axis=1)
+            gpd_files["ADM_2"] = gaul2
 
-        ##### ADMIN1 From GAUL
-        gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
-        gaul1 = gaul1.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1"}, axis=1)
-        gaul1["gaul2_code"] = None
-        gpd_files["ADM_1"] = gaul1
+            ##### ADMIN1 From GAUL
+            gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
+            gaul1 = gaul1.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1"}, axis=1)
+            gaul1["gaul2_code"] = None
+            gpd_files["ADM_1"] = gaul1
 
-        ##### ADMIN0 From Natural Earth
-        ne_0 = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
-        ne_0 = ne_0.rename({"ADMIN":"ADMIN_0", "ISO_A3" : "iso3_code"}, axis=1)
-        ne_0["gaul1_code"] = None
-        ne_0["gaul2_code"] = None
-        ne_0 = pd.merge(ne_0, gaul1[["iso3_code", "gaul0_code"]], on="iso3_code", how="left").drop_duplicates()
-        gpd_files["ADM_0"] = ne_0
+            ##### ADMIN0 From Natural Earth
+            ne_0 = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
+            ne_0 = ne_0.rename({"ADMIN":"ADMIN_0", "ISO_A3" : "iso3_code"}, axis=1)
+            ne_0["gaul1_code"] = None
+            ne_0["gaul2_code"] = None
+            ne_0 = pd.merge(ne_0, gaul1[["iso3_code", "gaul0_code"]], on="iso3_code", how="left").drop_duplicates()
+            gpd_files["ADM_0"] = ne_0
 
-    except Exception as e:
-        print(f"[open_admin_gpd] Error loading GPD files: {e}")
-        return None
+        except Exception as e:
+            print(f"[open_admin_gpd][GAUL] Error loading GPD files: {e}")
+            return None
+    elif polygon_source == "geoBoundaries" :
+        try : 
+            ### ADMIN 0
+            geoBoundaries0 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM0.gpkg")
+            geoBoundaries0 = geoBoundaries0.rename({"shapeName" : "ADMIN_0", "shapeGroup" : "iso3_code"}, axis=1)
+            gpd_files["ADM_0"] = geoBoundaries0
+
+            ### ADMIN 1 
+            geoBoundaries1 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM1.gpkg")
+            geoBoundaries1 = geoBoundaries1.rename({"shapeName" : "ADMIN_1", "shapeGroup" : "iso3_code"}, axis=1)
+            geoBoundaries1 = pd.merge(geoBoundaries1, geoBoundaries0[["iso3_code", "ADMIN_0"]], on="iso3_code", how="left").drop_duplicates()
+            gpd_files["ADM_1"] = geoBoundaries1
+
+            ### ADMIN 2 
+            geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2.gpkg")
+            gpd_files["ADM_2"] = geoBoundaries2
+
+        except Exception as e:
+            print(f"[open_admin_gpd][geoBoundaries] Error loading GPD files: {e}")
+            return None
     return gpd_files
 
 def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
@@ -262,7 +285,7 @@ def fallback_country_union(gdf_file, countries):
         if df_gpd is not None:
             df_gpd["finest_level"] = 0
             df_gpd["locationOsm"] = country
-            df_gpd["locationGaul"] = country
+            df_gpd["locationPolygon"] = country
             df_gpd["geocoding_osm_flag"] = 0
             df_gpd["geocoding_country_flag"] = 1
             country_polygons.append(df_gpd)
@@ -396,13 +419,13 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                     print(f"Best match: {best_result['name']} (sim={best_result['sim']:.2f}) at level {best_result['admin_level']}")
                 df_gpd["finest_level"] = best_result["admin_level"]
                 df_gpd["locationOsm"] = best_result["name"]
-                df_gpd["locationGaul"] = df_gpd[best_result["admin_field"]]
+                df_gpd["locationPolygon"] = df_gpd[best_result["admin_field"]]
                 df_gpd["geocoding_country_flag"] = 0
                 df_gpd["geocoding_osm_flag"] = 0
                 return df_gpd
 
         # If not polygon found, look to geojson output from nominatim directly
-        # Use Nominatim Point/Polygon to retrive the GAUL geometry
+        # Use Nominatim Point/Polygon to retrive the Polygons geometry
         if "geojson" in best_nomin.raw.keys() :
             coords = best_nomin.raw['geojson']['coordinates']
 
@@ -416,7 +439,7 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
             if df_gpd is not None:
                 df_gpd["finest_level"] = best_result["admin_level"]
                 df_gpd["locationOsm"] = best_result["name"]
-                df_gpd["locationGaul"] = df_gpd[best_result["admin_field"]].tolist()
+                df_gpd["locationPolygon"] = df_gpd[best_result["admin_field"]].tolist()
                 df_gpd["geocoding_country_flag"] = 0
                 df_gpd["geocoding_osm_flag"] = 1
                 return df_gpd
@@ -435,16 +458,23 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
         print(f"[geocode_unique_loc fallback] Error: {e}")
         return None
 
-def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print_info=False, save_path=False, res_savename=False) :
+def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL") :
     """
     For each row, perform the geocoding and create a polygon corresponding the location found
     If the gather_admin_level is True, the polygons are downgraded to the lowest resolution found
     """
     df_geo = deepcopy(df)
-    df_geo_output = pd.DataFrame(columns = list(df.columns)+["gaul0_code", "gaul1_code", "gaul2_code", 
-                                                             "locationPolygon", "locationLowestAdmin", 
-                                                             "geocoding_country_flag", "geocoding_osm_flag", 
-                                                             "locationOsm", "locationGaul"])
+    if polygon_source == "GAUL" : 
+        extra_columns_output = ["gaul0_code", "gaul1_code", "gaul2_code", 
+                                "locationPolygon", "locationLowestAdmin", 
+                                "geocoding_country_flag", "geocoding_osm_flag", 
+                                "locationOsm", "locationPolygon"]
+    else : 
+        extra_columns_output = ["locationPolygon", "locationLowestAdmin", 
+                                "geocoding_country_flag", "geocoding_osm_flag", 
+                                "locationOsm", "locationPolygon"]
+
+    df_geo_output = pd.DataFrame(columns = list(df.columns)+extra_columns_output)
 
     #Convet to list columns related to locations & countries
     if "country_kw" in df_geo.columns : 
@@ -461,7 +491,7 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
 
     #Open Polygons
     start = time.time()
-    gpd_files = open_admin_gpd(ADMIN_PATH)
+    gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
     end = time.time()
     time_open = (end-start)/60
     if print_info :
@@ -476,8 +506,6 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
     start = time.time()
     for row_index, row_data in df_geo.iterrows():
         try : 
-            geocoding_country_flag = None
-            geocoding_osm_flag = None
             locations = row_data['location']
             country = row_data["country"]
             if not country and df_type=="llm" : 
@@ -533,17 +561,16 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
                 df_row_append = df_geo.loc[row_index].copy()
                 df_row_append.loc["locationPolygon"] = merged_geometry
                 df_row_append.loc["locationLowestAdmin"] = layer_name
-                # downgrade_country_flag = 1 if (df_location_subset["geocoding_country_flag"] == 1).any() else 0
-                # downgrade_country_flag = sum(df_location_subset["geocoding_country_flag"])
                 df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
-                # downgrade_osm_flag = 1 if (df_location_subset["geocoding_osm_flag"] == 1).any() else 0
-                # downgrade_osm_flag = sum(df_location_subset["geocoding_osm_flag"])
                 df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
                 df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
-                df_row_append.loc["locationGaul"] = df_location_subset["locationGaul"].unique().tolist()
+                df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
+
                 # For the codes, take the list 
-                for code in ["iso3_code", "gaul0_code", "gaul1_code", "gaul2_code"] : 
-                    df_row_append.loc[code] = df_location_subset[code].unique().tolist()
+                df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
+                if polygon_source == "GAUL" : 
+                    for code in ["gaul0_code", "gaul1_code", "gaul2_code"] : 
+                        df_row_append.loc[code] = df_location_subset[code].unique().tolist()
 
                 # Remove the impact value if it's not the lowest admin level
                 if merge_level != lowest_level : 
@@ -564,19 +591,11 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
     # Save 
     if save_path and res_savename:
         save_df = df_geo_output.copy()
-        if df_type=="llm" : 
-            columns_list_to_str = ['location', 'locationOsm', 'country', 'country_kw', 'gaul0_code', 'gaul1_code', 'gaul2_code']
-        else : 
-            columns_list_to_str = ['location', 'locationOsm', 'country', 'gaul0_code', 'gaul1_code', 'gaul2_code']
-
-        for col in columns_list_to_str : 
-            save_df[col] = save_df[col].apply(lambda x: str(x) if isinstance(x, list) else x)  
-
+        save_df = delistify_cols(save_df)
         save_gdf = gpd.GeoDataFrame(save_df, geometry='locationPolygon')
         save_gdf = save_gdf.set_crs("EPSG:4326", allow_override=True)
         try:
             suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
-
             #Save gpkg
             gpkg_path = f"{save_path}{res_savename}{suffix}.gpkg"
             if not atomic_gpkg_save(save_gdf, gpkg_path):
