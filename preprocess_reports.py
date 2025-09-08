@@ -8,16 +8,16 @@
 
 import pandas as pd
 import json
-from collections import Counter
-from src.text_processing_functions import *
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import copy as cp
 import regex as re
-import Path
-import date
+import datetime as dt
+from pathlib import Path
+from collections import Counter
+from src.text_processing_functions import *
 from src.data import *
 from src.hazard_def import hazard_subtype_kw_searc
 from src.text_processing_functions import *
@@ -33,7 +33,7 @@ match_above = False
 fname_in = 'filtered_report_types_nat_hazards_bugfix'
 
 
-fname_out = f'{fname_in}_v{date.today().strftime("%y%m%d")}'
+fname_out = f'{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -50,8 +50,8 @@ filtered_reports_hazonly = []
 for report in all_ifrc_reports_info_unnested:
     #Filter unwanted report types
     if report['appealType'] in ['Operations Update', 'DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']:
-        if id_language and "language" not in item.report.keys():
-            report['language'] = detect_language(item['text'])
+        if id_language and "language" not in report.keys():
+            report['language'] = detect_language(report['text'])
         if report["language"] == 'en':
             report["iso_code"] = country_name_to_iso3(report.get("location"))
             if format_numbers:
