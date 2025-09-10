@@ -1,18 +1,22 @@
 #Functions to extract data with LLMs
+import time
 import pandas as pd
 import json as json
 import regex as re
+import json_repair
+import instructor
+from pydantic import ValidationError
+from typing import get_type_hints, get_origin, get_args
 from copy import deepcopy
 from itertools import chain
 from langchain_groq import ChatGroq
-import instructor
 from src.hazard_def import *
 from src.impact_def import *
 from src.data import *
 from src.prompts_hazards import *
 from src.prompts_impacts import *
 from src.client import CLIENT, MODEL_NAME
-from src.classOutput import ImpactList
+from src.classOutput import *
 
 def extract_outer_json(text):
     start_index = text.find('{')
@@ -23,64 +27,6 @@ def extract_outer_json(text):
 
     extracted_json = text[start_index:end_index + 1]
     return extracted_json
-
-def get_model_response(CLIENT, MODEL, prompt, prompt_system=None, response_model=None):
-
-  if prompt_system:
-      messages = [
-          {"role": "system", "content": prompt_system},
-          {"role": "user", "content": prompt}
-      ]
-  else:
-      messages = [
-          {"role": "user", "content": prompt}
-      ]
-  completion = CLIENT.chat.completions.create(
-    model=MODEL,
-    messages=messages,
-    temperature=0,
-    response_model=response_model,
-    max_retries=2
-  )
-
-  return completion.choices[0].message.content
-
-def get_model_response_v2(CLIENT, MODEL, prompt):
-
-  """Get model response structured using Groq API"""
-
-  chat = ChatGroq(
-    temperature=0,
-    model=MODEL,
-    api_key="os.getenv("GROQ_API_KEY")" # Optional if not set as an environment variable
-    )
-  structured_llm = chat.with_structured_output(ImpactList, include_raw=True)
-  response = structured_llm.invoke(prompt)
-  return response
-
-def get_model_response_v3(CLIENT, MODEL, prompt, kwargs={}):
-   """Get model response structured using OpenAI API"""
-   prompt_system = """
-    You are an assistant that analyzes impacts. Use the following function to structure your response:
-
-    Function: ImpactList
-    Parameters: {"impacts": [{impactValue: int, impactUnit: str, location : list, startYear : int, startMonth : int, startDay : int, endYear : int, endMonth : int, endDay : int, hazards : list, impactAnnotation : list}]}
-
-    Analyze the impacts and return results in the above format.
-    """
-   try:
-      completion = CLIENT.chat.completions.create(
-           model=MODEL,
-           messages=[
-                     {"role": "system", "content": prompt_system},
-                     {"role": "user", "content": prompt}
-                     ],
-            temperature=0,
-            response_model = ImpactList
-            )
-   except instructor.exceptions.InstructorRetryException as e:
-       print(e)
-   return completion.choices[0].message.content
 
 def add_key_value_pairs(data, new_pairs):
     """
@@ -121,245 +67,412 @@ def check_result_json(result_json, label=None):
         print("JSON is empty:", result_json)
     return answer
 
-def identify_hazards(text, hazards_to_check):
-    hazards_identified = []
-    for hazard in hazards_to_check:
-        #test for event occurence
-        prompt = check_event_occurrence(text, hazard)
-        result = get_model_response(CLIENT, MODEL_NAME, prompt)
-        hazard_occurrence = int(''.join(re.findall("[01]", result)))
-        if hazard_occurrence == 1:
-            hazards_identified.append(hazard)
-            print(f"{hazard} occurred in the report area.")
-    return hazards_identified
+def build_messages(prompt, prompt_system=None, prompt_assistant=None):
+    """Build messages for OpenAI API based on (user) prompt, system prompt and assistant prompt"""
 
-def check_location(location_text):
-    # Check if 'country' key exists and has a value
-    if ("country" in location_text and location_text["country"]):
-        location_country = location_text["country"]
-        print("Location: ", location_country)
+    messages = [
+        {"role": "user", "content": prompt}
+    ]
+    if prompt_system:
+        messages.append({"role": "system", "content": prompt_system})
+    if prompt_assistant:
+        messages.append({"role": "assistant", "content": prompt_assistant})
+    return messages
+
+def get_model_response(messages, **kwargs):
+    """Get model response structured using OpenAI API"""
+    completion = CLIENT.chat.completions.create(
+        model=MODEL_NAME,
+        messages=messages,
+        **kwargs
+    )
+    return completion
+
+def get_model_response_retry(prompt, output_model, **kwargs):
+    """Get model response structured using OpenAI API allowing for one retry prompting the model with its error
+    from pydantic ValidationError"""
+    try:
+        #get model response
+        messages = build_messages(prompt)
+        response = get_model_response(messages, **kwargs)
+
+        # Parse the response content into a list of ImpactDetail objects
+        response_content = json_repair.loads(response.choices[0].message.content)
+        try:
+            structured_response = output_model.model_validate(response_content)
+            return structured_response.model_dump()  # Return as Python object
+        except ValidationError as e:
+            print("Validation Error:", e)
+            #allow one retry prompting the model with its error
+            prompt_system = f"""
+                The previous response was not valid, leading to the following error: {e}. Please try again
+                respecting the output format specified in the instructions to avoid the error."""
+            try:
+                #messages = build_messages(prompt, prompt_system=prompt_system)
+                retry_messages = [
+                {"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
+                {"role": "user", "content": (
+                    f"Invalid JSON:\n{response_content}\n\n"
+                    f"Validation error:\n{e}\n\n"
+                    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
+                    "Fix the JSON so it passes validation."
+                )}
+                ]
+                response_content = get_model_response(retry_messages, **kwargs)
+                # Parse the response content into a list of ImpactDetail objects
+                response_content = json_repair.loads(response.choices[0].message.content)
+                try:
+                    structured_response = output_model.model_validate(response_content)
+                    return structured_response.model_dump()  # Return as Python object
+                except ValidationError as e:
+                    print("Validation Error:", e)
+                    return response_content
+            except Exception as e:
+                print("API Error:", e)
+            return {"error": "Response validation failed.", "details": str(e)}
+    except Exception as e:
+        print("API Error:", e)
+        return {"error": "API call failed.", "details": str(e)}
+
+def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
+    """Get continued model response reprompting the model with the previous response. Stops when max_rounds is reached or now new (not duplicate)
+     impacts are extracted."""
+    full_response_raw = "" #need to feed raw response to llm otherwise causes issues with output format
+    full_response_formatted = []
+    error_count = 0
+    messages = build_messages(prompt_user, prompt_system=prompt_system, prompt_assistant=prompt_assistant)
+    #get model response
+    for i in range(max_rounds):
+        try:
+            response = get_model_response(messages, **groq_kwargs)
+        except Exception as e:
+            print("API Error:", e)
+            return {"error": "API call failed.", "details": str(e)}
+
+        #if is_extraction_finished(response.choices[0].message.content):
+        #    break
+
+        # Parse the response content into a list of ImpactDetail objects
+        response_content = json_repair.loads(response.choices[0].message.content)
+        try:
+            #hotfix to avoid too many retrials
+            response_content = force_target_type(output_model, response_content)
+            #validation
+            structured_response = output_model.model_validate(response_content).model_dump()
+            nb_valid_error = 0
+        except ValidationError as e:
+            print(f"Validation Error: {e}. Allowing one retry")
+            #messages.extend([
+            #    {"role": "system", "content": (
+            #        "You must output **ONLY** a JSON object matching this schema exactly. "
+            #        "If your previous answer failed, fix the output strictly following the schema below.\n\n"
+            #        f"SCHEMA:\n{json.dumps(output_model.schema_json(), indent=2)}"
+            #        "\n\nValidation error:\n" + str(e)
+            #    )},
+            #    {"role": "user", "content": "Reformat the output so it is valid JSON that passes the schema above."}
+            #])
+            retry_messages = [
+                {"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
+                {"role": "user", "content": (
+                    f"Invalid JSON:\n{response_content}\n\n"
+                    f"Validation error:\n{e}\n\n"
+                    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
+                    "Fix the JSON so it passes validation."
+                )}
+            ]
+
+            try:
+                #messages.append({"role": "system", "content": prompt_system+prompt_error})
+                #messages = build_messages(prompt_user, prompt_system=prompt_error, prompt_assistant=prompt_assistant)
+                response = get_model_response(retry_messages, **groq_kwargs)
+            except Exception as e:
+                print("API Error:", e)
+                return {"error": "API call failed.", "details": str(e)}
+            response_content = json_repair.loads(response.choices[0].message.content)
+            try:
+                #hotfix to avoid too many retrials
+                response_content = force_target_type(output_model, response_content)
+                structured_response = output_model.model_validate(response_content).model_dump()  # Return as Python object
+                nb_valid_error = 0
+            except ValidationError as e:
+                print("Validation Error:", e)
+                nb_valid_error = e.error_count()
+                error_count += 1
+                continue
+                #structured_response = response_content
+
+        #deduplicate output
+        try:
+            structured_response = deduplicate_structured_responses(full_response_formatted, structured_response)
+        except Exception as e:
+            print("deduplicate_structured_responses error:", e)
+
+        if not len(structured_response) : #if no new content, stop
+            break
+
+        full_response_raw+=response.choices[0].message.content#keep raw output so it does not mess with formating instructions
+        full_response_formatted.extend(structured_response)
+
+        # Add assistant message and user prompt for continuation
+        messages.append({"role": "assistant", "content": json.dumps(full_response_formatted)})
+        messages.append({
+                         "role": "user",
+                         "content":
+                            "Check for NEW impacts not already extracted above. "
+                            "Do NOT return repeated impacts under any circumstances."
+                            #"If there are NO NEW impacts not already listed above, return only: '__END__'. "
+                             #"Previously extracted impacts:\n"
+                             #+ "\n".join([
+                             #    ann for item in full_response_formatted if (ann := '; '.join(item['impactsAnnotation']))
+                             #])
+                             #+ "\n\nContinue the extraction ONLY IF there are new impacts not mentioned above. "
+                             #"If everything is covered, return '__END__'."
+                     })
+
+    print(f"Nb. of iterations: {i}")
+    return full_response_formatted, error_count
+
+def is_extraction_finished(response_content):
+    """check if extraction is finished"""
+    return "__end__" in response_content.lower()
+
+
+def get_target_type(output_model):
+    """Infer target type from output_model"""
+    model_types = get_type_hints(output_model)
+    if "root" in model_types:  # pydantic v1 style RootModel
+        field_type = model_types["root"]
+    elif "__root__" in model_types:  # pydantic v2 style RootModel
+        field_type = model_types["__root__"]
     else:
-        print("Country not specified or missing:", location_text)
-        return None
-    # Check if 'city' key exists and has a value
-    if ("city" in location_text and location_text["city"]) or ("state" in location_text and location_text["state"]):
-        if location_text["city"] and location_text["state"]:
-            location_complete = f"{location_country}, {location_text['state']}, {location_text['city']}"
-        elif location_text["state"]:
-            location_complete = f"{location_country}, {location_text['state']}"
-        elif location_text["city"]:
-            location_complete = f"{location_country}, {location_text['city']}"
-        print("Location found: ", location_complete)
-    else:
-        print("City/State not specified or missing:", location_text)
-        location_complete = f"{location_country}"
-    return location_complete
+        return None  # no special root type
 
-def identify_locations(text, hazard):
-    identified_locations = {}
-    prompt = get_event_location(text, hazard)
-    result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    result_json = extract_outer_json(result)
-    answer_location = check_result_json(result_json, "hazardLocation")
-    if len(answer_location) == 1:
-        location_complete = check_location(answer_location[0])
-        if location_complete:
-            identified_locations[location_complete] = answer_location[0]
-    if len(answer_location) >= 1:
-        for location in answer_location:
-            location_complete = check_location(location)
-            if location_complete:
-                identified_locations[location_complete] = location
-    return identified_locations
+    # If it's something like List[ImpactValue], get_origin returns <class 'list'>
+    return get_origin(field_type) or field_type
 
-def identify_dates(text, hazard, location_complete):
-    prompt = get_event_date(text, hazard, location_complete)
-    result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    result_json = extract_outer_json(result)
-    answer_date = check_result_json(result_json, "hazardDate")
-    return answer_date
+def force_target_type(output_model, response):
+    """Function to force target type based on output_model"""
+    target_type = get_target_type(output_model)
 
-def identify_subtypes(text, hazard, location_complete, answer_date):
-    subtypes = maintype_to_subytpe_emdat[hazard]
-    hazard_date = deepcopy(answer_date)
-    if hazard_date and "hazardName" in hazard_date[0]:
-        del hazard_date[0]["hazardName"]
-    prompt = get_hazard_subtype(text, hazard, location_complete, hazard_date, subtypes)
-    result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    #result_json = extract_outer_json(result)
-    #answer_subtypes = check_result_json(result_json, "hazardSubtypes")
-    return result
+    if target_type is None:
+        return response
 
-def identify_impacts_simple(text, hazard_subtypes, location_complete , hazard_date):
-    """simple first version of impact data extraction"""
-    prompt = find_impact_types_unconstrained(text, hazard_subtypes, location_complete , hazard_date)
-    result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    result_json = extract_outer_json(result)
-    answer_subtypes = check_result_json(result_json, "impactSubtypes")
-    return answer_subtypes
-
-def identify_impacts_cat(text, impcat_to_check):
-    """Identify categories of impacts"""
-    impcat_identified = []
-    for impcat, imp_description in impcat_to_check.items():
-        #test for event occurence
-        prompt = find_impact_types_categories(text, impcat, imp_description)
-        result = get_model_response(CLIENT, MODEL_NAME, prompt)
-        impcat_occurrence = int("".join(re.findall("[01]", result)))
-        if impcat_occurrence == 1:
-            impcat_identified.append(impcat)
-            print(f"{impcat} identified in the report area.")
-    return impcat_identified
-
-def identify_impacts_quant(text, impact_types):
-    """Quantify impacts from identified impact categories"""
-    prompt = quantify_impacts(text, impact_types)
-    result = get_model_response(CLIENT, MODEL_NAME, prompt)
-    result_json = extract_outer_json(result)
-    answer_subtypes = check_result_json(result_json, "impactSubtypes")
-    return answer_subtypes
-
-def get_event_information(df_labelled, guess_hazard_types=True, guess_subtypes=True, guess_impacts_simple=False,
-                          guess_impacts_quant=False):
-    """Wrapper function to do all level promptings. Calls seaprate subfunctions per
-    each level:
-        Check if any hazard -> investigates_specific_events
-        Check specific hazard -> identify_hazards
-        Check event location -> get_event_location
-        Check event date -> get_event_date
-        Check event subtypes -> get_hazard_subtype
-        Check event impacts -> find_impact_types
-
-    """
-    response = []
-    count = 0
-    for rowid, row in df_labelled.iterrows():
-
-        reference_info = {
-            "appealCode": row["appealCode"],
-            "location": row["location"],
-            "reportDate" : row["reportDate"],
-            "disasterType": row["disasterType"]
-        }
-
-        text = row["nathaz_text"]
-
-        #ask LLM to identify main haz types from list
-        if guess_hazard_types:
-            hazards_to_check = list(maintype_to_subytpe_emdat.keys())
-
-        #just check that LLM can identify hazard identified with keyword search
+    # Handle lists
+    if target_type is list:
+        if not isinstance(response, list):
+            return [response]
+        elif all(isinstance(x, list) for x in response):
+            return [item for sublist in response for item in sublist]#flatten
         else:
-            hazards_to_check = row['hazards_found']
+            return response
+    # Handle dicts
+    if target_type is dict and isinstance(response, list) and len(response) == 1:
+        return response[0]  # unwrap singleton list
 
-        #test if a hazard occured, maybe unnecessary step?
-        prompt = investigates_specific_events(text)
-        result = get_model_response(CLIENT, MODEL_NAME, prompt)
-        specific_event = int(''.join(re.findall("[01]", result)))
+    return response
 
-        if not specific_event:
-            print(f"No hazard event identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+
+def deduplicate_structured_responses(prev_responses, new_responses):
+    """Function to check for duplicate responses. Returns a list of unique responses."""
+    new_unique_responses = []
+    seen = set([(entry["impactSubtype"],
+             entry["impactValue"],
+             entry["impactUnit"],
+             #tuple(entry.get("location") or []),
+             #tuple(entry.get("country") or []),
+             #tuple(entry.get("hazards") or [])
+             ) for entry in prev_responses])
+
+    for new_entry in new_responses:
+        entry_key = (new_entry["impactSubtype"],
+                     new_entry["impactValue"],
+                     new_entry["impactUnit"],
+                     #tuple(new_entry.get("location") or []),
+                     #tuple(new_entry.get("country") or []),
+                     #tuple(new_entry.get("hazards") or []),
+                     )
+        if entry_key not in seen:
+            seen.add(entry_key)
+            new_unique_responses.append(new_entry)
+    return new_unique_responses
+
+
+def break_down_sent(sentences, max_tokens=5000):
+    """break down single sentences if too long"""
+    for i, sent in enumerate(sentences):
+        if len(sent) > max_tokens:
+            #break sentence into chunks
+            sent1 = sent[:max_tokens]
+            sent2 = sent[max_tokens:]
+            sentences[i] = sent1
+            sentences.insert(i+1, sent2)
+    return sentences
+
+def break_down_text(sentences, max_tokens=5000):
+    """break down entire text of sentences"""
+    cum_len = 0
+    break_id = []
+    sentences = break_down_sent(sentences, max_tokens)
+    for i, sent in enumerate(sentences):
+        cum_len += len(sent)
+        if cum_len > max_tokens:
+            cum_len = 0
+            break_id.append(i)
+    if len(break_id) > 0:
+        chunks = []
+        for i in range(len(break_id)):
+            if i == 0:
+                chunks.append(sentences[:break_id[i]])
+            else:
+                chunks.append(sentences[break_id[i-1]+1:break_id[i]])
+        return chunks
+    else:
+        return sentences
+
+def extract_impact_value(impact):
+    """
+    Extracts the impact value from the impact dictionary.
+    """
+    return impact[["impactValue","impactValueMin", "impactValueMax"]].max()
+
+def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq_kwargs):
+    """
+    Multiprompt extraction chain with following sequence
+        1. Type
+        2. Value unit
+        3. Loc
+        4. Dates
+        5. Hazards
+    """
+    error_counts = {}
+    prompt_impact_type = identify_impacts_prompt(text, impact_types_dict)
+    impact_types_list = list(impact_types_dict.keys())
+    ImpactSubtypes.set_allowed_subtypes(impact_types_list)
+    answer_impact_types = get_model_response_retry(prompt_impact_type, ImpactSubtypes, **groq_kwargs)
+    if not answer_impact_types or not len(answer_impact_types):
+        return None
+    impact_types = answer_impact_types["impactSubtypes"]
+    prompt_value_unit = identify_value_unit_prompt(text, impact_types)
+    ImpactValue.set_allowed_subtypes(impact_types)
+    answer_impact_values, value_error_count = get_model_response_retry_continue(prompt_value_unit, ImpactValueList, max_rounds=max_rounds, **groq_kwargs)
+    error_counts["value"] = value_error_count
+    identified_impacts = []
+    for impact in answer_impact_values:
+        #retrieve impact Value
+        if isinstance(impact, list) and len(impact) == 1:
+            impact = impact[0]
+        elif (isinstance(impact, dict) and "impactValue" not in impact.keys()) or not isinstance(impact, dict):
+            print(f"discarding impact: {impact}")
+            error_counts
             continue
 
-        #identify hazards
-        hazards_identified = identify_hazards(text, hazards_to_check)
-        for hazard in hazards_identified:
-            #add data entry with hazard and reference info
-            data = add_key_value_pairs([reference_info], {"hazardType": hazard})
+        #impact_parsed = parse_impact_value_precision(pd.DataFrame(impact)) #ensure impactValue is consistent
+        #impact["impactValue"] = impact_parsed["impactValue"]
+        #impact["impactValueMin"] = impact_parsed["impactValueMin"]
+        #impact["impactValueMax"] = impact_parsed["impactValueMax"]
+        impact_value = extract_impact_value(pd.DataFrame(impact))
+        impact_unit = impact["impactUnit"]
+        impact_desc = make_impact_description(impact, impact_value, impact_unit)
+        prompt_impact_loc = identify_impact_loc_prompt(text, impact_desc)
+        answer_loc = get_model_response_retry(prompt_impact_loc, ImpactLocation, **groq_kwargs)
+        if isinstance(answer_loc, list) and len(answer_loc) == 1:
+            answer_loc = answer_loc[0]
+        if not isinstance(answer_loc, dict):
+            answer_loc = {"country": None, "location": None, "locationAnnotation": None}
+        impact.update(answer_loc)
+        prompt_impact_dates = identify_impact_dates_prompt(text, impact, answer_loc)
+        answer_dates = get_model_response_retry(prompt_impact_dates, ImpactDates, **groq_kwargs)
+        if isinstance(answer_dates, list) and len(answer_dates) == 1:
+            answer_dates = answer_dates[0]
+        if not isinstance(answer_dates, dict):
+            answer_dates = {"startYear": None, "startMonth": None, "startDay": None, "endYear": None, "endMonth": None, "endDay": None, "dateAnnotation": None}
+        impact.update(answer_dates)
+        prompt_impact_hazards = identify_impact_hazards_prompt(text, impact_desc, answer_loc, answer_dates, hazards_list)
+        ImpactHazards.set_allowed_classes(hazards_list)
+        answer_hazards = get_model_response_retry(prompt_impact_hazards, ImpactHazards, **groq_kwargs)
+        if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
+            answer_hazards = answer_hazards[0]
+        if not isinstance(answer_hazards, dict):
+            answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+        impact.update(answer_hazards)
 
-            #identify locations
-            locations_identified = identify_locations(text, hazard)
-            #loop over identified locations
-            for location_complete, location in locations_identified.items():
+        identified_impacts.append(impact)
 
-                #add location to data
-                updated_data = deepcopy(add_key_value_pairs(data, location))
-
-                #try to identify dates
-                ##!assumes only one date per event-location
-                answer_date = identify_dates(text, hazard, location_complete)
-                if answer_date:
-                    updated_data = deepcopy(add_key_value_pairs(updated_data, answer_date))
-
-                if guess_subtypes:
-                    answer_subtypes = identify_subtypes(text, hazard, location_complete, answer_date)
-                    if answer_subtypes:
-                        updated_data = deepcopy(add_key_value_pairs(updated_data, {"hazardSubtypes":answer_subtypes}))
-
-                if guess_impacts_simple:
-                    #for impact_cat, impact_types in impact_types_dict.items():
-                    #    answer_impacts = identify_impacts(text, answer_subtypes, location_complete , answer_date, impact_types)
-                    #    if answer_impacts:
-                    #        updated_data = deepcopy(add_key_value_pairs(updated_data, {impact_cat:answer_impacts}))
-                    answer_impacts = identify_impacts_simple(text, answer_subtypes, location_complete , answer_date)
-                    if answer_impacts:
-                        updated_data = deepcopy(add_key_value_pairs(updated_data,answer_impacts))
-                elif guess_impacts_quant:
-                    answer_impacts_cat = identify_impacts_cat(text, answer_subtypes, location_complete , answer_date, impact_cat_desc_dict)
-                    if answer_impacts_cat:
-                        updated_data = deepcopy(add_key_value_pairs(updated_data, {"impactTypes":answer_impacts_cat}))
-                        #answer_impacts_cat = json.loads(answer_impacts_cat) #convert to list
-                        answer_impacts_quant = identify_impacts_quant(text, answer_subtypes, location_complete , answer_date, answer_impacts_cat)
-                        if answer_impacts_quant:
-                            updated_data = deepcopy(add_key_value_pairs(updated_data, answer_impacts_quant))
+    return identified_impacts#, error_counts
 
 
-                #updated_data = deepcopy(add_key_value_pairs(updated_data, reference_info))
-                response.append(deepcopy(updated_data))
-
-
-
-
-    response_unnested = list(chain(*response))
-    response_df = pd.DataFrame(response_unnested)
-    return(response, response_df)
-
-def get_event_impacts_v1(df_labelled, res_savename):
+def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, text_pos="below", chunk_size=None, max_rounds=5, res_savename=None, **groq_kwargs):
     """Wrapper function to do all level promptings for impact extraction
-    Version 1 doing a separate identification of impact
+    Version 3 retrying multilevel prompting
 
     """
     response = []
     response_df_list = []
     count = 0
+    start_time = time.time()
     for rowid, row in df_labelled.iterrows():
 
         reference_info = {
             "appealCode": row["appealCode"],
-            "location": row["location"],
+            "country_kw": row["location"],
             "reportDate" : row["reportDate"],
-            "disasterType": row["disasterType"]
+            "reportLink" : row["reportLink"],
+            "disasterType": row["disasterType"],
+            "nathaz_text": row["nathaz_text"]
         }
 
-        text = row["nathaz_text"]
-
-        #first identify impact main types or subtypes directly
-        answer_impacts_cat = identify_impacts_cat(text, impact_subtypes_desc_dict)#impact_cat_desc_dict, impact_subtypes_desc_dict
-
-        if len(answer_impacts_cat):
-            print(f"Impacts {answer_impacts_cat} identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        columns = ["appealCode", "country_kw", "reportDate", "disasterType", "impactValue", "impactValuePrecision",
+                   "impactValueMin", "impactValueMax", "impactUnit", "country", "location", "startYear", "startMonth",
+                   "startDay", "endYear", "endMonth", "endDay", "hazards", "impactsAnnotation"]
+        data = reference_info
+        #query impact, value, loc, date haz altogether
+        if chunk_size:
+            chunks = break_down_text(row["nathaz_text"], chunk_size)
+            answer_impacts = []
+            for chunk in chunks:
+                #user_prompt = groq_user_prompt(str(chunk))
+                answer_impacts.extend(extraction_chain(text, impact_types_dict, hazards_list,
+                                                                        max_rounds=max_rounds,
+                                                                        **groq_kwargs))
         else:
-            print(f"No impacts identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
-            pass
+            text = str(row["nathaz_text"])
+            #user_prompt = groq_user_prompt(str(text))
+            answer_impacts = extraction_chain(text, impact_types_dict, hazards_list,
+                                                                        max_rounds=max_rounds,
+                                                                        **groq_kwargs)
 
-        for impcat in answer_impacts_cat:
+        #answer_impacts = json_repair.loads(result)
+        #further clean-up
+        #answer_impacts = list(chain(*answer_impacts)) #unlist elements
+        answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
+        #answer_impacts = list(chain.from_iterable(el if isinstance(el, list) else [el] for el in answer_impacts)) #unzip list elements
+        print(f"Impacts {answer_impacts} identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        if answer_impacts:
+            data = deepcopy(add_key_value_pairs(answer_impacts, data))
+            response.append(data)
+            #response_unnested = list(chain(*response))
+            #construct df
+            new_dfs = pd.concat([pd.DataFrame.from_dict(impdict, orient="index").T for impdict in data],axis=0)
+            #new_dfs = pd.concat(
+            #    [pd.DataFrame.from_dict(impdict, orient="columns") for impdict in data],
+            #    axis=0
+            #)
+        else:
+            #if extraction fail, write empty row with reference info
+            new_dfs = pd.DataFrame(columns=columns, data=[reference_info])
 
-            #query impact, value, loc, date haz altogether
-            impdesc = impact_subtypes_desc_dict[impcat]
-            prompt = quantify_impacts_value_loc_date_haz(text, impcat, impdesc)
-            #prompt = "List impacts with their location, value, and date in JSON format from the text below:\n" \
-            #"Flood damage occured in Abu Hamad and Tokar on 29 August 2024. 10000 people were impacted. Other impacts occured"
-            result = get_model_response(CLIENT, MODEL_NAME, prompt)
-            answer_impacts = check_result_json(result)
-
-            if answer_impacts:
-                data = add_key_value_pairs([reference_info], {"impactType": impcat})
-                updated_data = deepcopy(add_key_value_pairs(data, answer_impacts))
-                response.append(updated_data)
-
-        response_unnested = list(chain(*response))
-        response_df_list.append(pd.DataFrame(response_unnested))
+        response_df_list.append(new_dfs)
         all_response_df = pd.concat(response_df_list, ignore_index=True, axis=0)
-        all_response_df.to_csv(DATA_OUT_LLMS + res_savename, index=False)
+        if res_savename:
+            all_response_df.to_csv(DATA_OUT_LLMS / res_savename, index=False)
+
+    end_time = time.time()
+    nreports = len(df_labelled)
+    dtime = end_time - start_time
+    n_extracted_fields = len(all_response_df) if answer_impacts else 0
+    print(f"{MODEL_NAME}; time taken: {dtime} seconds, {dtime/nreports} seconds per report")
+    #store time in df
+    #df_time = pd.DataFrame({"model": [MODEL_NAME], "time_per_report": [dtime/nreports], "n_extracted_fields": [n_extracted_fields]})
+    #df_time.to_csv(DATA_PATH + "{MODEL_NAME}_time_per_report.csv", index=False, mode="a", header=False)
 
     return (response, all_response_df)

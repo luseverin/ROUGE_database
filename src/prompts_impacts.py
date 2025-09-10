@@ -1,4 +1,175 @@
+import pandas as pd
+from src.prompt_examples import *
+from src.impact_def import *
 #Prompts for impact extraction
+def identify_impacts_prompt(text, impact_desc):
+    """Try to identify impacts from different categories. Based on impact categories
+    dict"""
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Identify subtypes of impacts that occurred in the report area described in the text above, only
+    accounting for subtypes described below:
+    {format_desc(impact_desc)}
+    Answer as a JSON in the following format and respecting the rules described after:
+    JSON format:
+    {{
+    "impactSubtypes": ["<one or more of {list(impact_desc.keys())}>" or null],  # Description: The list of subtypes of impact (e.g., Affected People, Road Infrastructure, Crop Production and Forestry).
+    }}
+
+    Rules
+    - Only include impact subtypes that are in the following list: {list(impact_desc.keys())}.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the JSON.
+
+    Example output:
+    {examples_subtypes}
+    """
+    return prompt
+
+def identify_value_unit_prompt(text, answer):
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Based on the list of types of impacts that you previously identified:
+    {answer}
+    identify the values and units of these impacts from the text above.
+    Answer by providing a list of JSONs, in the following format and respecting the rules described after:
+    List of JSON format:
+    [
+    {{
+    "impactSubtype": "<one of {answer}>",  # Description: Subtype of impact (e.g., Affected People, Road Infrastructure, Crop Production and Forestry).
+    "impactValue": <float or null>  # Description: The quantified value of the impact. Provide the exact number if mentioned. If a range is provided give the upper estimate. Use null if unknown.
+    "impactValuePrecision": "one of ["exact", "approx"], # Description: The flag describing whether the quantified impact value is exact or approximate. Use null if unknown.
+    "impactValueMin": <float or null>,  # Description: The lower bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+    "impactValueMax": <float or null>,  # Description: The upper bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+    "impactUnit": "<string>" or null,  # Description: The unit of the impact value (e.g., people, meters, houses). Use null if unknown.
+    "valueAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the impacts information. Write the text exactly as found in the original text.
+    }}
+    ]
+
+    Rules:
+    - The `impactSubtype` field must only contain one of the valid values: {answer}.
+    - Do not reuse a specific impactValue for different entries.
+    - Provide the exact text excerpt from where you extracted the impacts information in the `valueAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
+    - Extract each mention of an impact only once. Do not repeat yourself.
+    - Provide the unit of the impact in the `impactUnit` field exactly as found in the original text, keeping all information on the measured quantity (e.g. write 'km of roads' instead of just 'km')
+    - When multiple numbers are provided favour the `impactValue` associated with `impactUnit` in terms of "people" over "households", and "CHF" over other currencies
+    - When the `impactValue` field is an exact number, `impactValuePrecision` must be set to `exact`.
+    - When the `impactValue` field is an approximation, `impactValuePrecision` must be set to `approx`.
+    - When the `impactValue` field is a range, `impactValuePrecision` must be set to `approx` and the `impactValueMin` and `impactValueMax` fields must be filled.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the list of JSONs.
+
+    Example output:
+    {examples_value_unit}
+    """
+    return prompt
+
+def make_impact_description(impact_type, impact_value, impact_unit):
+    if ((impact_value is not None) or
+        (not pd.isna(impact_value) or
+        (impact_unit is not None) or
+        (not pd.isna(impact_unit)))):
+        return f"the impact of type '{impact_type}' with a value of {impact_value} {impact_unit}"
+    else:
+        return f"impacts of type '{impact_type}'"
+
+def identify_impact_loc_prompt(text, impact_description):
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Identify the locations where {impact_description} occurred in the report area described in the text above.
+    Answer as a JSON in the following format and respecting the rules described after:
+    JSON format:
+    {{
+    "country": ["<list of strings>"],  # Description: The list of affected countries where the described impact occurred.
+    "location" : ["<list of strings>"] or null,  # Description: The list of affected locations at the subnational level (e.g. cities, regions) where the described impact occurred.
+    "locationAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the location information. Write the text exactly as found in the original text.
+    }}
+
+    Rules:
+    - Provide the the most precise level of location found for the described impact in the `city field`.
+    - Give the location names exactly as written in the text. Do not aggregate different locations in words such as "varions locations" but provide the list of names.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Provide the exact text excerpt from where you extracted the location information in the `locationAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the JSON.
+
+    Example output:
+    {examples_location}
+    """
+    return prompt
+
+def identify_impact_dates_prompt(text, impact_description, locations):
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Identify the dates when {impact_description} occurred at {locations} in the report area described in the text above.
+    Answer as a JSON in the following format and respecting the rules described after:
+    JSON format:
+    {{
+    "startYear": <integer or null>,  # Description: The year when the impact started. Use null if unknown.
+    "startMonth": <integer or null>,  # Description: The month when the impact started. Use null if unknown.
+    "startDay": <integer or null>,  # Description: The day when the impact started. Use null if unknown.
+    "endYear": <integer or null>,  # Description: The year when the impact ended. Use null if ongoing or unknown.
+    "endMonth": <integer or null>,  # Description: The month when the impact ended. Use null if ongoing or unknown.
+    "endDay": <integer or null>,  # Description: The day when the impact ended. Use null if ongoing or unknown.
+    "dateAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the date information. Write the text exactly as found in the original text.
+    }}
+
+    Rules:
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Provide the exact text excerpt from where you extracted the date information in the `dateAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the JSON.
+
+    Example output:
+    {examples_date}
+    """
+    return prompt
+
+def identify_impact_hazards_prompt(text, impact_description, locations, dates, hazards_list):
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Identify the hazards that caused {impact_description} at {locations} at {dates} in the report area described in the text above.
+    Answer as a JSON in the following format and respecting the rules described after:
+    JSON format:
+    {{
+    "hazards": ["<one or more of {hazards_list}>" or null],  # Description: List of hazards causing the impact (e.g., Tropical storm, Drought, Flood).
+    "hazardsAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the hazard information. Write the text exactly as found in the original text. Provide the entire sentences.
+    }}
+    Rules:
+    - The `hazards` field must only contain values from {hazards_list}.
+    - Provide the exact text excerpt from where you extracted the hazard information in the `hazardsAnnotation` field. Write the text exactly as found in the original text.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the JSON.
+
+    Example output:
+    {example_hazards}
+    """
+    return prompt
+
 def make_prompt_system(impact_types, hazard_types):
     prompt_system = f"""
     You are an assistant that analyzes impacts. You must output results strictly in the following JSON format:
@@ -26,6 +197,320 @@ def make_prompt_system(impact_types, hazard_types):
     3. Adhere to the JSON format strictly; no extra fields are allowed.
     """
     return prompt_system
+
+#try new formulation with formatting
+def quantify_impacts_type_value_loc_date_haz_const_unit(imp_main, imp_sub, imp_unit, hazard_cat):
+    """Find impact type, values, locs, etc. altogether"""
+    prompt = f"""
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Extract from the above text all descriptions and mentions of impacts resulting from extreme
+    natural hazard events. Answer by providing a list of JSONs, following strictly the instructructions
+    on the fields to extract and the structure of the output below:
+    [
+    {{
+        "impactType": "<one of {imp_main}>",  # Description: Main type of impact (e.g., Human, Agriculture, Infrastructure).
+        "impactSubtype": "<one of {imp_sub}>",  # Description: Subtype of impact (e.g., Affected People, Crop Production, WASH Infrastructure).
+        "impactValue": <integer or null>,  # Description: The quantified value of the impact. Use null if unknown.
+        "impactUnit": "<one of {imp_unit}>",  # Description: The unit of the impact value (e.g., people, kilometers, houses).
+        "impactValueFlag": "one of ["exact", "approx"], # Description: The quality flag for the quantified impact value informing on the confidence in the quantified value.
+        "country": "<string>",  # Description: The country where the impact occurred.
+        "location": ["<list of strings>" or null],  # Description: A list of affected locations (e.g., cities, regions).
+        "startYear": <integer or null>,  # Description: The year when the impact started. Use null if unknown.
+        "startMonth": <integer or null>,  # Description: The month when the impact started. Use null if unknown.
+        "startDay": <integer or null>,  # Description: The day when the impact started. Use null if unknown.
+        "endYear": <integer or null>,  # Description: The year when the impact ended. Use null if ongoing or unknown.
+        "endMonth": <integer or null>,  # Description: The month when the impact ended. Use null if ongoing or unknown.
+        "endDay": <integer or null>,  # Description: The day when the impact ended. Use null if ongoing or unknown.
+        "hazards": ["<one or more of {hazard_cat}>" or null],  # Description: List of hazards causing the impact (e.g., Tropical storm, Drought, Flood).
+        "impactsAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the impacts information. Write the text exactly as found in the original text.
+    }}
+    ]
+
+    Rules:
+    1. The `impactType` field must only contain one of the valid values: {imp_main}.
+    2. The `impactSubtype` field must only contain one of the valid values: {imp_sub}.
+    2. The `impactUnit` field must only contain one of the valid values: {imp_unit}.
+    3. The `hazards` field must only contain values from {hazard_cat}.
+    4. Follow the JSON format strictly; do not add or remove fields.
+    5. Ensure all field constraints are respected. If any values are unknown, use null.
+    6. Do not add notes or extra text, only output the list of JSONs.
+    7. Do not reuse a specific impactValue for different entries.
+
+    """
+    return prompt
+
+def quantify_impacts_type_value_loc_date_haz_free_unit_ranges(imp_sub, hazard_cat):
+    """Find impact type, values, locs, etc. altogether"""
+    prompt = f"""
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Extract from the above text all descriptions and mentions of impacts resulting from extreme
+    natural hazard events.
+    Answer by providing a list of JSONs, following strictly the JSON structure provided below and the strictly
+    following the set of rules described after.
+
+    ### Structure of the list of JSONs
+    [
+    {{
+        "impactSubtype": "<one of {imp_sub}>",  # Description: Subtype of impact (e.g., Affected People, Road Infrastructure, Crop Production and Forestry).
+        "impactValue": <float or null>  # Description: The quantified value of the impact. Provide the exact number if mentioned. If a range is provided give the upper estimate. Use null if unknown.
+        "impactValuePrecision": "one of ["exact", "approx"], # Description: The flag describing whether the quantified impact value is exact or approximate. Use null if unknown.
+        "impactValueMin": <float or null>,  # Description: The lower bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+        "impactValueMax": <float or null>,  # Description: The upper bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+        "impactUnit": "<string>" or null,  # Description: The unit of the impact value (e.g., people, meters, houses). Use null if unknown.
+        "country": ["<list of strings>"],  # Description: The list of affected countries where the described impact occurred.
+        "location": ["<list of strings>"],  # Description: The list of affected locations (e.g., cities, regions) where the described impact occurred.
+        "startYear": <integer or null>,  # Description: The year when the impact started. Use null if unknown.
+        "startMonth": <integer or null>,  # Description: The month when the impact started. Use null if unknown.
+        "startDay": <integer or null>,  # Description: The day when the impact started. Use null if unknown.
+        "endYear": <integer or null>,  # Description: The year when the impact ended. Use null if ongoing or unknown.
+        "endMonth": <integer or null>,  # Description: The month when the impact ended. Use null if ongoing or unknown.
+        "endDay": <integer or null>,  # Description: The day when the impact ended. Use null if ongoing or unknown.
+        "hazards": ["<one or more of {hazard_cat}>" or null],  # Description: List of hazards causing the impact (e.g., Tropical storm, Drought, Flood).
+        "impactsAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the impacts information. Write the text exactly as found in the original text.
+    }}
+    ]
+
+    ### Rules:
+    - The `impactSubtype` field must only contain one of the valid values: {imp_sub}.
+    - The `hazards` field must only contain values from {hazard_cat}.
+    - Do not reuse a specific impactValue for different entries.
+    - Extract each mention of an impact only once. Do not repeat yourself.
+    - Provide the exact text excerpt from where you extracted the impacts information in the `impactsAnnotation` field. Write the text exactly as found in the original text.
+    - Provide the unit of the impact in the `impactUnit` field exactly as found in the original text, keeping all information on the measured quantity (e.g. write 'km of roads' instead of just 'km')
+    - When multiple numbers are provided favour the `impactValue` associated with `impactUnit` in terms of "people" over "households", and "CHF" over other currencies
+    - When the `impactValue` field is an exact number, `impactValuePrecision` must be set to `exact`.
+    - When the `impactValue` field is an approximation, `impactValuePrecision` must be set to `approx`.
+    - When the `impactValue` field is a range, `impactValuePrecision` must be set to `approx` and the `impactValueMin` and `impactValueMax` fields must be filled.
+    - Provide the location names in the `location` field as the most precise level that is mentionned. Give the names exactly as written in the text. Do not aggregate different locations in words such as "varions locations" but provide the list of names.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the list of JSONs.
+
+    """
+    return prompt
+
+def quantify_impacts_all_system_prompt(imp_sub, hazard_cat):
+    """Find impact type, values, locs, etc. altogether"""
+    prompt = f"""
+    You are provided a text (### Input text) containing information about impacts from natural hazards. Extract from the
+    provided text all descriptions and mentions of impacts resulting from the natural hazard events.
+    You must provide your answer as a list of JSONs with the structure ###JSON structure described below,
+    and strictly follow the rules described below in the ###Rules section. Further information on the fields to extract
+    are provided in the ###impactSubtype description section, ###hazards description section and ###Examples provided
+    at the end. See ###Example output for an example of how the output list of JSON must look like.
+    ###JSON structure:
+    [
+    {{
+        "impactSubtype": "<one of {imp_sub}>",  # Description: Subtype of impact (e.g., Affected People, Road Infrastructure, Crop Production and Forestry).
+        "impactValue": <float or null>  # Description: The quantified value of the impact. Provide the exact number if mentioned. If a range is provided give the upper estimate. Use null if unknown.
+        "impactValuePrecision": "one of ["exact", "approx"], # Description: The flag describing whether the quantified impact value is exact or approximate. Use null if unknown.
+        "impactValueMin": <float or null>,  # Description: The lower bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+        "impactValueMax": <float or null>,  # Description: The upper bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+        "impactUnit": "<string>" or null,  # Description: The unit of the impact value (e.g., people, meters, houses). Use null if unknown.
+        "country": ["<list of strings>"],  # Description: The list of affected countries where the described impact occurred.
+        "location": ["<list of strings>"],  # Description: The list of affected locations (e.g., cities, regions) where the described impact occurred.
+        "startYear": <integer or null>,  # Description: The year when the impact started. Use null if unknown.
+        "startMonth": <integer or null>,  # Description: The month when the impact started. Use null if unknown.
+        "startDay": <integer or null>,  # Description: The day when the impact started. Use null if unknown.
+        "endYear": <integer or null>,  # Description: The year when the impact ended. Use null if ongoing or unknown.
+        "endMonth": <integer or null>,  # Description: The month when the impact ended. Use null if ongoing or unknown.
+        "endDay": <integer or null>,  # Description: The day when the impact ended. Use null if ongoing or unknown.
+        "hazards": ["<one or more of {hazard_cat}>" or null],  # Description: List of hazards causing the impact (e.g., Tropical storm, Drought, Flood).
+        "impactsAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the impacts information. Write the text exactly as found in the original text.
+    }}
+    ]
+
+    ###Rules:
+    - The `impactSubtype` field must only contain one of the valid values: {imp_sub}.
+    - The `hazards` field must only contain values from {hazard_cat}.
+    - Do not reuse a specific impactValue for different entries.
+    - Extract each mention of an impact only once. Do not repeat yourself.
+    - Provide the exact text excerpt from where you extracted the impacts information in the `impactsAnnotation` field. Write the text exactly as found in the original text.
+    - Provide the unit of the impact in the `impactUnit` field exactly as found in the original text, keeping all information on the measured quantity (e.g. write 'km of roads' instead of just 'km')
+    - When multiple numbers are provided favour the `impactValue` associated with `impactUnit` in terms of "people" over "households", and "CHF" over other currencies
+    - When the `impactValue` field is an exact number, `impactValuePrecision` must be set to `exact`.
+    - When the `impactValue` field is an approximation, `impactValuePrecision` must be set to `approx`.
+    - When the `impactValue` field is a range, `impactValuePrecision` must be set to `approx` and the `impactValueMin` and `impactValueMax` fields must be filled.
+    - Provide the location names in the `location` field as the most precise level that is mentionned. Give the names exactly as written in the text. Do not aggregate different locations in words such as "varions locations" but provide the list of names.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the list of JSONs.
+
+    """
+    return prompt
+#- impactSubtype (string)
+#- impactValue (float or null)
+#- impactValuePrecision (string)
+#- impactValueMin (float or null)
+#- impactValueMax (float or null)
+#- impactUnit (string or null)
+#- country (list of strings or null)
+#- location (list of strings or null)
+#- startYear (integer or null)
+#- startMonth (integer or null)
+#- startDay (integer or null)
+#- endYear (integer or null)
+#- endMonth (integer or null)
+#- endDay (integer or null)
+#- hazards (list of strings or null)
+#- impactsAnnotation (list of strings)
+
+def impact_scehem_json_schema(impsub_list, haz_list):
+    impact_scheme_json = {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "impactSubtype": {
+            "type": "string",
+            "enum": impsub_list
+          },
+          "impactValue": { "type": ["number", "null"] },
+          "impactUnit": { "type": ["string", "null"] },
+          "impactValuePrecision": {
+              "type": ["string", "null"],
+              "enum": ["exact", "approx"]
+          },
+          "country": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
+          "location": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "startYear": { "type": ["integer", "null"] },
+          "startMonth": { "type": ["integer", "null"] },
+          "startDay": { "type": ["integer", "null"] },
+          "endYear": { "type": ["integer", "null"] },
+          "endMonth": { "type": ["integer", "null"] },
+          "endDay": { "type": ["integer", "null"] },
+          "hazards": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "enum": haz_list
+            },
+            "minItems": 1
+          },
+          "impactsAnnotation": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          }
+        },
+        "required": ["impactSubtype",
+                     "impactValue",
+                     "hazards",
+                     "location",
+                     "startYear",
+                     "startMonth",
+                     "startDay",
+                     "endYear",
+                     "endMonth",
+                     "endDay",
+                     "impactValueMin",
+                     "impactValueMax",
+                     "impactUnit",
+                     "impactValuePrecision",
+                     "country",
+                     "impactsAnnotation"]
+      }
+    }
+    return impact_scheme_json
+
+def groq_system_prompt(imp_sub, hazard_cat):
+    prompt = f"""
+
+    ### System
+    You are a data-extraction bot. Return **ONLY** a python list of valid JSONs.
+
+    ### Instructions
+    Return only a python list of JSONs. Each JSON must have the following fields, with the correct data type and correspoding to the description:
+    - "impactSubtype": "<one of {imp_sub}>",  # Description: Subtype of impact (e.g., Affected People, Road Infrastructure, Crop Production and Forestry).
+    - "impactValue": <float or null>  # Description: The quantified value of the impact. Provide the exact number if mentioned. If a range is provided give the upper estimate. Use null if unknown.
+    - "impactValuePrecision": "one of ["exact", "approx"], # Description: The flag describing whether the quantified impact value is exact or approximate. Use null if unknown.
+    - "impactValueMin": <float or null>,  # Description: The lower bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+    - "impactValueMax": <float or null>,  # Description: The upper bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+    - "impactUnit": "<string>" or null,  # Description: The unit of the impact value (e.g., people, meters, houses). Use null if unknown.
+    - "country": ["<list of strings>"],  # Description: The list of affected countries where the described impact occurred.
+    - "location": ["<list of strings>"],  # Description: The list of affected locations (e.g., cities, regions) where the described impact occurred.
+    - "startYear": <integer or null>,  # Description: The year when the impact started. Use null if unknown.
+    - "startMonth": <integer or null>,  # Description: The month when the impact started. Use null if unknown.
+    - "startDay": <integer or null>,  # Description: The day when the impact started. Use null if unknown.
+    - "endYear": <integer or null>,  # Description: The year when the impact ended. Use null if ongoing or unknown.
+    - "endMonth": <integer or null>,  # Description: The month when the impact ended. Use null if ongoing or unknown.
+    - "endDay": <integer or null>,  # Description: The day when the impact ended. Use null if ongoing or unknown.
+    - "hazards": ["<one or more of {hazard_cat}>" or null],  # Description: List of hazards causing the impact (e.g., Tropical storm, Drought, Flood).
+    - "impactsAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the impacts information. Write the text exactly as found in the original text. Provide the entire sentences.
+
+    Respect the following rules:
+    - The `impactSubtype` field must only contain one of the valid values: {imp_sub}.
+    - The `hazards` field must only contain values from {hazard_cat}.
+    - Do not reuse a specific impactValue for different entries.
+    - Provide the exact text excerpt from where you extracted the impacts information in the `impactsAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
+    - Extract each mention of an impact only once. Do not repeat yourself.
+    - Provide the unit of the impact in the `impactUnit` field exactly as found in the original text, keeping all information on the measured quantity (e.g. write 'km of roads' instead of just 'km')
+    - When multiple numbers are provided favour the `impactValue` associated with `impactUnit` in terms of "people" over "households", and "CHF" over other currencies
+    - When the `impactValue` field is an exact number, `impactValuePrecision` must be set to `exact`.
+    - When the `impactValue` field is an approximation, `impactValuePrecision` must be set to `approx`.
+    - When the `impactValue` field is a range, `impactValuePrecision` must be set to `approx` and the `impactValueMin` and `impactValueMax` fields must be filled.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the list of JSONs.
+    """
+    return prompt
+
+
+def quantify_impacts_all_user_prompt(text):
+    prompt = f"""
+    Please extract from the text TEXT below all the information about impacts from natural hazards
+    as described in the instructions, providing your answer in the correct format as described in
+    the instructions.
+
+    TEXT:
+    {text}
+    """
+    return prompt
+
+def groq_user_prompt(text):
+    prompt = f"""
+    Please extract from the input text below all the information about impacts from natural hazards.
+
+    ### Input text:
+    {text}
+    """
+    return prompt
+
+def add_text_prompt(prompt, text, text_pos="below"):
+    if text_pos == "above":
+        prompt = "### Input text:\n" + text + "\n" + prompt
+    elif text_pos == "below":
+        prompt = prompt + "\n### Input text:\n" + text
+    else:
+        raise ValueError("Position must be 'above' or 'below'")
+    return prompt
+
+def add_context(prompt, context):
+    return prompt + "\n### Context\nUse the following descriptions to help you complete the task:\n" + context
+
+def add_subtype_descriptions_prompt(prompt, category, descriptions):
+    return prompt + f"\n###{category} description:\n " + descriptions
+
+def add_examples_prompt(prompt, examples):
+    return prompt + f"\n### Example output:\n {examples}"
+
+def add_examples_prompt_v2(prompt, examples):
+    new_prompt = ""
+    for i, example in enumerate(examples):
+        new_prompt += f"\n### Example {i+1}:\n {example}\n"
+    return prompt + new_prompt
+
+def format_desc(desc_dict):
+    return "\n".join([f"{k}: {v}" for k, v in desc_dict.items()])
+
+
 def quantify_impacts_type_value_loc_date_haz(text, impact_cat_desc_dict, hazard_all_subtype_emdat):
     """Find impact type, values, locs, etc. altogether"""
     prompt = f"""
