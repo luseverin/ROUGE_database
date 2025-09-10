@@ -28,12 +28,13 @@ id_language = True #identify language and get rid of reports not in english
 format_numbers = False
 std_units = False
 match_above = False
+format_report_date = True #incompatible with json
+outformat = 'csv' #csv json
 
 ## Select data
 fname_in = 'filtered_report_types_nat_hazards_bugfix'
 
-
-fname_out = f'{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -45,6 +46,7 @@ with open(DATA_IN_JSONS / (fname_in + '.json'), 'r') as json_file:
     all_ifrc_reports_info_unnested = json.load(json_file)
 
 not_eng = []
+id_lang = 0
 filtered_reports = []
 filtered_reports_hazonly = []
 for report in all_ifrc_reports_info_unnested:
@@ -52,8 +54,15 @@ for report in all_ifrc_reports_info_unnested:
     if report['appealType'] in ['Operations Update', 'DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']:
         if id_language and "language" not in report.keys():
             report['language'] = detect_language(report['text'])
+            id_lang=1
         if report["language"] == 'en':
             report["iso_code"] = country_name_to_iso3(report.get("location"))
+            #reformat time
+            if format_report_date:
+                report["date"] = pd.to_datetime(report["date"], dayfirst=True).strftime("%d/%m/%Y")
+            else:
+                report["reportDate"] = report["date"]
+            del report["date"]
             if format_numbers:
                 report['text_processed'] = replace_commas_in_numbers(report['text_processed'])
                 report['text_processed'] = replace_count_suffixes(report['text_processed'])
@@ -74,8 +83,22 @@ print(f"Number of reports: {len(filtered_reports)}")
 print(f"Number of reports with hazards id with kw search: {len(filtered_reports_hazonly)}")
 
 ## Save data
-with open(DATA_IN_JSONS / (fname_out + '.json'), 'w') as f:
-    json.dump(filtered_reports, f, indent=4)
+if id_lang:#save file with language info as takes time to process
+    with open(DATA_IN_JSONS / (fname_in + '.json'), 'w') as f:
+        json.dump(filtered_reports, f, indent=4)
+if outformat == 'csv':
+    filtered_reports = pd.DataFrame(filtered_reports)
+    filtered_reports_hazonly = pd.DataFrame(filtered_reports_hazonly)
 
-with open(DATA_IN_JSONS / ("hazonly_" + fname_out + '.json'), 'w') as f:
-    json.dump(filtered_reports_hazonly, f, indent=4)
+    filtered_reports.to_csv(DATA_IN_JSONS / (fname_out + '.csv'), index=False)
+    filtered_reports_hazonly.to_csv(DATA_IN_JSONS / ("hazonly_" + fname_out + '.csv'), index=False)
+
+elif outformat == 'json':
+    with open(DATA_IN_JSONS / (fname_out + '.json'), 'w') as f:
+        json.dump(filtered_reports, f, indent=4)
+
+    with open(DATA_IN_JSONS / ("hazonly_" + fname_out + '.json'), 'w') as f:
+        json.dump(filtered_reports_hazonly, f, indent=4)
+
+else:
+    raise ValueError("outformat must be 'csv' or 'json'")
