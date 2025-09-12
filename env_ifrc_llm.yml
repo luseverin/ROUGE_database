@@ -1,0 +1,82 @@
+name: ifrc_llm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+
+  # Core scientific stack
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - statsmodels
+  - matplotlib
+  - seaborn
+
+  # Geospatial stack
+  - geopandas
+  - shapely
+  - fiona
+  - rasterio
+  - pyproj
+  - cartopy
+  - contextily
+
+  # IO + formats
+  - xarray
+  - netcdf4
+  - h5py
+  - openpyxl
+  - xlrd
+  - xlsxwriter
+  - pyxlsb
+  #- tables  # pytables
+
+  # Parallel/distributed
+  - dask
+  - distributed
+  - joblib
+  - numba
+
+  # Utilities
+  - tqdm
+  - requests
+  - beautifulsoup4
+  - lxml
+  - pyyaml
+
+  # Jupyter
+  - ipython
+  - ipykernel
+  - jupyterlab
+  - notebook
+
+  # Pydantic + validation
+  - pydantic
+
+  # Optional viz
+  - folium
+  - bokeh
+
+  # NLP
+  - spacy
+  - nltk
+
+  - pip:
+    - groq
+    - instructor
+    - json-repair
+    - number-spacy
+    - word2number
+    - sentence-transformers
+    - transformers
+    - torch
+    - llama-index
+    - langchain-core
+    - langchain-groq
+    - pycountry
+    - text2num
+    - pint
+    #spacy model
+    - https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.3.1/en_core_web_sm-2.3.1.tar.gz#egg=en_core_web_sm
