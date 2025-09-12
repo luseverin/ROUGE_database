@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "src"                 # name of your package
+version = "0.1.0"
+description = "Project utilities"
+authors = [{name="Your Name"}]
+
+[tool.setuptools]
+packages = ["src"]           # tell setuptools to include the src package
