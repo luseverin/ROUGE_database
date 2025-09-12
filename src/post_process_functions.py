@@ -334,13 +334,14 @@ unit_type_kw_reclass = {
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
                         '%' : r"(%|perc.*)",
 }
-unit_kw_reclass ={
+unit_kw_reclass = {
                         'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
                         'roads' : r"road.*|route.*|bridge.*|highway.*|motorway.*",#r"(?<!kilometer|kilometre|km).*(road.*|route.*|.*bridge.*|.*highway.*|.*motorway.*)",
-                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|bus.*|taxi.*|taxicab.*|truck.*",
+                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|buse?s?\b|taxi.*|taxicab.*|truck.*",
                         'water, sanitation and hygiene facilities' : r"water.*|sanitation.*|hygiene.*|latrine.*|well.*|tap.*|reservoir.*|aqueduct.*",
-                        'healthcare facilities' : r"health|hospital.*|clinic.*|maternity.*|medical",
+                        'healthcare facilities' : r"health|hospitals?\b|clinic.*|maternity.*|medical",
                         'IT and communication facilities' : r"communication.*|radio.*|tv.*|cell tower.*|antenna.*",
+                        'power and energy production infrastructure facilities' : r"power.*|energy.*|generator.*|wind.*|solar.*|hydro.*|dams?",
                         'homes' : r"residential.*|residence.|hous.*|home.*|building.*",
                         'education facilities' : r"education.*|school.*|university.*|college.*",
                         'crop production and forestry' : r"crop.*|field.*|forest.*|tree.*|banana.*|coffee.*|cocoa.*|cotton.*|maize.*|rice.*|sorghum.*|soybean.*|sugar.*|tobacco.*|wheat.*",
@@ -348,43 +349,73 @@ unit_kw_reclass ={
                         'affected animals' : r"livestock.*|animal.*|fish.*|cow.*|sheep.*|poult.*|cattle.*|goat.*|pig.*|chick.*|horse.*|heads?",
                         'informal settlements' : r"camp.?|tent.?|refuge.?|settlement.?"
                          }
+
+expected_unit_subtype = {
+    "Affected People": "people",
+    "Injured People": "people",
+    "Displaced People": "people",
+    "Homeless People": "people",
+    "Missing People": "people",
+    "Human Deaths": "people",
+    "Residential Buildings": "homes",
+    "Informal settlements": "informal settlements",
+    "Education Infrastructure": "education facilities",
+    "Human Health and Wellbeing" : "unknown",
+    "Infected and Ill People": "people",
+    "Road Infrastructure" : "roads",
+    "Other Transportation Infrastructure" : "transportation facilities",
+    "Water, Sanitation, and Hygiene Infrastructure": "water, sanitation and hygiene facilities",
+    "Healthcare Infrastructure": "healthcare facilities",
+    "IT and Communication Infrastructure": "IT and communication facilities",
+    "Power and Energy Production Infrastructure" : "power and energy production infrastructure facilities",
+    "Agriculture Infrastructure": "agricultural facilities",
+    "Affected Livestock and Animals": "affected animals",
+    "Recreation, Tourism, and Culture": "unknown",
+    "Economy and Market": "unknown",
+    "Access to Healthcare": "people",
+    "Access to transport and Mobility": "people",
+    "Access to Food": "people",
+    "Access to Water, Sanitation, and Hygiene": "people",
+    "Other Human Impacts": "unknown",
+    "Other Infrastructure Impacts": "unknown",
+    "Other Agricultural Impacts": "unknown",
+    "Other Service Access Impacts": "people",
+}
 default_subtype_unit = {
- 'Affected People': "people",
- 'Injured People': "people",
- 'Displaced People': "people",
- 'Homeless People': "people",
- 'Missing People': "people",
- 'Human Deaths': "people",
- 'Residential Buildings': "homes",
- 'Informal settlements': "undefined informal settlements",
- 'Education Infrastructure': "schools",
- 'Human Health and Wellbeing' : "unknown",
- 'Infected and Ill People': "people",
- 'Road Infrastructure' : "roads",
- 'Other Transportation Infrastructure' : "undefined other transportation infrastructure",
- 'Water, Sanitation, and Hygiene Infrastructure': "undefined WASH facilities",
- 'Healthcare Infrastructure': "undefined healthcare facilities",
- 'IT and Communication Infrastructure': "undefined IT and communication facilities",
- 'Residential Buildings': "houses",
- 'Informal settlements': "undefined informal settlements",
- 'Education Infrastructure': "schools",
- 'Power and Energy Production Infrastructure' : "undefined power and energy production infrastructure facilities",
- 'Agriculture Infrastructure': "undefined agricultural facilities",
- 'Crop Production and Forestry': "undefined crop production and forestry",
- 'Affected Livestock and Animals': "undefined affected animals",
- 'Other Economic and Livelihood Impacts': "CHF",
- 'Recreation, Tourism, and Culture' : "unknown",
- 'Access to Healthcare': "people",
- 'Access to transport and Mobility': "people",
- 'Water Quality and Availability' : "unknown",
- 'Access to Education':"people",
- 'Access to Power and Energy':"people",
- 'Access to Food':"people",
- 'Access to Water, Sanitation, and Hygiene':"people",
- 'Other Human Impacts': "unknown",
- 'Other Infrastructure Impacts': "unknown",
- 'Other Agricultural Impacts': "unknown",
- 'Other Service Access Impacts': "people"
+    'Affected People': "people",
+    'Injured People': "people",
+    'Displaced People': "people",
+    'Homeless People': "people",
+    'Missing People': "people",
+    'Human Deaths': "people",
+    'Residential Buildings': "homes",
+    'Informal settlements': "undefined informal settlements",
+    'Education Infrastructure': "schools",
+    'Human Health and Wellbeing' : "unknown",
+    'Infected and Ill People': "people",
+    'Road Infrastructure' : "roads",
+    'Other Transportation Infrastructure' : "undefined other transportation infrastructure",
+    'Water, Sanitation, and Hygiene Infrastructure': "undefined WASH facilities",
+    'Healthcare Infrastructure': "undefined healthcare facilities",
+    'IT and Communication Infrastructure': "undefined IT and communication facilities",
+    'Education Infrastructure': "schools",
+    'Power and Energy Production Infrastructure' : "undefined power and energy production infrastructure facilities",
+    'Agriculture Infrastructure': "undefined agricultural facilities",
+    'Crop Production and Forestry': "undefined crop production and forestry",
+    'Affected Livestock and Animals': "undefined affected animals",
+    'Other Economic and Livelihood Impacts': "CHF",
+    'Recreation, Tourism, and Culture' : "unknown",
+    'Access to Healthcare': "people",
+    'Access to transport and Mobility': "people",
+    'Water Quality and Availability' : "unknown",
+    'Access to Education':"people",
+    'Access to Power and Energy':"people",
+    'Access to Food':"people",
+    'Access to Water, Sanitation, and Hygiene':"people",
+    'Other Human Impacts': "unknown",
+    'Other Infrastructure Impacts': "unknown",
+    'Other Agricultural Impacts': "unknown",
+    'Other Service Access Impacts': "people"
 }
 
 def convert_unit(x, unit_converter):
@@ -422,7 +453,7 @@ def assign_unit_type(x, unit_type_kw_reclass):
         unit_type = "multiple"
     return unit_type
 
-def reclassify_units(x, unit_kw_reclass, default_subtype_unit, force_unit_to_subtype=True):
+def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subtype=True, reclass_subtype=True):
     """
     Reclassify units based on keywords
 
@@ -454,6 +485,12 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit, force_unit_to_sub
             reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
         else:
             reclass_unit = unit
+    if reclass_subtype:
+        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
+        if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
+            print(f"Reclassified subtype from {x['impactSubtype']} to {possible_subtypes[0]} with unit reclass {reclass_unit} and orig unit {unit}")
+            print(x["valueAnnotation"])
+            x["impactSubtype"] = possible_subtypes[0]
     return reclass_unit
 
 def standardize_units(x, std_unit_kw_reclass, unit_mapping):
