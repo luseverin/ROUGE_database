@@ -455,9 +455,7 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
         df_type = "labelled"
 
     for col in col_to_list :
-        df_geo[col] = df_geo[col].apply(
-            lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
-        )
+        df_geo[col] = df_geo[col].apply(listify_strings)
 
     #Open Polygons
     start = time.time()
