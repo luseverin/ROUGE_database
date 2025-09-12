@@ -87,6 +87,8 @@ def detect_language(text):
 def written_num(text, lang="en"):
     """Version of like_num using text2num. Able to handle plurals but does not
     detect literal number (e.g. "3")"""
+    if not text or text.strip() == "":
+        return False
     try:
         text2num(text, lang)
         return True
