@@ -10,10 +10,27 @@ hazard_all_subtype_emdat = ["drought", "wildfire", "forest fire", "land fire",
                             "derecho", "hail", "lightning", "winterstorm", "storm surge",
                             "tornado", "extra-tropical storm", "tropical storm" ]
 
-hazard_main_types_emdat_extended = ["Drought", "Wildfire", "Earthquake", "Mass movement",
-                                    "Volcanic activity", "Flood", "Wave action", "Extreme warm temperature",
-                                    "Extreme cold temperature", "Other storm",
-                                    "Tropical storm", "Epidemic", "Conflict"]
+#hazard_main_types_emdat_extended = ["Drought", "Wildfire", "Earthquake", "Mass movement",
+#                                    "Volcanic activity", "Flood", "Wave action", "Extreme warm temperature",
+#                                    "Extreme cold temperature", "Other storm",
+#                                    "Tropical storm", "Epidemic", "Conflict"]
+
+hazard_kw_reclass = {
+    'Drought': r"\bdrought.*|\bdry\s+spell.*",
+    'Wildfire': r"\b(forest\s*fire|wild\s*fire|land\s*fire|bush\s*fire|wildfire|landfire|bushfire|fire)s?\b.*",
+    'Earthquake': r"\b(earthquake|ground\s+movement|tsunami)s?\b.*",
+    'Mass movement': r"\b(mass\s+movement|avalanche|land\s*slide|landslide|rockfall|sudden\s+subsidence|mudslide|rockslide)s?\b.*",
+    'Volcanic activity': r"\b(volcanic|ash\s+fall|lava\s+flow|pyroclastic\s+flow|lahar)s?\b.*",
+    'Flood': r"\b(flood|inundation|coastal\s+flood|flash\s+flood|riverine\s+flood|ice\s+jam\s+flood|heavy rain)s?\b.*",
+    'Wave action': r"\b(wave|rogue\s+wave|seiche)\b.*",
+    'Extreme cold temperature': r"\b(extreme\s+cold\s+temperature|cold\s+wave|coldwave|cold\s+spell|severe\s+winter\s+conditions)s?\b.*",
+    'Extreme warm temperature': r"\b(extreme\s+warm\s+temperature|heat\s+wave|heatwave|heat\s+episode|(?:heat|hot)\s+spell|heat\s+stress)s?\b.*",
+    'Tropical storm': r"\b(tropical\s+storm|typhoon|hurricane|cyclonic\s+storm)s?\b.*",
+    'Convective storm': r"\b(convective\s+storm|derecho|hail|lightning|tornado|superstorm|thunderstorm)s?\b.*",
+    'Other storm': r"\b(extra-?tropical\s+storm|winter\s*storm|storm\s+surge|windstorm|snowstorm|blizzard)s?\b.*",
+    'Epidemics': r"\b(cholera|dengue|outbreak|epidemic)s?\b.*",
+    'Conflict': r"\b(conflict|war|terrorism|unrest)s?\b.*"
+}
 
 hazard_main_types_emdat_desc = {
     "Drought": "Prolonged lack of precipitation",
@@ -35,17 +52,17 @@ hazard_main_types_emdat_desc = {
 hazard_mapping_emdat = {'Drought': ['Drought'],
                         'Wildfire': ['Wildfire', 'forest fire', "Forest fire", 'land fire', "Land fire", "fire"],
                         'Earthquake': ['Earthquake', "Tsunami"],
-                        'Mass movement': ['Mass movement', 'Mass movement (dry)', 'Mass movement (wet)', "Landslide", "Mud flow/slide", "Avalanche", 
+                        'Mass movement': ['Mass movement', 'Mass movement (dry)', 'Mass movement (wet)', "Landslide", "Mud flow/slide", "Avalanche",
                                           "Alluvion", "Coastal erosion", "Subsidence", "Erosion", "Sedimentation"],
-                        'Volcanic activity': ['Volcanic activity', "Eruption", "Liquefaction", "Lahar"], 
-                        'Flood': ['Flood', 'Glacial lake outburst flood', "Flash flood", "Riverine flood", "Coastal flood", "Ice jam flood", 
-                                  "Rain", "Heavy rain", "Heavy rains", "Overflow"], 
+                        'Volcanic activity': ['Volcanic activity', "Eruption", "Liquefaction", "Lahar"],
+                        'Flood': ['Flood', 'Glacial lake outburst flood', "Flash flood", "Riverine flood", "Coastal flood", "Ice jam flood",
+                                  "Rain", "Heavy rain", "Heavy rains", "Overflow"],
                         'Wave action': ['rogue wave', 'seiche'],
-                        'Extreme temperature': ['Extreme warm temperature', 'Extreme cold temperature', 'Extreme temperature', "Cold wave", "Heat wave", 
+                        'Extreme temperature': ['Extreme warm temperature', 'Extreme cold temperature', 'Extreme temperature', "Cold wave", "Heat wave",
                                                 "Severe winter conditions", "Frost"],
-                        'Storm': ['Storm', 'Other storm', 'Tropical storm', 'Convective storm', "Extra-tropical cyclone", "Severe local storm", 
-                                  "Violent wind", "Lightning", "Hail", "Storm surge", "Storm tides", "Tornado", "Tropical cyclone", "Fog", "Blizzard", 
-                                  "Windstorm", "Electric storm", "Snowstorm", "Hail storm", "Cyclone", "Surge", "Cond.Atmosph.", "Atmospheric cond.", 
+                        'Storm': ['Storm', 'Other storm', 'Tropical storm', 'Convective storm', "Extra-tropical cyclone", "Severe local storm",
+                                  "Violent wind", "Lightning", "Hail", "Storm surge", "Storm tides", "Tornado", "Tropical cyclone", "Fog", "Blizzard",
+                                  "Windstorm", "Electric storm", "Snowstorm", "Hail storm", "Cyclone", "Surge", "Cond.Atmosph.", "Atmospheric cond.",
                                   "Sandstorm", "Tropical depression", "Atmosphcondition", "Strong wind"]}
 
 emdat_undrr_to_name = {
@@ -225,13 +242,13 @@ maintype_to_subytpe_emdat = {'Drought': ['drought'],
   'extra-tropical storm',
   'tropical storm']}
 
-hazard_subtype_kw_searc ={
-                        'Drought': r"drought.*|dry spell.*",
-                        'Wildfire': r"fire.*|forestfire.*|wildfire.*|landfire.*|bushfire.*|forest fire.*|wild fire.*|land fire.*|bush fire.*" ,
-                        'Earthquake' : r"ground movement.|tsunami.",
-                        'Mass movement': r"avalanche.|land slide.*|landslide.*|rockfall.*|sudden subsidence.|mudslide.|mass movement.*",
-                        'Volcanic activity' : r"ash fall.|lava flow.|pyroclastic flow.|lahar",
-                        'Flood': r"flood.*|inundation.*|coastal flood.|flash flood.|riverine flood.|ice jam flood.",
-                        'Wave action' : r"rogue wave.|seiche",
-                        'Extreme temperature' : r"cold wave.*|coldwave.*|cold spell.*|heat wave.*|heatwave.*|heat episode.*|((heat|hot) spell).*|heat stress.*|severe winter conditions.",
-                        'Storm' : r"derecho.|hail.|lightning.|winterstorm.|storm surge.|tornado.|winter storm.|extra-tropical storm.|tropical storm.|typhoon.|hurricane.|storm.*|superstorm.*|windstorm.*|snowstorm.*|blizzard.*|thunderstorm.*" }
+#hazard_subtype_kw_searc ={
+#                        'Drought': r"drought.*|dry spell.*",
+#                        'Wildfire': r"fire.*|forestfire.*|wildfire.*|landfire.*|bushfire.*|forest fire.*|wild fire.*|land fire.*|bush fire.*" ,
+#                        'Earthquake' : r"ground movement.|tsunami.",
+#                        'Mass movement': r"avalanche.|land slide.*|landslide.*|rockfall.*|sudden subsidence.|mudslide.|mass movement.*",
+#                        'Volcanic activity' : r"ash fall.|lava flow.|pyroclastic flow.|lahar",
+#                        'Flood': r"flood.*|inundation.*|coastal flood.|flash flood.|riverine flood.|ice jam flood.",
+#                        'Wave action' : r"rogue wave.|seiche",
+#                        'Extreme temperature' : r"cold wave.*|coldwave.*|cold spell.*|heat wave.*|heatwave.*|heat episode.*|((heat|hot) spell).*|heat stress.*|severe winter conditions.",
+#                        'Storm' : r"derecho.|hail.|lightning.|winterstorm.|storm surge.|tornado.|winter storm.|extra-tropical storm.|tropical storm.|typhoon.|hurricane.|storm.*|superstorm.*|windstorm.*|snowstorm.*|blizzard.*|thunderstorm.*" }

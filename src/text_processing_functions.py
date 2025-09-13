@@ -13,6 +13,9 @@ from pint import UnitRegistry
 import nltk
 from nltk.tokenize import sent_tokenize
 from nltk.corpus import stopwords
+
+from src.units import *
+
 nltk.download('punkt_tab')
 nltk.download('punkt')  # Download sentence tokenizer
 nltk.download('stopwords') # Download stopwords
@@ -21,53 +24,6 @@ nltk.download('stopwords') # Download stopwords
 nlp = spacy.load("en_core_web_sm")#en_core_web_sm
 nlp.add_pipe("language_detector")
 #nlp.add_pipe('find_numbers')
-
-# Define unit conversion mapping
-unit_mapping = {
-    'km': 'km',
-    'km**2': 'km**2',
-    'miles': 'km',
-    'kg': 'kg',
-    'm**3': 'm**3',
-    "acre": "km**2",
-    "feet": "km",
-    "meter": "km",
-    "hectare": "km**2",
-    "ha": "km**2",
-    "mi**2": "km**2",
-    "m**2": "km**2",
-    "ft**2": "km**2",
-    "pound": "kg",
-    "ton": "kg",
-    "tonne": "kg",
-    "liter": "m**3",
-    "l": "m**3",
-    "gallon": "m**3",
-}
-std_unit_kw_reclass = {
-                    'km' : [r"(?<!\b(squared?)\b)\s\b(kilometers?|kilometres?|kms?)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2)\b)"],
-                    'km**2' : [r"\b(?<=(squared?))\s*(kilometers?|kilometres?|kms?)\b",
-                            r"\b(kilometers?|kilometres?|kms?)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
-                    'm**2' : [r"\b(?<=(squared?)\b)\s*\b(meters?|metres?|m)\b",
-                            r"\b(meters?|metres?|m)\s?\b\b(\*\*\s*2|\*\*2|\^2|²|square|squared|2)\b(?<!\.\d)"],
-                    'mi**2' : [r"\b(?<=(squared?))\s*(mile|miles|mi)\b",
-                            r"\b(mile|miles|mi)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
-                    'ft**2' : [r"\b(?<=(squared?))\s*(feet|foot|ft)\b",
-                            r"\b(feet|foot|ft)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
-                    'kg' : [r"\b(kgs?|kilograms?)\b"],
-                    'm**3' : [r"\b(?<=(cube|cubic))\s*(meters?|metres?|m)\b",
-                            r"\b(meters?|metres?|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)\b(?<!\.\d)"],
-                    "acre": [r"\b(acres?)\b"],
-                    "feet": [r"(?<!\b(squared?|cube|cubic)\s*)\b(feet|foot|ft)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
-                    "hectare": [r"\b(hectares?|ha|hectors?)\b"],
-                    "ton": [r"\b(?<!\b(metric)\s*)(ton|tons)\b"],
-                    "tonne": [r"\b(tonne|tonnes|metric ton|metric tons)\b"],
-                    "pound": [r"\b(pounds|lbs?)\b"],
-                    "meter": [r"(?<!\b(squared?|cube|cubic)\s*)\b(meters?|metres?|m)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
-                    "liter": [r"\b(liters?|litres?|l)\b"],
-                    "miles": [r"(?<!\b(squared?|cube|cubic)\s*)\b(miles?|mi)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
-                    "gallon": [r"\b(gallons|gal)\b"],
-}
 
 ## Detect language
 #https://spacy.io/universe/project/spacy_fastlang

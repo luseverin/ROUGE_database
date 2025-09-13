@@ -10,7 +10,12 @@ from pint import UnitRegistry
 from collections import Counter
 from price_parser import Price
 from currency_converter import CurrencyConverter
+
 from src.text_processing_functions import *
+from src.units import *
+from src.impact_def import *
+from src.hazard_def import *
+
 
 
 def country_name_to_iso3(name):
@@ -200,49 +205,6 @@ def parse_impact_value_precision(x):
         [imp_value, imp_value_min, imp_value_max],
         index=["impactValue", "impactValueMin", "impactValueMax"]
     )
-
-impact_kw_reclass = {
-    'Affected People': r"\bAffected People\b",
-    'Injured People': r"\bInjured People\b",
-    'Displaced People': r"\bDisplaced People\b",
-    'Homeless People': r"\bHomeless People\b",
-    'Missing People': r"\bMissing People\b",
-    'Human Deaths': r"\bHuman Deaths\b",
-    'Human Health and Wellbeing': r"\bHuman Health and Wellbeing\b",
-    'Infected and Ill People': r"\bInfected and Ill People\b",
-
-    'Road Infrastructure': r"\b(Road Infrastructure|road)s?\b",
-    'Other Transportation Infrastructure': r"\bOther Transportation Infrastructure\b",
-    'Water, Sanitation, and Hygiene Infrastructure': r"\bWater,?\s*Sanitation,?\s*and Hygiene Infrastructure\b",
-    'Healthcare Infrastructure': r"\bHealthcare Infrastructure\b",
-    'IT and Communication Infrastructure': r"\bIT and Communication Infrastructure\b",
-
-    'Residential Buildings': r"\bResidential Buildings\b",
-    'Informal settlements': r"\bInformal settlements\b",
-    'Education Infrastructure': r"\bEducation Infrastructure\b",
-    'Power and Energy Production Infrastructure': r"\bPower and Energy Production Infrastructure\b",
-    'Agriculture Infrastructure': r"\bAgricultur(?:e|al)? Infras(?:tructure|tucture)\b",
-
-    'Crop Production and Forestry': r"\bCrop Production and Forestry\b",
-    'Affected Livestock and Animals': r"\bAffected Livestock and Animals\b",
-
-    'Other Economic and Livelihood Impacts': r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
-    'Recreation, Tourism, and Culture': r"\bRecreation, Tourism, and Culture\b",
-
-    'Access to Healthcare': r"\bAccess to Healthcare\b",
-    'Access to transport and Mobility': r"\b(Access to transport and Mobility|Access to transport|Mobility)\b",
-    'Water Quality and Availability': r"\bWater Quality and Availability\b",
-    'Access to Education': r"\bAccess to Education\b",
-    'Access to Power and Energy': r"\bAccess to Power and Energy\b",
-    'Access to Food': r"\bfood\b",
-    'Access to Water, Sanitation, and Hygiene': r"\bAccess to Water,?\s*Sanitation,?\s*and Hygiene\b",
-
-    'Other Infrastructure Impacts': r"\b(Other Infrastructur(?:e|al)? Impacts?)\b",
-    'Other Human Impacts': r"\bOther Human.* Impacts?\b",
-    'Other Environmental Impacts': r"\bOther Environmental.* Impacts?\b",
-    'Other Service Access Impacts': r"\bOther Service Access(?: Impacts?)?\b",
-    'Other Agricultural Impacts': r"\bOther Agricultural.* Impacts?\b",
-}
 def reclassify_impact_subtype(x, allowed_impact_types, impact_kw_reclass):
     """
     Reclassify an impact subtype using a dictionary of regular expressions.
@@ -274,23 +236,6 @@ def reclassify_impact_subtype(x, allowed_impact_types, impact_kw_reclass):
     else:
         return "Unknown"
 
-hazard_kw_reclass = {
-    'Drought': r"\bdrought.*|\bdry\s+spell.*",
-    'Wildfire': r"\b(forest\s*fire|wild\s*fire|land\s*fire|bush\s*fire|wildfire|landfire|bushfire|fire)s?\b.*",
-    'Earthquake': r"\b(earthquake|ground\s+movement|tsunami)s?\b.*",
-    'Mass movement': r"\b(mass\s+movement|avalanche|land\s*slide|landslide|rockfall|sudden\s+subsidence|mudslide|rockslide)s?\b.*",
-    'Volcanic activity': r"\b(volcanic|ash\s+fall|lava\s+flow|pyroclastic\s+flow|lahar)s?\b.*",
-    'Flood': r"\b(flood|inundation|coastal\s+flood|flash\s+flood|riverine\s+flood|ice\s+jam\s+flood|heavy rain)s?\b.*",
-    'Wave action': r"\b(wave|rogue\s+wave|seiche)\b.*",
-    'Extreme cold temperature': r"\b(extreme\s+cold\s+temperature|cold\s+wave|coldwave|cold\s+spell|severe\s+winter\s+conditions)s?\b.*",
-    'Extreme warm temperature': r"\b(extreme\s+warm\s+temperature|heat\s+wave|heatwave|heat\s+episode|(?:heat|hot)\s+spell|heat\s+stress)s?\b.*",
-    'Tropical storm': r"\b(tropical\s+storm|typhoon|hurricane|cyclonic\s+storm)s?\b.*",
-    'Convective storm': r"\b(convective\s+storm|derecho|hail|lightning|tornado|superstorm|thunderstorm)s?\b.*",
-    'Other storm': r"\b(extra-?tropical\s+storm|winter\s*storm|storm\s+surge|windstorm|snowstorm|blizzard)s?\b.*",
-    'Epidemics': r"\b(cholera|dengue|outbreak|epidemic)s?\b.*",
-    'Conflict': r"\b(conflict|war|terrorism|unrest)s?\b.*"
-}
-
 def reclassify_hazard(x, hazard_kw_reclass):
     """
     Reclassify a hazard type using a dictionary of regular expressions.
@@ -320,104 +265,6 @@ def reclassify_hazard(x, hazard_kw_reclass):
                     corr_haz[i] = "Unknown"
     return corr_haz
 
-#reclassify units
-unit_converter = {"families" : (3, "people"),
-                  "households": (3, "people"),
-                  "village": (1000, "people"),
-                  "communities": (100, "people"),
-                  }
-
-unit_type_kw_reclass = {
-                        'km' : r"\b(kilometer|kilometre|km)s?(?!\s*(\*\*\s*2|\^2|²|square|squared|2))",
-                        'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
-                        'kg' : r"(kg.*|.*kilogram.*)",
-                        'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
-                        '%' : r"(%|perc.*)",
-}
-unit_kw_reclass = {
-                        'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
-                        'roads' : r"road.*|route.*|bridge.*|highway.*|motorway.*",#r"(?<!kilometer|kilometre|km).*(road.*|route.*|.*bridge.*|.*highway.*|.*motorway.*)",
-                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|buse?s?\b|taxi.*|taxicab.*|truck.*",
-                        'water, sanitation and hygiene facilities' : r"water.*|sanitation.*|hygiene.*|latrine.*|well.*|tap.*|reservoir.*|aqueduct.*",
-                        'healthcare facilities' : r"health|hospitals?\b|clinic.*|maternity.*|medical",
-                        'IT and communication facilities' : r"communication.*|radio.*|tv.*|cell tower.*|antenna.*",
-                        'power and energy production infrastructure facilities' : r"power.*|energy.*|generator.*|wind.*|solar.*|hydro.*|dams?",
-                        'homes' : r"residential.*|residence.|hous.*|home.*|building.*",
-                        'education facilities' : r"education.*|school.*|university.*|college.*",
-                        'crop production and forestry' : r"crop.*|field.*|forest.*|tree.*|banana.*|coffee.*|cocoa.*|cotton.*|maize.*|rice.*|sorghum.*|soybean.*|sugar.*|tobacco.*|wheat.*",
-                        'agricultural facilities' : r"irrigation.*|barn.*|farm.*",
-                        'affected animals' : r"livestock.*|animal.*|fish.*|cow.*|sheep.*|poult.*|cattle.*|goat.*|pig.*|chick.*|horse.*|heads?",
-                        'informal settlements' : r"camp.?|tent.?|refuge.?|settlement.?"
-                         }
-
-expected_unit_subtype = {
-    "Affected People": "people",
-    "Injured People": "people",
-    "Displaced People": "people",
-    "Homeless People": "people",
-    "Missing People": "people",
-    "Human Deaths": "people",
-    "Residential Buildings": "homes",
-    "Informal settlements": "informal settlements",
-    "Education Infrastructure": "education facilities",
-    "Human Health and Wellbeing" : "unknown",
-    "Infected and Ill People": "people",
-    "Road Infrastructure" : "roads",
-    "Other Transportation Infrastructure" : "transportation facilities",
-    "Water, Sanitation, and Hygiene Infrastructure": "water, sanitation and hygiene facilities",
-    "Healthcare Infrastructure": "healthcare facilities",
-    "IT and Communication Infrastructure": "IT and communication facilities",
-    "Power and Energy Production Infrastructure" : "power and energy production infrastructure facilities",
-    "Agriculture Infrastructure": "agricultural facilities",
-    "Affected Livestock and Animals": "affected animals",
-    "Recreation, Tourism, and Culture": "unknown",
-    "Economy and Market": "unknown",
-    "Access to Healthcare": "people",
-    "Access to transport and Mobility": "people",
-    "Access to Food": "people",
-    "Access to Water, Sanitation, and Hygiene": "people",
-    "Other Human Impacts": "unknown",
-    "Other Infrastructure Impacts": "unknown",
-    "Other Agricultural Impacts": "unknown",
-    "Other Service Access Impacts": "people",
-}
-default_subtype_unit = {
-    'Affected People': "people",
-    'Injured People': "people",
-    'Displaced People': "people",
-    'Homeless People': "people",
-    'Missing People': "people",
-    'Human Deaths': "people",
-    'Residential Buildings': "homes",
-    'Informal settlements': "undefined informal settlements",
-    'Education Infrastructure': "schools",
-    'Human Health and Wellbeing' : "unknown",
-    'Infected and Ill People': "people",
-    'Road Infrastructure' : "roads",
-    'Other Transportation Infrastructure' : "undefined other transportation infrastructure",
-    'Water, Sanitation, and Hygiene Infrastructure': "undefined WASH facilities",
-    'Healthcare Infrastructure': "undefined healthcare facilities",
-    'IT and Communication Infrastructure': "undefined IT and communication facilities",
-    'Education Infrastructure': "schools",
-    'Power and Energy Production Infrastructure' : "undefined power and energy production infrastructure facilities",
-    'Agriculture Infrastructure': "undefined agricultural facilities",
-    'Crop Production and Forestry': "undefined crop production and forestry",
-    'Affected Livestock and Animals': "undefined affected animals",
-    'Other Economic and Livelihood Impacts': "CHF",
-    'Recreation, Tourism, and Culture' : "unknown",
-    'Access to Healthcare': "people",
-    'Access to transport and Mobility': "people",
-    'Water Quality and Availability' : "unknown",
-    'Access to Education':"people",
-    'Access to Power and Energy':"people",
-    'Access to Food':"people",
-    'Access to Water, Sanitation, and Hygiene':"people",
-    'Other Human Impacts': "unknown",
-    'Other Infrastructure Impacts': "unknown",
-    'Other Agricultural Impacts': "unknown",
-    'Other Service Access Impacts': "people"
-}
-
 def convert_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
 
@@ -438,7 +285,7 @@ def convert_unit(x, unit_converter):
             continue
     return x
 
-
+## assign_unit_type is redundant with standardize_units, could simplified and removed
 def assign_unit_type(x, unit_type_kw_reclass):
     """Detect if dimension of unit can be identified e.g. length, mass,...
        Default to "other"
@@ -489,7 +336,7 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
         possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
         if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
             print(f"Reclassified subtype from {x['impactSubtype']} to {possible_subtypes[0]} with unit reclass {reclass_unit} and orig unit {unit}")
-            print(x["valueAnnotation"])
+            #print(x["valueAnnotation"])
             x["impactSubtype"] = possible_subtypes[0]
     return reclass_unit
 
