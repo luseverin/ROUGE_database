@@ -9,7 +9,7 @@ import regex as re
 from pint import UnitRegistry
 from collections import Counter
 from price_parser import Price
-from currency_converter import CurrencyConverter
+from currency_converter import CurrencyConverter, RateNotFoundError
 
 from src.text_processing_functions import *
 from src.units import *
@@ -404,10 +404,15 @@ def convert_monetary_units(x):
         try:
             value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
             unit_parsed = DEF_CUR
-        except Exception as e:
-            print(e)
-            value_parsed = value_raw
-            unit_parsed = unit_raw
+        except RateNotFoundError as e:
+            print(str(e) + "; using default conversion rate")
+            try:
+                value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR)
+                unit_parsed = DEF_CUR
+            except Exception as e:
+                print(e)
+                value_parsed = value_raw
+                unit_parsed = unit_raw
     else:
         value_parsed = value_raw
         unit_parsed = unit_raw
