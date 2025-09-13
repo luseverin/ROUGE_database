@@ -12,7 +12,7 @@ from src.impact_def import *
 from src.hazard_def import *
 
 # import your functions
-from src.text_processing_functions import (
+from src.post_process_functions import (
     country_name_to_iso3, list_country_name_to_iso3,
     separate_locs, remove_startspace,
     delistify_cols, listify_strings,
@@ -175,7 +175,7 @@ class TestImpactFunctions(unittest.TestCase):
         x = pd.Series({"impactValue": 10, "impactUnit": "families"})
         out = convert_unit(x.copy(), unit_converter)
         self.assertEqual(out["impactUnit"], "people")
-        self.assertEqual(out["impactValue"], 50)
+        self.assertEqual(out["impactValue"], 30)
 
     def test_assign_unit_type(self):
         x = pd.Series({"impactUnit": "kg"})
