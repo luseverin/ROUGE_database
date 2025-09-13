@@ -1,7 +1,7 @@
 #sanity checks for llm extraction
 import pandas as pd
 import numpy as np
-
+from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers
 #value in original text
 def format_number(num):
     """
@@ -23,7 +23,11 @@ def flag_value_in_text(extract_df):
         if np.isnan(row["impactValue"]):
             return np.nan
         else:
-            return format_number(row["impactValue"]) in "".join(row["nathaz_text"])
+            text = "".join(row["nathaz_text"])
+            text = replace_commas_in_numbers(text)
+            text = replace_count_suffixes(text)
+            text = replace_numbers(text)
+            return format_number(row["impactValue"]) in text
     extract_df["value_in_text"] = extract_df.apply(lambda x: value_in_text(x), axis=1)
     return extract_df
 
@@ -49,9 +53,12 @@ def pop_cntry_check(extracted_data, country_pop):
     """
     def check_pop(x):
         year = str(pd.to_datetime(x["reportDate"]).year)
-        year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else "2023"
-        if year != year_check:
-            print(f"Warning: year {year} not in population data for {x['country_iso3_kw']}")
+        year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else None
+        if not year_check:
+            years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns if col.isnumeric()])
+            year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
+            print(f"Warning: year {year} not in population data for {x['country_iso3_kw']}"
+                  f"\n Defaulting to year {year_check}")
         if  x["country_iso3_kw"] not in country_pop["Country Code"].unique():
             print(f"Warning: country {x['country_iso3_kw']} not in population data")
             pop_year = np.nan
