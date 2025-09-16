@@ -33,7 +33,7 @@ from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
 
 # geolocator = gpy.geocoders.Nominatim(user_agent='orienternet')
-geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (https://github.com/luseverin/como_project4)", timeout=10)
+geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (laura.hasbini@lsce.ipsl.frs)", timeout=10)
 
 LOCATION_LEVEL_MAPPING = {
     'admin2': {'admin_level': 2, 'nominatim_keys': ['city', 'town', 'village', 'municipality',
@@ -143,8 +143,10 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
             geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2_corrected.gpkg")
             geoBoundaries2 = geoBoundaries2.rename({"shapeName" : "ADMIN_2", "shapeGroup" : "iso3_code"}, axis=1)
             geoBoundaries2 = geoBoundaries2.loc[geoBoundaries2["shapeType"]=="ADM2"]
-            geoBoundaries2 = pd.merge(geoBoundaries2, geoBoundaries0[["iso3_code", "ADMIN_0"]], on="iso3_code", how="left").drop_duplicates()
             gpd_files["ADM_2"] = geoBoundaries2
+
+            if not "ADMIN_0" in gpd_files["ADM_2"].columns :
+                gpd_files["ADM_2"] = pd.merge(gpd_files["ADM_2"], geoBoundaries0[["iso3_code", "ADMIN_0"]], on="iso3_code", how="left").drop_duplicates()
 
             if not "ADMIN_1" in gpd_files["ADM_2"].columns : 
                 pandarallel.initialize(nb_workers=8)
@@ -154,6 +156,12 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
         except Exception as e:
             print(f"[open_admin_gpd][geoBoundaries] Error loading GPD files: {e}")
             return None
+            #Verify that the geometries are valid 
+
+    for i in range(2): 
+        invalid_mask = ~gpd_files[f"ADM_{i}"]["geometry"].is_valid
+        gpd_files[f"ADM_{i}"].loc[invalid_mask, "geometry"] = gpd_files[f"ADM_{i}"].loc[invalid_mask, "geometry"].buffer(0)
+
     return gpd_files
 
 def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
@@ -174,7 +182,6 @@ def get_polygon(gdf_file, country_name, level_name, target_name, admin_level):
     except Exception as e:
         print(f"level_name : {level_name}, target_name : {target_name}")
         print(f"[get_polygon] Error: {e}")
-
     return None
 
 def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
@@ -380,6 +387,8 @@ def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
                 geometries.extend(matches["geometry"])
         except Exception as e:
             print(f"[gather admin fallback] Error: {e}")
+        # print(geometries)
+    # print(geometries)
     return unary_union(geometries)
 
 # Main geocoding functions
@@ -567,99 +576,101 @@ def geocode_df_to_polygon_old(df, similarity_th=0.2, split_lowest_levels=True, p
 
     start = time.time()
     for row_index, row_data in df_geo.iterrows():
-        try : 
-            locations = row_data['location']
-            country = row_data["country"]
-            if not country and df_type=="llm" : 
-                country = row_data["country_kw"]
+        # try : 
+        locations = row_data['location']
+        country = row_data["country"]
+        if not country and df_type=="llm" : 
+            country = row_data["country_kw"]
 
-            # If no country is found, don't look for any polygon 
-            if not country:
-                df_row_append = df_geo.loc[row_index].copy()
-                df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
-                continue
-
-            # If no location, change to have it as a list
-            if not locations : 
-                locations = [None]
-            
-            df_locations = []
-
-            start_loop = time.time()
-            count_geocoding_osm_flag = 0 
-            count_geocoding_country_flag = 0 
-            for location in locations : 
-                df_loc = geocode_unique_loc(gpd_files, location, country, similarity_th, time_last_request, print_info)
-                time_last_request = time.time()
-                if df_loc is not None : 
-                    if (df_loc["geocoding_osm_flag"] == 1).any() : 
-                        count_geocoding_osm_flag+=1
-                    if (df_loc["geocoding_country_flag"] == 1).any() : 
-                        count_geocoding_country_flag+=1
-                    df_locations.append(df_loc)   
-            if not df_locations : 
-                continue
-            end_loop = time.time()
-            time_open = (end_loop-start_loop)/60
-            # if print_info :
-            print(f"Time to geocode one row {time_open}mins")
-                
-            df_locations = pd.concat(df_locations, axis=0)
-            df_locations = df_locations[df_locations['geometry'].notnull()]
-
-            if df_locations.empty:
-                continue
-                
-            #Retrieve the lowest admin level
-            lowest_level = df_locations["finest_level"].min()
-            highest_level = df_locations["finest_level"].max()
-            
-            if split_lowest_levels : 
-                highest_level = df_locations["finest_level"].max()
-            else : 
-                highest_level = lowest_level
-
-            #Merge all the locs to the lewest admin levels
-            start_loop = time.time()
-            for merge_level in range(lowest_level, highest_level+1) :
-                layer_name = f"ADM_{merge_level}"
-                df_location_subset = df_locations.loc[df_locations.finest_level>=merge_level]
-                merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
-
-                df_row_append = df_geo.loc[row_index].copy()
-                df_row_append.loc["geometry"] = merged_geometry
-                df_row_append.loc["locationLowestAdmin"] = layer_name
-                df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
-                df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
-                df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
-                df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
-
-                # For the codes, take the list 
-                # print("iso3_code")
-                # print(df_location_subset["iso3_code"])
-                df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
-                if polygon_source == "GAUL" : 
-                    for code in ["gaul0_code", "gaul1_code", "gaul2_code"] : 
-                        df_row_append.loc[code] = df_location_subset[code].unique().tolist()
-                
-                # Remove the impact value if it's not the lowest admin level
-                if merge_level != lowest_level : 
-                    df_row_append.loc["impactValue"] = np.nan
-                    df_row_append.loc["impactUnit"] = np.nan
-                    df_row_append.loc["impactValueApprox"] = np.nan
-                
-                # Align columns to df_geo_output
-                df_row_append = pd.DataFrame([df_row_append])
-                common_cols = df_geo_output.columns.intersection(df_row_append.columns)
-                df_row_append = df_row_append[common_cols]
-                df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
-            end_loop = time.time()
-            time_open = (end_loop-start_loop)/60
-            # if print_info :
-            print(f"Time to merge at lowest level {time_open}mins")
-        except Exception as e : 
-            print(f"[Row {row_index}] Error: {e}")
+        # If no country is found, don't look for any polygon 
+        if not country:
+            df_row_append = df_geo.loc[row_index].copy()
+            df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
             continue
+
+        # If no location, change to have it as a list
+        if not locations : 
+            locations = [None]
+        
+        df_locations = []
+
+        start_loop = time.time()
+        count_geocoding_osm_flag = 0 
+        count_geocoding_country_flag = 0 
+        for location in locations : 
+            df_loc = geocode_unique_loc(gpd_files, location, country, similarity_th, time_last_request, print_info)
+            time_last_request = time.time()
+            if df_loc is not None : 
+                if (df_loc["geocoding_osm_flag"] == 1).any() : 
+                    count_geocoding_osm_flag+=1
+                if (df_loc["geocoding_country_flag"] == 1).any() : 
+                    count_geocoding_country_flag+=1
+                df_locations.append(df_loc)   
+        if not df_locations : 
+            continue
+        end_loop = time.time()
+        time_open = (end_loop-start_loop)/60
+        # if print_info :
+        print(f"Time to geocode one row {time_open}mins")
+            
+        df_locations = pd.concat(df_locations, axis=0)
+        df_locations = df_locations[df_locations['geometry'].notnull()]
+
+        if df_locations.empty:
+            continue
+            
+        #Retrieve the lowest admin level
+        lowest_level = df_locations["finest_level"].min()
+        highest_level = df_locations["finest_level"].max()
+        
+        if split_lowest_levels : 
+            highest_level = df_locations["finest_level"].max()
+        else : 
+            highest_level = lowest_level
+
+        #Merge all the locs to the lewest admin levels
+        start_loop = time.time()
+        for merge_level in range(lowest_level, highest_level+1) :
+            layer_name = f"ADM_{merge_level}"
+            df_location_subset = df_locations.loc[df_locations.finest_level>=merge_level]
+            # print("df_location_subset :", df_location_subset)
+            # print("merge_level :",merge_level)
+            merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
+
+            df_row_append = df_geo.loc[row_index].copy()
+            df_row_append.loc["geometry"] = merged_geometry
+            df_row_append.loc["locationLowestAdmin"] = layer_name
+            df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
+            df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
+            df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
+            df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
+
+            # For the codes, take the list 
+            # print("iso3_code")
+            # print(df_location_subset["iso3_code"])
+            df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
+            if polygon_source == "GAUL" : 
+                for code in ["gaul0_code", "gaul1_code", "gaul2_code"] : 
+                    df_row_append.loc[code] = df_location_subset[code].unique().tolist()
+            
+            # Remove the impact value if it's not the lowest admin level
+            if merge_level != lowest_level : 
+                df_row_append.loc["impactValue"] = np.nan
+                df_row_append.loc["impactUnit"] = np.nan
+                df_row_append.loc["impactValueApprox"] = np.nan
+            
+            # Align columns to df_geo_output
+            df_row_append = pd.DataFrame([df_row_append])
+            common_cols = df_geo_output.columns.intersection(df_row_append.columns)
+            df_row_append = df_row_append[common_cols]
+            df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
+        end_loop = time.time()
+        time_open = (end_loop-start_loop)/60
+        # if print_info :
+        print(f"Time to merge at lowest level {time_open}mins")
+        # except Exception as e : 
+        #     print(f"[Row {row_index}] Error: {e}")
+        #     continue
     end = time.time()
     time_open = (end-start)/60
     # if print_info :
