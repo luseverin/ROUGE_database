@@ -97,7 +97,7 @@ examples_base = """[{
        "endYear": null,
        "endMonth": null,
        "endDay": null,
-       "hazards" : ["Other storm"],
+       "hazards" : ["Convective storm"],
        "impactsAnnotation" : ["At least 4 hospitals have been impacted by a hailstorm in River Nile State alone."]
        }]
     """
@@ -149,7 +149,7 @@ examples_type_subtype = """[{
        "endYear": null,
        "endMonth": null,
        "endDay": null,
-       "hazards" : ["Other storm"],
+       "hazards" : ["Convective storm"],
        "impactsAnnotation" : ["At least 4 hospitals have been impacted by a hailstorm in River Nile State alone."]
        }]
     """
@@ -204,7 +204,7 @@ examples_range = """[{
        "endYear": null,
        "endMonth": null,
        "endDay": null,
-       "hazards" : ["Other storm"],
+       "hazards" : ["Convective storm"],
        "impactsAnnotation" : ["At least 4 hospitals have been impacted by a hailstorm in River Nile State alone."]
        }]
     """
@@ -269,7 +269,7 @@ Output:
  "endYear": null,
  "endMonth": null,
  "endDay": null,
- "hazards" : ["Other storm"],
+ "hazards" : ["Convective storm"],
  "impactsAnnotation" : ["At least 4 hospitals have been impacted by a hailstorm in River Nile State alone."]
  }
 """
