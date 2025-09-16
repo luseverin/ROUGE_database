@@ -2,14 +2,15 @@ import pandas as pd
 import numpy as np
 import ast
 import geopy as gpy
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import itertools
 import time
-import math
 import pycountry
 import langcodes
 from copy import deepcopy
-from rapidfuzz import fuzz
 import geopandas as gpd
+from functools import partial
+import concurrent.futures
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
 from src.post_process_functions import *
@@ -31,7 +32,9 @@ pattern_country = '|'.join(map(re.escape, unique_country_names))
 from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
 
-geolocator = gpy.geocoders.Nominatim(user_agent='orienternet')
+# geolocator = gpy.geocoders.Nominatim(user_agent='orienternet')
+geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (https://github.com/luseverin/como_project4)", timeout=10)
+
 LOCATION_LEVEL_MAPPING = {
     'admin2': {'admin_level': 2, 'nominatim_keys': ['city', 'town', 'village', 'municipality',
                                                     'city_district', 'district', 'borough', 'suburb', 'subdivision',
@@ -82,6 +85,17 @@ def get_country_languages_dict():
 LANGUAGES = get_country_languages_dict()
 
 #### Function to Geocode one location
+def match_admin1_for_row(row, gpd_files):
+    """
+    Given a row of df_geo and gpd_files, find the ADM1 boundary that contains/intersects the geometry.
+    """
+    geom = row["geometry"]
+    adm0 = row["ADMIN_0"]
+
+    adm1_match = get_polygon_for_geometry(geom, adm0, gpd_files, level=1)
+    if adm1_match is not None and "ADMIN_1" in adm1_match:
+        return adm1_match["ADMIN_1"].values[0]
+    return None
 
 def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
     gpd_files = {}
@@ -114,17 +128,28 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
             ### ADMIN 0
             geoBoundaries0 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM0.gpkg")
             geoBoundaries0 = geoBoundaries0.rename({"shapeName" : "ADMIN_0", "shapeGroup" : "iso3_code"}, axis=1)
+            geoBoundaries0 = geoBoundaries0.loc[geoBoundaries0["shapeType"]=="ADM0"]
             gpd_files["ADM_0"] = geoBoundaries0
 
             ### ADMIN 1 
             geoBoundaries1 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM1.gpkg")
             geoBoundaries1 = geoBoundaries1.rename({"shapeName" : "ADMIN_1", "shapeGroup" : "iso3_code"}, axis=1)
+            geoBoundaries1 = geoBoundaries1.loc[geoBoundaries1["shapeType"]=="ADM1"]
             geoBoundaries1 = pd.merge(geoBoundaries1, geoBoundaries0[["iso3_code", "ADMIN_0"]], on="iso3_code", how="left").drop_duplicates()
             gpd_files["ADM_1"] = geoBoundaries1
 
             ### ADMIN 2 
-            geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2.gpkg")
+            # geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2.gpkg")
+            geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2_corrected.gpkg")
+            geoBoundaries2 = geoBoundaries2.rename({"shapeName" : "ADMIN_2", "shapeGroup" : "iso3_code"}, axis=1)
+            geoBoundaries2 = geoBoundaries2.loc[geoBoundaries2["shapeType"]=="ADM2"]
+            geoBoundaries2 = pd.merge(geoBoundaries2, geoBoundaries0[["iso3_code", "ADMIN_0"]], on="iso3_code", how="left").drop_duplicates()
             gpd_files["ADM_2"] = geoBoundaries2
+
+            if not "ADMIN_1" in gpd_files["ADM_2"].columns : 
+                pandarallel.initialize(nb_workers=8)
+                func = partial(match_admin1_for_row, gpd_files=gpd_files)
+                gpd_files["ADM_2"]["ADMIN_1"] = gpd_files["ADM_2"].parallel_apply(func, axis=1)
 
         except Exception as e:
             print(f"[open_admin_gpd][geoBoundaries] Error loading GPD files: {e}")
@@ -199,19 +224,31 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
         adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
         return adm2_match if not adm2_match.empty else None
 
-def query_nominatim(location, country, last_request_time, delay=1):
+def query_nominatim(location, country, delay=2):
     """
     Make nominatim query
     """
-    if time.time() - last_request_time <= delay:
-        time.sleep(delay)
+    # if time.time() - last_request_time <= delay:
+    #     time.sleep(delay)
 
     if not location :
         query = f"{country}"
     else :
         query = f"{location}, {country}"
-    result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
-    return result, time.time()
+    try :
+        result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
+        return result
+    except GeocoderTimedOut : 
+        # logging.info('TIMED OUT: GeocoderTimedOut: Retrying...')
+        print("Ask for a delay")
+        time.sleep(delay)
+        result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
+        return result
+    except Exception as e : 
+        print("Ask for a delay")
+        time.sleep(delay)
+        result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
+        return result
 
 def query_reverse_geocode(coords, last_request_time, country, lang="en", delay=1):
     """
@@ -242,7 +279,19 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
                     sim = rotated_levenshtein_similarity(loc_clean, val_clean)
                     if print_info:
                         print(f"Found geocoding at resolution {admin_level}, Initial: {loc_clean}, Geocoded: {val}, Similarity: {sim:.2f}")
-                    if sim >= similarity_th and sim > best_sim and admin_level>=best_info["admin_level"]:
+                    
+                    if sim == 1 : 
+                        best_sim = sim
+                        best_info = {
+                            "sim": sim,
+                            "admin_level": admin_level,
+                            "admin_field": admin_field,
+                            "name": val,
+                            "key": key
+                        }
+                        return best_info, best_sim
+
+                    if sim >= similarity_th and sim > best_sim : #and admin_level>=best_info["admin_level"]:
                         best_sim = sim
                         best_info = {
                             "sim": sim,
@@ -264,7 +313,20 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
             sim = rotated_levenshtein_similarity(loc_clean, val_clean)
             if print_info:
                 print(f"Found geocoding at resolution {admin_level}, Initial: {loc_clean}, Geocoded: {val}, Similarity: {sim:.2f}")
-            if sim >= similarity_th and sim > best_sim and admin_level>=best_info["admin_level"]:
+            
+            #If exact match, return it directly 
+            if sim == 1 : 
+                best_sim = sim
+                best_info = {
+                    "sim": sim,
+                    "admin_level": admin_level,
+                    "admin_field": admin_field,
+                    "name": val,
+                    "key": key
+                }
+                return best_info, best_sim
+            
+            elif sim >= similarity_th and sim > best_sim :#and admin_level>=best_info["admin_level"]:
                 best_sim = sim
                 best_info = {
                     "sim": sim,
@@ -329,7 +391,7 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
         best_sim = 0
 
         for curr_country in countries :
-            nom_result, time_last_request = query_nominatim(location, curr_country, time_last_request)
+            nom_result = query_nominatim(location, curr_country)
 
             if nom_result is None:
                 if print_info:
@@ -458,7 +520,7 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
         print(f"[geocode_unique_loc fallback] Error: {e}")
         return None
 
-def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL") :
+def geocode_df_to_polygon_old(df, similarity_th=0.2, split_lowest_levels=True, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL") :
     """
     For each row, perform the geocoding and create a polygon corresponding the location found
     If the gather_admin_level is True, the polygons are downgraded to the lowest resolution found
@@ -466,13 +528,13 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
     df_geo = deepcopy(df)
     if polygon_source == "GAUL" : 
         extra_columns_output = ["gaul0_code", "gaul1_code", "gaul2_code", 
-                                "locationPolygon", "locationLowestAdmin", 
+                                "geometry", "locationLowestAdmin", 
                                 "geocoding_country_flag", "geocoding_osm_flag", 
-                                "locationOsm", "locationPolygon"]
+                                "locationOsm", "locationPolygon", "iso3_code"]
     else : 
-        extra_columns_output = ["locationPolygon", "locationLowestAdmin", 
+        extra_columns_output = ["geometry", "locationLowestAdmin", 
                                 "geocoding_country_flag", "geocoding_osm_flag", 
-                                "locationOsm", "locationPolygon"]
+                                "locationOsm", "locationPolygon", "iso3_code"]
 
     df_geo_output = pd.DataFrame(columns = list(df.columns)+extra_columns_output)
 
@@ -494,8 +556,8 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
     gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
     end = time.time()
     time_open = (end-start)/60
-    if print_info :
-        print(f"Time to open files {time_open}mins")
+    # if print_info :
+    print(f"Time to open files {time_open}mins")
 
     time_last_request = time.time()
 
@@ -523,6 +585,7 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
             
             df_locations = []
 
+            start_loop = time.time()
             count_geocoding_osm_flag = 0 
             count_geocoding_country_flag = 0 
             for location in locations : 
@@ -536,6 +599,10 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
                     df_locations.append(df_loc)   
             if not df_locations : 
                 continue
+            end_loop = time.time()
+            time_open = (end_loop-start_loop)/60
+            # if print_info :
+            print(f"Time to geocode one row {time_open}mins")
                 
             df_locations = pd.concat(df_locations, axis=0)
             df_locations = df_locations[df_locations['geometry'].notnull()]
@@ -553,13 +620,14 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
                 highest_level = lowest_level
 
             #Merge all the locs to the lewest admin levels
+            start_loop = time.time()
             for merge_level in range(lowest_level, highest_level+1) :
                 layer_name = f"ADM_{merge_level}"
                 df_location_subset = df_locations.loc[df_locations.finest_level>=merge_level]
                 merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
-                
+
                 df_row_append = df_geo.loc[row_index].copy()
-                df_row_append.loc["locationPolygon"] = merged_geometry
+                df_row_append.loc["geometry"] = merged_geometry
                 df_row_append.loc["locationLowestAdmin"] = layer_name
                 df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
                 df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
@@ -567,32 +635,41 @@ def geocode_df_to_polygon(df, similarity_th=0.2, split_lowest_levels=True, print
                 df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
 
                 # For the codes, take the list 
+                # print("iso3_code")
+                # print(df_location_subset["iso3_code"])
                 df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
                 if polygon_source == "GAUL" : 
                     for code in ["gaul0_code", "gaul1_code", "gaul2_code"] : 
                         df_row_append.loc[code] = df_location_subset[code].unique().tolist()
-
+                
                 # Remove the impact value if it's not the lowest admin level
                 if merge_level != lowest_level : 
                     df_row_append.loc["impactValue"] = np.nan
                     df_row_append.loc["impactUnit"] = np.nan
                     df_row_append.loc["impactValueApprox"] = np.nan
-                    
+                
                 # Align columns to df_geo_output
                 df_row_append = pd.DataFrame([df_row_append])
                 common_cols = df_geo_output.columns.intersection(df_row_append.columns)
                 df_row_append = df_row_append[common_cols]
                 df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
-        
+            end_loop = time.time()
+            time_open = (end_loop-start_loop)/60
+            # if print_info :
+            print(f"Time to merge at lowest level {time_open}mins")
         except Exception as e : 
             print(f"[Row {row_index}] Error: {e}")
             continue
+    end = time.time()
+    time_open = (end-start)/60
+    # if print_info :
+    print(f"Time to process all rows {time_open}mins")
 
     # Save 
     if save_path and res_savename:
         save_df = df_geo_output.copy()
         save_df = delistify_cols(save_df)
-        save_gdf = gpd.GeoDataFrame(save_df, geometry='locationPolygon')
+        save_gdf = gpd.GeoDataFrame(save_df, geometry='geometry')
         save_gdf = save_gdf.set_crs("EPSG:4326", allow_override=True)
         try:
             suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
@@ -637,3 +714,567 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
             shutil.rmtree(temp_dir)
         except:
             pass
+
+#### Test for parrallelization 
+
+def geocode_df_to_polygon_v1_parrallele(df, similarity_th=0.2, split_lowest_levels=True, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL", max_workers=None):
+    """
+    For each row, perform the geocoding and create a polygon corresponding the location found
+    If the gather_admin_level is True, the polygons are downgraded to the lowest resolution found
+    """
+    df_geo = deepcopy(df)
+    if polygon_source == "GAUL": 
+        extra_columns_output = ["gaul0_code", "gaul1_code", "gaul2_code", 
+                                "geometry", "locationLowestAdmin", 
+                                "geocoding_country_flag", "geocoding_osm_flag", 
+                                "locationOsm", "locationPolygon", "iso3_code"]
+    else: 
+        extra_columns_output = ["geometry", "locationLowestAdmin", 
+                                "geocoding_country_flag", "geocoding_osm_flag", 
+                                "locationOsm", "locationPolygon", "iso3_code"]
+
+    df_geo_output = pd.DataFrame(columns=list(df.columns) + extra_columns_output)
+
+    # Convert to list columns related to locations & countries
+    if "country_kw" in df_geo.columns: 
+        col_to_list = ["location", "country", "country_kw"]
+        df_type = "llm"
+    else: 
+        col_to_list = ["location", "country"]
+        df_type = "labelled"
+
+    for col in col_to_list: 
+        df_geo[col] = df_geo[col].apply(
+            lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
+        )
+
+    # Open Polygons
+    start = time.time()
+    gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
+    end = time.time()
+    time_open = (end - start) / 60
+    if print_info:
+        print(f"Time to open files {time_open}mins")
+
+    if gpd_files is None:
+        return None
+
+    # Function to process a single row
+    def process_row(row_data, row_index, gpd_files, similarity_th, df_type, split_lowest_levels, polygon_source):
+        try:
+            locations = row_data['location']
+            country = row_data["country"]
+            if not country and df_type == "llm": 
+                country = row_data["country_kw"]
+
+            # If no country is found, don't look for any polygon 
+            if not country:
+                df_row_append = row_data.copy()
+                return [df_row_append]
+
+            # If no location, change to have it as a list
+            if not locations: 
+                locations = [None]
+            
+            df_locations = []
+            count_geocoding_osm_flag = 0 
+            count_geocoding_country_flag = 0 
+            
+            for location in locations:
+                df_loc = geocode_unique_loc(gpd_files, location, country, similarity_th, time.time(), print_info)
+                if df_loc is not None: 
+                    if (df_loc["geocoding_osm_flag"] == 1).any(): 
+                        count_geocoding_osm_flag += 1
+                    if (df_loc["geocoding_country_flag"] == 1).any(): 
+                        count_geocoding_country_flag += 1
+                    df_locations.append(df_loc)   
+            
+            if not df_locations: 
+                return []
+
+            df_locations = pd.concat(df_locations, axis=0)
+            df_locations = df_locations[df_locations['geometry'].notnull()]
+
+            if df_locations.empty:
+                return []
+                
+            # Retrieve the lowest admin level
+            lowest_level = df_locations["finest_level"].min()
+            highest_level = df_locations["finest_level"].max()
+            
+            if split_lowest_levels: 
+                highest_level = df_locations["finest_level"].max()
+            else: 
+                highest_level = lowest_level
+
+            # Process each merge level
+            results = []
+            for merge_level in range(lowest_level, highest_level + 1):
+                layer_name = f"ADM_{merge_level}"
+                df_location_subset = df_locations.loc[df_locations.finest_level >= merge_level]
+                merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
+
+                df_row_append = row_data.copy()
+                df_row_append.loc["geometry"] = merged_geometry
+                df_row_append.loc["locationLowestAdmin"] = layer_name
+                df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
+                df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
+                df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
+                df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
+                df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
+                
+                if polygon_source == "GAUL": 
+                    for code in ["gaul0_code", "gaul1_code", "gaul2_code"]: 
+                        df_row_append.loc[code] = df_location_subset[code].unique().tolist()
+                
+                # Remove the impact value if it's not the lowest admin level
+                if merge_level != lowest_level: 
+                    df_row_append.loc["impactValue"] = np.nan
+                    df_row_append.loc["impactUnit"] = np.nan
+                    df_row_append.loc["impactValueApprox"] = np.nan
+                
+                results.append(df_row_append)
+            
+            return results
+            
+        except Exception as e: 
+            print(f"[Row {row_index}] Error: {e}")
+            return []
+
+    # Process rows in parallel
+    start = time.time()
+    
+    # Create partial function with fixed arguments
+    process_row_partial = partial(
+        process_row, 
+        gpd_files=gpd_files, 
+        similarity_th=similarity_th, 
+        df_type=df_type, 
+        split_lowest_levels=split_lowest_levels, 
+        polygon_source=polygon_source
+    )
+    
+    # Use ThreadPoolExecutor for I/O-bound tasks (geocoding)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_index = {
+            executor.submit(process_row_partial, row_data, row_index): row_index 
+            for row_index, row_data in df_geo.iterrows()
+        }
+        
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_index):
+            row_index = future_to_index[future]
+            try:
+                row_results = future.result()
+                for result in row_results:
+                    # Align columns to df_geo_output
+                    result_df = pd.DataFrame([result])
+                    common_cols = df_geo_output.columns.intersection(result_df.columns)
+                    result_df = result_df[common_cols]
+                    df_geo_output = pd.concat([df_geo_output, result_df], ignore_index=True)
+            except Exception as e:
+                print(f"[Row {row_index}] Error in processing: {e}")
+    
+    end = time.time()
+    time_open = (end - start) / 60
+    if print_info:
+        print(f"Time to process all rows {time_open}mins")
+
+    # Save 
+    if save_path and res_savename:
+        save_df = df_geo_output.copy()
+        save_df = delistify_cols(save_df)
+        save_gdf = gpd.GeoDataFrame(save_df, geometry='geometry')
+        save_gdf = save_gdf.set_crs("EPSG:4326", allow_override=True)
+        try:
+            suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
+            # Save gpkg
+            gpkg_path = f"{save_path}{res_savename}{suffix}.gpkg"
+            if not atomic_gpkg_save(save_gdf, gpkg_path):
+                raise Exception(f"[GeoPackage Save Error] Failed to save GeoPackage to {gpkg_path}")
+        except Exception as e:
+            print(f"[GeoPackage Save Error] {e}")
+    
+    return df_geo_output
+
+def _process_single_row(row_data, row_index, gpd_files, similarity_th, df_type, 
+                       split_lowest_levels, polygon_source, print_info=False):
+    """Process a single row for geocoding (extracted for parallel processing)"""
+    try:
+        locations = row_data['location']
+        country = row_data["country"]
+        if not country and df_type == "llm": 
+            country = row_data["country_kw"]
+
+        # If no country is found, don't look for any polygon 
+        if not country:
+            df_row_append = row_data.copy()
+            return [df_row_append]
+
+        # If no location, change to have it as a list
+        if not locations: 
+            locations = [None]
+        
+        df_locations = []
+        count_geocoding_osm_flag = 0 
+        count_geocoding_country_flag = 0 
+        
+        for location in locations:
+            df_loc = geocode_unique_loc(gpd_files, location, country, similarity_th, time.time(), print_info)
+            if df_loc is not None: 
+                if (df_loc["geocoding_osm_flag"] == 1).any(): 
+                    count_geocoding_osm_flag += 1
+                if (df_loc["geocoding_country_flag"] == 1).any(): 
+                    count_geocoding_country_flag += 1
+                df_locations.append(df_loc)   
+        
+        if not df_locations: 
+            return []
+
+        df_locations = pd.concat(df_locations, axis=0)
+        df_locations = df_locations[df_locations['geometry'].notnull()]
+
+        if df_locations.empty:
+            return []
+            
+        # Retrieve the lowest admin level
+        lowest_level = df_locations["finest_level"].min()
+        highest_level = df_locations["finest_level"].max()
+        
+        if split_lowest_levels: 
+            highest_level = df_locations["finest_level"].max()
+        else: 
+            highest_level = lowest_level
+
+        # Process each merge level
+        results = []
+        for merge_level in range(lowest_level, highest_level + 1):
+            layer_name = f"ADM_{merge_level}"
+            df_location_subset = df_locations.loc[df_locations.finest_level >= merge_level]
+            merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
+
+            df_row_append = row_data.copy()
+            df_row_append.loc["geometry"] = merged_geometry
+            df_row_append.loc["locationLowestAdmin"] = layer_name
+            df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
+            df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
+            df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
+            df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
+            df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
+            
+            if polygon_source == "GAUL": 
+                for code in ["gaul0_code", "gaul1_code", "gaul2_code"]: 
+                    df_row_append.loc[code] = df_location_subset[code].unique().tolist()
+            
+            # Remove the impact value if it's not the lowest admin level
+            if merge_level != lowest_level: 
+                df_row_append.loc["impactValue"] = np.nan
+                df_row_append.loc["impactUnit"] = np.nan
+                df_row_append.loc["impactValueApprox"] = np.nan
+            
+            results.append(df_row_append)
+        
+        return results
+        
+    except Exception as e: 
+        print(f"[Row {row_index}] Error: {e}")
+        return []
+
+def geocode_df_to_polygon_v2_parrallel(df, similarity_th=0.2, split_lowest_levels=True, 
+                             print_info=False, save_path=False, res_savename=False, 
+                             polygon_source="GAUL", max_workers=None):
+    """Main function with parallel processing"""
+    df_geo = deepcopy(df)
+    if polygon_source == "GAUL": 
+        extra_columns_output = ["gaul0_code", "gaul1_code", "gaul2_code", 
+                                "geometry", "locationLowestAdmin", 
+                                "geocoding_country_flag", "geocoding_osm_flag", 
+                                "locationOsm", "locationPolygon", "iso3_code"]
+    else: 
+        extra_columns_output = ["geometry", "locationLowestAdmin", 
+                                "geocoding_country_flag", "geocoding_osm_flag", 
+                                "locationOsm", "locationPolygon", "iso3_code"]
+
+    df_geo_output = pd.DataFrame(columns=list(df.columns) + extra_columns_output)
+
+    # Convert to list columns related to locations & countries
+    if "country_kw" in df_geo.columns: 
+        col_to_list = ["location", "country", "country_kw"]
+        df_type = "llm"
+    else: 
+        col_to_list = ["location", "country"]
+        df_type = "labelled"
+
+    for col in col_to_list: 
+        df_geo[col] = df_geo[col].apply(
+            lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
+        )
+
+    # Open Polygons
+    start = time.time()
+    gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
+    end = time.time()
+    time_open = (end - start) / 60
+    if print_info:
+        print(f"Time to open files {time_open}mins")
+
+    if gpd_files is None:
+        return None
+    
+    # Process rows in parallel
+    start = time.time()
+    
+    # Prepare arguments for each row
+    tasks = []
+    for row_index, row_data in df_geo.iterrows():
+        tasks.append((
+            row_data, row_index, gpd_files, similarity_th, 
+            df_type, split_lowest_levels, polygon_source, print_info
+        ))
+    
+    # Use ThreadPoolExecutor
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_index = {
+            executor.submit(_process_single_row, *task_args): task_args[1]  # row_index is second argument
+            for task_args in tasks
+        }
+        
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_index):
+            row_index = future_to_index[future]
+            try:
+                row_results = future.result()
+                for result in row_results:
+                    result_df = pd.DataFrame([result])
+                    common_cols = df_geo_output.columns.intersection(result_df.columns)
+                    result_df = result_df[common_cols]
+                    df_geo_output = pd.concat([df_geo_output, result_df], ignore_index=True)
+            except Exception as e:
+                print(f"[Row {row_index}] Error in processing: {e}")
+    
+    end = time.time()
+    time_open = (end - start) / 60
+    if print_info:
+        print(f"Time to process all rows {time_open}mins")
+
+    # Save 
+    if save_path and res_savename:
+        save_df = df_geo_output.copy()
+        save_df = delistify_cols(save_df)
+        save_gdf = gpd.GeoDataFrame(save_df, geometry='geometry')
+        save_gdf = save_gdf.set_crs("EPSG:4326", allow_override=True)
+        try:
+            suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
+            # Save gpkg
+            gpkg_path = f"{save_path}{res_savename}{suffix}.gpkg"
+            if not atomic_gpkg_save(save_gdf, gpkg_path):
+                raise Exception(f"[GeoPackage Save Error] Failed to save GeoPackage to {gpkg_path}")
+        except Exception as e:
+            print(f"[GeoPackage Save Error] {e}")
+    return df_geo_output
+
+#### GARBAGE 
+def _process_row_shared_crap(args, df_type, similarity_th, split_lowest_levels, polygon_source, print_info):
+    """
+    Worker for multiprocessing: process one row.
+    """
+    global worker_gpd_files
+    row_index, row_data = args
+    # print("Run row")
+
+    pid = mp.current_process().pid
+    print(f"Process {pid} processing row {row_index}")
+    print(f"Worker gpd_files is None: {worker_gpd_files is None}")
+
+    try:
+        if worker_gpd_files is None:
+            print(f"Worker {mp.current_process().pid}: gpd_files is None!")
+            return None
+        
+        locations = row_data['location']
+        country = row_data["country"]
+        if not country and df_type == "llm":
+            country = row_data["country_kw"]
+
+        if not country:
+            return pd.DataFrame([row_data])
+
+        if not locations:
+            locations = [None]
+
+        df_locations = []
+        count_geocoding_osm_flag = 0
+        count_geocoding_country_flag = 0
+
+        for location in locations:
+            df_loc = geocode_unique_loc(
+                worker_gpd_files, location, country, similarity_th, time.time(), print_info
+            )
+            if df_loc is not None:
+                if (df_loc["geocoding_osm_flag"] == 1).any():
+                    count_geocoding_osm_flag += 1
+                if (df_loc["geocoding_country_flag"] == 1).any():
+                    count_geocoding_country_flag += 1
+                df_locations.append(df_loc)
+
+        if not df_locations:
+            return None
+
+        df_locations = pd.concat(df_locations, axis=0)
+        df_locations = df_locations[df_locations['geometry'].notnull()]
+        if df_locations.empty:
+            return None
+
+        lowest_level = df_locations["finest_level"].min()
+        highest_level = df_locations["finest_level"].max()
+        if not split_lowest_levels:
+            highest_level = lowest_level
+
+        outputs = []
+        for merge_level in range(lowest_level, highest_level + 1):
+            layer_name = f"ADM_{merge_level}"
+            df_location_subset = df_locations.loc[df_locations.finest_level >= merge_level]
+            merged_geometry = gather_to_lowest_admin(df_location_subset, gpd_files, merge_level)
+
+            df_row_append = row_data.copy()
+            df_row_append.loc["geometry"] = merged_geometry
+            df_row_append.loc["locationLowestAdmin"] = layer_name
+            df_row_append.loc["geocoding_country_flag"] = count_geocoding_country_flag
+            df_row_append.loc["geocoding_osm_flag"] = count_geocoding_osm_flag
+            df_row_append.loc["locationOsm"] = df_location_subset["locationOsm"].unique().tolist()
+            df_row_append.loc["locationPolygon"] = df_location_subset["locationPolygon"].unique().tolist()
+            df_row_append.loc["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
+
+            if polygon_source == "GAUL":
+                for code in ["gaul0_code", "gaul1_code", "gaul2_code"]:
+                    df_row_append.loc[code] = df_location_subset[code].unique().tolist()
+
+            if merge_level != lowest_level:
+                for col in ["impactValue", "impactUnit", "impactValueApprox"]:
+                    if col in df_row_append:
+                        df_row_append.loc[col] = np.nan
+
+            outputs.append(pd.DataFrame([df_row_append]))
+            # print(outputs)
+        return pd.concat(outputs, ignore_index=True)
+
+    except Exception as e:
+        print(f"[Row {row_index}] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def geocode_df_to_polygon_crap(df, similarity_th=0.2, split_lowest_levels=True,
+                          print_info=False, save_path=False, res_savename=False,
+                          polygon_source="GAUL", n_jobs=None):
+    """
+    Parallelised geocoding with multiprocessing.
+    """
+    df_geo = deepcopy(df)
+
+    if polygon_source == "GAUL":
+        extra_columns_output = ["gaul0_code", "gaul1_code", "gaul2_code",
+                                "geometry", "locationLowestAdmin",
+                                "geocoding_country_flag", "geocoding_osm_flag",
+                                "locationOsm", "locationPolygon"]
+    else:
+        extra_columns_output = ["geometry", "locationLowestAdmin",
+                                "geocoding_country_flag", "geocoding_osm_flag",
+                                "locationOsm", "locationPolygon"]
+
+    df_geo_output = pd.DataFrame(columns=list(df.columns) + extra_columns_output)
+
+    # Convert list-like cols
+    if "country_kw" in df_geo.columns:
+        col_to_list = ["location", "country", "country_kw"]
+        df_type = "llm"
+    else:
+        col_to_list = ["location", "country"]
+        df_type = "labelled"
+
+    for col in col_to_list:
+        df_geo[col] = df_geo[col].apply(
+            lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
+        )
+
+    # # Load polygons
+    # start = time.time()
+    # # gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
+    # init_worker(ADMIN_PATH, polygon_source)
+    # end = time.time()
+    # # if print_info:
+    # print(f"Time to open files {(end - start)/60:.2f} mins")
+
+    # if gpd_files is None:
+    #     return None
+
+    print("Testing init_worker standalone...")
+    init_worker(ADMIN_PATH, polygon_source)
+    print("init_worker test completed")
+    
+    worker_func = partial(_process_row_shared_crap, 
+                         df_type=df_type,
+                         similarity_th=similarity_th,
+                         split_lowest_levels=split_lowest_levels,
+                         polygon_source=polygon_source,
+                         print_info=print_info)
+
+    # # Prepare args for workers
+    # args_list = [
+    #     (idx, row, gpd_files, df_type, similarity_th, split_lowest_levels, polygon_source, print_info)
+    #     for idx, row in df_geo.iterrows()
+    # ]
+    args_list = [(idx, row) for idx, row in df_geo.iterrows()]
+
+    # Default: use all CPUs
+    start = time.time()
+    if n_jobs is None:
+        n_jobs = mp.cpu_count()
+    end = time.time()
+    time_open = (end-start)/60
+    print(f"Time to count nb of CPU {time_open}mins")
+
+    print("Number of CPU : ", n_jobs)
+
+    # Run pool
+    print("Run parallelisation")
+    start = time.time()
+    chunksize = max(1, len(df_geo) // (n_jobs * 4))
+    # with mp.Pool(processes=n_jobs) as pool:
+    #     # results = list(pool.imap_unordered(_process_row_shared, args_list, chunksize=100))
+    #     results = list(pool.imap_unordered(worker_func, args_list, chunksize=chunksize))
+    with mp.Pool(processes=n_jobs, initializer=init_worker, initargs=(ADMIN_PATH, polygon_source)) as pool:
+        print(f"Pool created with {n_jobs} processes")
+        print(f"Processing {len(args_list)} rows")
+
+        results = list(pool.imap_unordered(worker_func, args_list, chunksize=chunksize))
+    end = time.time()
+    time_open = (end-start)/60
+    print(f"Time to run all // {time_open}mins")
+    
+    print(f"Number of results found {len(results)}")
+    print("Result 0 : ", results[0])
+    results = [r for r in results if r is not None]
+    if results:
+        df_geo_output = pd.concat(results, ignore_index=True)
+
+    # Save output
+    print("Try to save")
+    print("Save_path : ", save_path)
+    print("res_savename : ", res_savename)
+    if save_path and res_savename:
+        save_df = df_geo_output.copy()
+        save_df = delistify_cols(save_df)
+        save_gdf = gpd.GeoDataFrame(save_df, geometry='geometry')
+        save_gdf = save_gdf.set_crs("EPSG:4326", allow_override=True)
+        try:
+            suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
+            gpkg_path = f"{save_path}{res_savename}{suffix}.gpkg"
+            if not atomic_gpkg_save(save_gdf, gpkg_path):
+                raise Exception(f"[GeoPackage Save Error] Failed to save GeoPackage to {gpkg_path}")
+        except Exception as e:
+            print(f"[GeoPackage Save Error] {e}")
+
+    return df_geo_output
