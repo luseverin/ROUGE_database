@@ -6,6 +6,7 @@ import regex as re
 import copy as cp
 import ast
 import regex as re
+import json_repair
 from pint import UnitRegistry
 from collections import Counter
 from price_parser import Price
@@ -113,7 +114,8 @@ def listify_strings(x):
     """
     if isinstance(x, str):
         try :
-            x = json.loads(x.replace("'", '"'))
+            #x = json.loads(x.replace("'", '"'))
+            x = json_repair.loads(x)
         except :
             x = [x]
         return x
@@ -123,7 +125,7 @@ def listify_strings(x):
         return []
     else:
         return x
-def format_output(df, num_cols, list_cols=None):
+def format_output(df, num_cols=None, list_cols=None):
     """
     Format output of the final report
 
@@ -139,11 +141,11 @@ def format_output(df, num_cols, list_cols=None):
     pd.DataFrame
         Formatted DataFrame
     """
-    df = df.replace(["null", "None", None], np.nan)
-    df[num_cols] = df[num_cols].astype(float)
-    if list_cols is None:
-        return df
-    df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
+    if num_cols:
+        df = df.replace(["null", "None", None], np.nan)
+        df[num_cols] = df[num_cols].astype(float)
+    if list_cols:
+        df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
     return df
 
 def explode_lists(df):
