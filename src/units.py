@@ -59,21 +59,50 @@ unit_type_kw_reclass = {
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
                         '%' : r"(%|perc.*)",
 }
+#unit_kw_reclass = {
+#                        'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
+#                        'roads' : r"road.*|route.*|bridge.*|highway.*|motorway.*",#r"(?<!kilometer|kilometre|km).*(road.*|route.*|.*bridge.*|.*highway.*|.*motorway.*)",
+#                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|buse?s?\b|taxi.*|taxicab.*|truck.*",
+#                        'water, sanitation and hygiene facilities' : r"water.*|sanitation.*|hygiene.*|latrine.*|well.*|tap.*|reservoir.*|aqueduct.*",
+#                        'healthcare facilities' : r"health|hospitals?\b|clinic.*|maternity.*|medical",
+#                        'IT and communication facilities' : r"communication.*|radio.*|tv.*|cell tower.*|antenna.*",
+#                        'power and energy production infrastructure facilities' : r"power.*|energy.*|generator.*|wind.*|solar.*|hydro.*|dams?",
+#                        'homes' : r"residential.*|residence.|hous.*|home.*|building.*",
+#                        'education facilities' : r"education.*|school.*|university.*|college.*",
+#                        'crop production and forestry' : r"crop.*|field.*|forest.*|tree.*|banana.*|coffee.*|cocoa.*|cotton.*|maize.*|rice.*|sorghum.*|soybean.*|sugar.*|tobacco.*|wheat.*",
+#                        'agricultural facilities' : r"irrigation.*|barn.*|farm.*",
+#                        'affected animals' : r"livestock.*|animal.*|fish.*|cow.*|sheep.*|poult.*|cattle.*|goat.*|pig.*|chick.*|horse.*|heads?",
+#                        'informal settlements' : r"camp.?|tent.?|refuge.?|settlement.?"
+#                         }
+
 unit_kw_reclass = {
-                        'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
-                        'roads' : r"road.*|route.*|bridge.*|highway.*|motorway.*",#r"(?<!kilometer|kilometre|km).*(road.*|route.*|.*bridge.*|.*highway.*|.*motorway.*)",
-                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|buse?s?\b|taxi.*|taxicab.*|truck.*",
-                        'water, sanitation and hygiene facilities' : r"water.*|sanitation.*|hygiene.*|latrine.*|well.*|tap.*|reservoir.*|aqueduct.*",
-                        'healthcare facilities' : r"health|hospitals?\b|clinic.*|maternity.*|medical",
-                        'IT and communication facilities' : r"communication.*|radio.*|tv.*|cell tower.*|antenna.*",
-                        'power and energy production infrastructure facilities' : r"power.*|energy.*|generator.*|wind.*|solar.*|hydro.*|dams?",
-                        'homes' : r"residential.*|residence.|hous.*|home.*|building.*",
-                        'education facilities' : r"education.*|school.*|university.*|college.*",
-                        'crop production and forestry' : r"crop.*|field.*|forest.*|tree.*|banana.*|coffee.*|cocoa.*|cotton.*|maize.*|rice.*|sorghum.*|soybean.*|sugar.*|tobacco.*|wheat.*",
-                        'agricultural facilities' : r"irrigation.*|barn.*|farm.*",
-                        'affected animals' : r"livestock.*|animal.*|fish.*|cow.*|sheep.*|poult.*|cattle.*|goat.*|pig.*|chick.*|horse.*|heads?",
-                        'informal settlements' : r"camp.?|tent.?|refuge.?|settlement.?"
-                         }
+    'people': r"\b(people|persons?|individuals?|residents?|evacuees?)\b",
+
+    'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
+
+    'transportation facilities': r"\b(rail(way|road)?s?|train tracks?|airports?|cars?|buses?|bus|taxi(cab)?s?|trucks?)\b",
+
+    'water, sanitation and hygiene facilities': r"\b(water|sanitation|hygiene|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
+
+    'healthcare facilities': r"\b(health(care)?|hospitals?|clinics?|maternit(y|ies)|medical)\b",
+
+    'IT and communication facilities': r"\b(communication(s)?|radios?|tv|cell towers?|antennas?)\b",
+
+    'power and energy production infrastructure facilities': r"\b(power|energy|generators?|wind|solar|hydro|dams?)\b",
+
+    'homes': r"\b(residential|residences?|houses?|homes?|buildings?)\b",
+
+    'education facilities': r"\b(education(al)?|schools?|universit(y|ies)|colleges?)\b",
+
+    'crop production and forestry': r"\b(crops?|fields?|forests?|trees?|bananas?|coffee|cocoa|cotton|maize|rice|sorghum|soybeans?|sugar|tobacco|wheat)\b",
+
+    'agricultural facilities': r"\b(irrigation|barns?|farms?)\b",
+
+    'affected animals': r"\b(livestock|animals?|fish|cows?|sheep|poultr(y|ies)|cattle|goats?|pigs?|chickens?|horses?|heads?)\b",
+
+    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?)\b"
+}
+
 
 expected_unit_subtype = {
     "Affected People": "people",
@@ -142,3 +171,34 @@ default_subtype_unit = {
     'Other Agricultural Impacts': "unknown",
     'Other Service Access Impacts': "people"
 }
+
+#impactUnitType_list = ["count", "distance", "area", "weight", "volume"]
+
+#impact_subtypes_unit_dict = {
+#        "Affected People": ["people"],
+#        "Injured People": ["people"],
+#        "Displaced People": ["people"],
+#        "Homeless People": ["people"],
+#        "Missing People": ["people"],
+#        "Human Deaths": ["people"],
+#        "Human Health and Wellbeing": ["people", "cases"],
+#        "Roads" : ["roads", "km of roads", "CHF"],
+#        "Other transportation infrastructure" : ["transportation facilities", "km of transportation facilities", "CHF"],
+#        "Water, Sanitation, and Hygiene Infrastructure": ["WASH facilities","CHF"],
+#        "Healthcare Infrastructure": ["healthcare facilities","CHF"],
+#        "IT and Communication Infrastructure": ["IT and communication facilities","CHF"],
+#        "Residential Buildings": ["houses","CHF"],
+#        "Informal Settlements": ["informal settlements","CHF"],
+#        "Education Infrastructure": ["education facilities","CHF"],
+#        "Agricultural Infrastructure": ["agricultural facilities","CHF"],
+#        "Power and Energy Production Infrastructure": ["power and energy production facilities","CHF"],
+#        "Crop Production and Forestry": ["kg of crops", "km**2 of crops", "trees", "CHF"],
+#        "Affected Livestock and Animals": ["affected animals","CHF"],
+#        "Recreation, Tourism, and Culture": ["recreation, tourisme and culture facilities", "CHF"],
+#        "Economy and Market": ["CHF"],
+#        "Access to Healthcare": ["people"],
+#        "Access to transport and Mobility": ["people"],
+#        "Water Quality and Availability": ["people", "m**3"],
+#        "Access to Education": ["people"],
+#        "Access to Power and Energy": ["people"],
+#        }
