@@ -15,6 +15,7 @@ else:
     raise ValueError(f"Unknown user: {user}")
 
 DATA_IN_JSONS = DATA_PATH / 'report_jsons/'
+DATA_PDF = DATA_PATH / "reports/"
 DATA_OUT_LLMS = DATA_PATH / 'results_llm/'
 DATA_LABELLED = DATA_PATH / 'labelled/'
 DATA_FIGURE = DATA_PATH / 'figure/'
