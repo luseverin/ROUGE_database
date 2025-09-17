@@ -1,17 +1,8 @@
 #sanity checks for llm extraction
 import pandas as pd
 import numpy as np
-from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers
+from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers, format_number
 #value in original text
-def format_number(num):
-    """
-    Formats a number into a string, removing unnecessary trailing zeros
-    and the decimal point if it's not needed.
-    """
-    if isinstance(num, float) and num.is_integer():
-        # If the number is a float but represents an integer
-        return str(int(num))
-    return str(num).rstrip('0').rstrip('.') if '.' in str(num) else str(num)
 def flag_value_in_text(extract_df):
     """
     Adds a column to the dataframe, "value_in_text", which is
