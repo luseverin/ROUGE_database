@@ -19,7 +19,7 @@ from pathlib import Path
 from collections import Counter
 from src.text_processing_functions import *
 from src.data import *
-from src.hazard_def import hazard_subtype_kw_searc
+from src.hazard_def import hazard_kw_reclass
 from src.text_processing_functions import *
 from src.post_process_functions import country_name_to_iso3
 
@@ -34,7 +34,7 @@ outformat = 'csv' #csv json
 ## Select data
 fname_in = 'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'preproc_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'test_new_sel_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -70,8 +70,8 @@ for report in all_ifrc_reports_info_unnested:
             if std_units:
                 report['text_processed'] = standardize_units(report['text_processed'])
             report['sentences'] = sent_tokenize(report['text_processed'])
-            report['nathaz_text'] = select_hazard_description(report['sentences'], match_above=match_above)
-            report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_subtype_kw_searc)
+            report['nathaz_text'] = select_impact_description(report['sentences'])
+            report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)
             filtered_reports.append(report)
             if (len(report['hazards_found_kw']) > 0):# and (report['disasterTypeReclassified'] not in disasterType_nathaz)):
                 filtered_reports_hazonly.append(report)
