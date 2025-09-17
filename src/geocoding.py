@@ -11,6 +11,7 @@ from copy import deepcopy
 import geopandas as gpd
 from functools import partial
 import concurrent.futures
+from concurrent.futures import ProcessPoolExecutor
 from shapely.geometry import Polygon, Point
 from shapely.ops import unary_union
 from src.post_process_functions import *
@@ -18,6 +19,9 @@ from src.data import *
 import os
 import tempfile
 import shutil
+from urllib.parse import quote
+import requests
+from collections import defaultdict
 
 import multiprocessing as mp
 
@@ -33,7 +37,7 @@ from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
 
 # geolocator = gpy.geocoders.Nominatim(user_agent='orienternet')
-geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (laura.hasbini@lsce.ipsl.frs)", timeout=10)
+# geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (laura.hasbini@lsce.ipsl.frs)", timeout=10)
 
 LOCATION_LEVEL_MAPPING = {
     'admin2': {'admin_level': 2, 'nominatim_keys': ['city', 'town', 'village', 'municipality',
@@ -231,31 +235,150 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
         adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
         return adm2_match if not adm2_match.empty else None
 
-def query_nominatim(location, country, delay=2):
-    """
-    Make nominatim query
-    """
-    # if time.time() - last_request_time <= delay:
-    #     time.sleep(delay)
+# def query_nominatim(location, country, delay=2):
+#     """
+#     Make nominatim query
+#     """
+#     # if time.time() - last_request_time <= delay:
+#     #     time.sleep(delay)
 
-    if not location :
+#     if not location :
+#         query = f"{country}"
+#     else :
+#         query = f"{location}, {country}"
+
+#     # First try to geocode with nominatim
+#     try :
+#         result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
+#         return result
+    
+#     except Exception as e :
+#         time.sleep(delay)
+#         #2nd try to geocode with nominatim
+#         try : 
+#             result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
+#             return result
+#         except Exception as e : 
+#             # time.sleep(delay)
+#             # try : 
+#             #     result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
+#             #     return result
+#             # # If error raised again, return a flag to track which row were not geocoded 
+#             # except Exception as e : 
+#             #     return "Failed"
+#             print("[query_nominatim] Exception found : ", e)
+#             return None
+
+def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=10):
+    """
+    Make nominatim query with robust error handling
+    """
+    # Initialize geolocator with longer timeout
+    # geolocator = Nominatim(user_agent="your_app_name", timeout=timeout)
+    geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (laura.hasbini@lsce.ipsl.fr)", timeout=timeout)
+
+    if not location:
         query = f"{country}"
-    else :
+    else:
         query = f"{location}, {country}"
-    try :
-        result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
-        return result
-    except GeocoderTimedOut : 
-        # logging.info('TIMED OUT: GeocoderTimedOut: Retrying...')
-        print("Ask for a delay")
-        time.sleep(delay)
-        result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
-        return result
-    except Exception as e : 
-        print("Ask for a delay")
-        time.sleep(delay)
-        result = geolocator.geocode(query, exactly_one=True, language="en", addressdetails =True, geometry="geojson")
-        return result
+
+    for attempt in range(max_retries):
+        try:
+            result = geolocator.geocode(
+                query, 
+                exactly_one=True, 
+                language="en", 
+                addressdetails=True, 
+                geometry="geojson"
+            )
+            return result
+            
+        except (GeocoderTimedOut, GeocoderServiceError) as e:
+            if attempt == max_retries - 1:  # Last attempt
+                print(f"[query_nominatim] Failed after {max_retries} attempts: {e}")
+                return None
+            
+            # Exponential backoff
+            sleep_time = initial_delay * (2 ** attempt)
+            print(f"[query_nominatim] Attempt {attempt + 1} failed. Retrying in {sleep_time}s...")
+            time.sleep(sleep_time)
+            
+        except Exception as e:
+            print(f"[query_nominatim] Unexpected error: {e}")
+            return None
+    return None
+
+# def query_nominatim(location, country, max_retries=3, timeout=30):
+#     """
+#     Direct HTTP request to Nominatim API with better error handling
+#     """
+#     base_url = "https://nominatim.openstreetmap.org/search"
+    
+#     if not location:
+#         query = f"{country}"
+#     else:
+#         query = f"{location}, {country}"
+    
+#     params = {
+#         'q': query,
+#         'format': 'json',
+#         'limit': 1,
+#         'addressdetails': 1,
+#         'accept-language': 'en',
+#         'polygon_geojson': 1
+#     }
+    
+#     headers = {
+#         'User-Agent': 'IFRC/1.0 (laura.hasbini@lsce.ipsl.fr)',
+#         'Accept': 'application/json'
+#     }
+    
+#     for attempt in range(max_retries):
+#         try:
+#             response = requests.get(
+#                 base_url, 
+#                 params=params, 
+#                 headers=headers, 
+#                 timeout=timeout
+#             )
+            
+#             if response.status_code == 200:
+#                 data = response.json()
+#                 if data:
+#                     return data[0]  # Return first result
+#                 return None
+            
+#             elif response.status_code == 429:  # Too Many Requests
+#                 retry_after = int(response.headers.get('Retry-After', 5))
+#                 print(f"Rate limited. Retrying after {retry_after} seconds...")
+#                 time.sleep(retry_after)
+#                 continue
+                
+#             else:
+#                 print(f"HTTP Error {response.status_code}: {response.text}")
+#                 return None
+                
+#         except requests.exceptions.Timeout:
+#             if attempt == max_retries - 1:
+#                 print("All retries failed due to timeout")
+#                 return None
+#             sleep_time = 2 * (attempt + 1)
+#             print(f"Timeout on attempt {attempt + 1}. Retrying in {sleep_time}s...")
+#             time.sleep(sleep_time)
+            
+#         except requests.exceptions.ConnectionError:
+#             if attempt == max_retries - 1:
+#                 print("Connection error after all retries")
+#                 return None
+#             sleep_time = 3 * (attempt + 1)
+#             print(f"Connection error. Retrying in {sleep_time}s...")
+#             time.sleep(sleep_time)
+            
+#         except Exception as e:
+#             print(f"Unexpected error: {e}")
+#             return None
+    
+#     return None
 
 def query_reverse_geocode(coords, last_request_time, country, lang="en", delay=1):
     """
@@ -406,6 +529,11 @@ def geocode_unique_loc(gdf_file, location, country, similarity_th, time_last_req
                 if print_info:
                     print(f"No results for query: {location}, {curr_country}")
                 return fallback_country_union(gdf_file, countries)
+            # elif nom_result == "Failed" : 
+            #     # Add a flag underlines that geocoding must me done again 
+            #     df_gpd_failed = fallback_country_union(gdf_file, countries)
+            #     df_gpd_failed["Failed"] = True
+            #     return df_gpd_failed
             else : 
                 if print_info:
                     print(f"Result of the query: {nom_result}")
@@ -566,7 +694,7 @@ def geocode_df_to_polygon_old(df, similarity_th=0.2, split_lowest_levels=True, p
     end = time.time()
     time_open = (end-start)/60
     # if print_info :
-    print(f"Time to open files {time_open}mins")
+    # print(f"Time to open files {time_open}mins")
 
     time_last_request = time.time()
 
@@ -611,7 +739,7 @@ def geocode_df_to_polygon_old(df, similarity_th=0.2, split_lowest_levels=True, p
         end_loop = time.time()
         time_open = (end_loop-start_loop)/60
         # if print_info :
-        print(f"Time to geocode one row {time_open}mins")
+        # print(f"Time to geocode one row {time_open}mins")
             
         df_locations = pd.concat(df_locations, axis=0)
         df_locations = df_locations[df_locations['geometry'].notnull()]
@@ -667,14 +795,14 @@ def geocode_df_to_polygon_old(df, similarity_th=0.2, split_lowest_levels=True, p
         end_loop = time.time()
         time_open = (end_loop-start_loop)/60
         # if print_info :
-        print(f"Time to merge at lowest level {time_open}mins")
+        # print(f"Time to merge at lowest level {time_open}mins")
         # except Exception as e : 
         #     print(f"[Row {row_index}] Error: {e}")
         #     continue
     end = time.time()
     time_open = (end-start)/60
     # if print_info :
-    print(f"Time to process all rows {time_open}mins")
+    # print(f"Time to process all rows {time_open}mins")
 
     # Save 
     if save_path and res_savename:
@@ -725,6 +853,323 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
             shutil.rmtree(temp_dir)
         except:
             pass
+
+#### Optimize geocoding and work per unique location found 
+
+def find_best_nomin(gdf_file, location, countries, similarity_th, print_info=False) : 
+    best_result = None
+    best_sim = 0
+
+    for curr_country in countries :
+        nom_result = query_nominatim(location, curr_country)
+
+        if nom_result is None:
+            if print_info:
+                print(f"No results for query: {location}, {curr_country}")
+            return fallback_country_union(gdf_file, countries)
+        else : 
+            if print_info:
+                print(f"Result of the query: {nom_result}")
+
+        # Evaluate similarity
+        loc_clean = remove_admin_words(location)
+        coords = (nom_result.latitude, nom_result.longitude)
+        address = nom_result.raw.get("address", {}) if nom_result and isinstance(nom_result.raw, dict) else {}
+
+        match_info, sim = find_best_match(loc_clean, address, similarity_th, print_info)
+        if sim > best_sim:
+            best_sim = sim
+            best_result = {
+                **match_info,
+                "coords": coords,
+                "country": curr_country
+            }
+            # best_nomin = nom_result
+    return nom_result, best_result
+
+def geocode_from_nominatim_output(gdf_file, location, best_nomin, best_result, countries, print_info=False) :
+    #Make sure countries are in list format
+    try :
+        # If a satisfactory matching is found, and it doesn't correspond to an ADMIN 3 level, look for a GADM polygon
+        if best_result : #and (best_result["admin_level"]!=3) :
+            if print_info : 
+                print("Best result :", best_result, " Search for polygon") 
+            # Try to extract the polygon with English
+            adm_lev = best_result["admin_level"]
+            df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["admin_field"], best_result["name"], adm_lev)
+
+            #If no polygon found, loop over other nominatim_keys for the same admin 
+            if df_gpd is None :
+                fallback_address = best_nomin.raw.get("address", {})
+                for nomin_key_admin in LOCATION_LEVEL_MAPPING[f"admin{adm_lev}"]["nominatim_keys"]:
+                    fallback_name = address.get(nomin_key_admin)
+                    if fallback_name is not None : 
+                        df_gpd = get_polygon(
+                            gdf_file[f"ADM_{best_result['admin_level']}"],
+                            best_result["country"],
+                            best_result["admin_field"],
+                            fallback_name,
+                            best_result["admin_level"]
+                        )
+                    if df_gpd is not None:
+                        best_result["name"] = fallback_name
+                        break
+            
+            #If no polygon found, loop over the languages
+            if df_gpd is None : 
+                language = LANGUAGES.get(best_result["country"])
+                languages = [language, "fr", "es", "de"]
+                for lang in languages : 
+                    address, _ = query_reverse_geocode(best_result['coords'], time_last_request, best_result["country"], lang)
+                    fallback_name = address.get(best_result['key'])
+                    if fallback_name is None:
+                        # Try alternative keys in LOCATION_LEVEL_MAPPING
+                        for nomin_key_admin in LOCATION_LEVEL_MAPPING[f"admin{adm_lev}"]["nominatim_keys"]:
+                            fallback_name = address.get(nomin_key_admin)
+                            if fallback_name is not None:
+                                df_gpd = get_polygon(
+                                    gdf_file[f"ADM_{best_result['admin_level']}"],
+                                    best_result["country"],
+                                    best_result["admin_field"],
+                                    fallback_name,
+                                    best_result["admin_level"]
+                                )
+                                if df_gpd is not None:
+                                    break
+                    else:
+                        df_gpd = get_polygon(
+                            gdf_file[f"ADM_{best_result['admin_level']}"],
+                            best_result["country"],
+                            best_result["admin_field"],
+                            fallback_name,
+                            best_result["admin_level"]
+                        )
+                    if df_gpd is not None:
+                        break
+
+            #Add extra informations
+            if df_gpd is not None:
+                if print_info:
+                    print(f"Best match: {best_result['name']} (sim={best_result['sim']:.2f}) at level {best_result['admin_level']}")
+                df_gpd["finest_level"] = best_result["admin_level"]
+                df_gpd["locationOsm"] = best_result["name"]
+                df_gpd["locationPolygon"] = df_gpd[best_result["admin_field"]]
+                df_gpd["geocoding_country_flag"] = 0
+                df_gpd["geocoding_osm_flag"] = 0
+                df_gpd["location"] = location
+                return df_gpd
+
+            # If not polygon found, look to geojson output from nominatim directly
+            # Use Nominatim Point/Polygon to retrive the Polygons geometry
+            if "geojson" in best_nomin.raw.keys() :
+                coords = best_nomin.raw['geojson']['coordinates']
+
+                if best_nomin.raw['geojson']['type'].strip().lower() == 'point':
+                    geom = Point(coords[0], coords[1])
+                else : 
+                    geom = pd.DataFrame(coords).transpose().apply(Polygon).iloc[0]
+
+                df_gpd = get_polygon_for_geometry(geom, best_result["country"], gdf_file, level=best_result['admin_level'])
+
+                if df_gpd is not None:
+                    df_gpd["finest_level"] = best_result["admin_level"]
+                    df_gpd["locationOsm"] = best_result["name"]
+                    df_gpd["locationPolygon"] = df_gpd[best_result["admin_field"]].tolist()
+                    df_gpd["geocoding_country_flag"] = 0
+                    df_gpd["geocoding_osm_flag"] = 1
+                    df_gpd["location"] = location
+                    return df_gpd
+        else : 
+            df_gpd =  fallback_country_union(gdf_file, countries)
+            df_gpd["location"] = location
+            return df_gpd
+        
+        #If no polygon found, loop for higher levels 
+            
+    except Exception as e :
+        # if print_info:
+        print(f"[geocode_unique_loc] {e}. Falling back to country level.")
+
+def run_parallel_geocode(nom_loc_dict, unique_locations_countries, gdf_file, print_info=False, max_workers=None):
+    results = []
+    
+    # run in parallel
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                geocode_from_nominatim_output,
+                gdf_file,
+                location,
+                best_nomin,
+                best_result,
+                unique_locations_countries[location],
+                print_info
+            ): location
+            for location, (best_nomin, best_result) in nom_loc_dict.items()
+        }
+
+        for future in futures:
+            location = futures[future]
+            try:
+                df = future.result()
+                if df is not None:
+                    results.append(df)
+            except Exception as e:
+                print(f"Error processing {futures[future]}: {e}")
+
+    # combine into single DataFrame
+    if results:
+        return pd.concat(results, ignore_index=True)
+    else:
+        return pd.DataFrame()
+
+def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split_lowest_levels=True, polygon_source="GAUL") :
+    df_locations = df_geo_individual_locs.loc[df_geo_individual_locs["location"].isin(row["location"])]
+    df_geo_output = pd.DataFrame()
+
+    #Retrieve the lowest admin level
+    lowest_level = df_locations["finest_level"].min()
+    highest_level = df_locations["finest_level"].max()
+    
+    if split_lowest_levels : 
+        highest_level = df_locations["finest_level"].max()
+    else : 
+        highest_level = lowest_level
+
+    #Merge all the locs to the lewest admin levels
+    for merge_level in range(lowest_level, highest_level+1) :
+        layer_name = f"ADM_{merge_level}"
+        df_location_subset = df_locations.loc[df_locations["finest_level"]>=merge_level]
+        merged_geometry = gather_to_lowest_admin(df_location_subset, gdf_file, merge_level)
+
+        df_row_append = pd.DataFrame([row])
+        df_row_append["geometry"] = merged_geometry
+        df_row_append["locationLowestAdmin"] = layer_name
+        df_row_append["geocoding_country_flag"] = df_location_subset['geocoding_country_flag'].sum()#count_geocoding_country_flag
+        df_row_append["geocoding_osm_flag"] = df_location_subset['geocoding_osm_flag'].sum()#count_geocoding_osm_flag
+        # print(df_location_subset["locationOsm"].unique().tolist())
+        # print("df_row_append", df_row_append)
+        df_row_append["locationOsm"] = [df_location_subset["locationOsm"].unique().tolist()]
+        df_row_append["locationPolygon"] = [df_location_subset["locationPolygon"].unique().tolist()]
+        print("df_row_append", df_row_append)
+
+        # For the codes, take the list 
+        df_row_append["iso3_code"] = df_location_subset["iso3_code"].unique().tolist()
+        if polygon_source == "GAUL" : 
+            for code in ["gaul0_code", "gaul1_code", "gaul2_code"] : 
+                df_row_append[code] = df_location_subset[code].unique().tolist()
+        
+        # Remove the impact value if it's not the lowest admin level
+        if merge_level != lowest_level : 
+            df_row_append["impactValue"] = np.nan
+            df_row_append["impactUnit"] = np.nan
+            df_row_append["impactValueApprox"] = np.nan
+        
+        # Align columns to df_geo_output
+        # df_row_append = pd.DataFrame([df_row_append])
+        # common_cols = df_geo_output.columns.intersection(df_row_append.columns)
+        # df_row_append = df_row_append[common_cols]
+        print(df_row_append)
+        df_geo_output = pd.concat([df_geo_output, df_row_append], ignore_index=True)
+    return df_geo_output 
+
+def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowest_levels=True, polygon_source="GAUL", max_workers=None):
+    results = []
+
+    # convert rows to dictionaries to pass to subprocesses
+    rows = df_geo.to_dict("records")
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                associate_locations_to_polygons,
+                row,
+                df_geo_individual_locs,
+                gdf_file, 
+                split_lowest_levels, 
+                polygon_source
+            ): i
+            for i, row in enumerate(rows)
+        }
+
+        for future in futures:
+            i = futures[future]
+            try:
+                df = future.result()
+                if df is not None and not df.empty:
+                    results.append(df)
+            except Exception as e:
+                print(f"Error processing row {i}: {e}")
+
+    if results:
+        return pd.concat(results, ignore_index=True)
+    else:
+        return pd.DataFrame()
+
+def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, split_lowest_levels=True, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL") :
+    # Prepare dataset 
+    df_geo = deepcopy(df)
+
+    # if polygon_source == "GAUL" : 
+    #     extra_columns_output = ["gaul0_code", "gaul1_code", "gaul2_code", 
+    #                             "geometry", "locationLowestAdmin", 
+    #                             "geocoding_country_flag", "geocoding_osm_flag", 
+    #                             "locationOsm", "locationPolygon", "iso3_code"]
+    # else : 
+    #     extra_columns_output = ["geometry", "locationLowestAdmin", 
+    #                             "geocoding_country_flag", "geocoding_osm_flag", 
+    #                             "locationOsm", "locationPolygon", "iso3_code"]
+
+    # df_geo_output = pd.DataFrame(columns = list(df.columns)+extra_columns_output)
+
+    if "country_kw" in df_geo.columns : 
+        col_to_list = ["location", "country", "country_kw"]
+        df_type = "llm"
+    else : 
+        col_to_list = ["location", "country"]
+        df_type = "labelled"
+
+    for col in col_to_list : 
+        df_geo[col] = df_geo[col].apply(
+            lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
+        )
+
+    # Open Polygons
+    gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
+
+    # Collect unique locations and associated countries
+    unique_locations_countries = defaultdict(set)
+
+    for _, row in df_geo.iterrows():
+        countries = row["country"]
+        # ensure it's iterable (list), even if single country
+        if not isinstance(countries, (list, set, tuple)):
+            countries = [countries]
+        
+        for loc in row["location"]:
+            unique_locations_countries[loc].update(countries)
+    unique_locations_countries = dict(unique_locations_countries)
+
+    # Run nominatim for each loc 
+    nom_loc_dict = {}
+    for loc in unique_locations_countries : 
+        countries = unique_locations_countries[loc]
+        nom_loc_dict[loc] = find_best_nomin(gpd_files, loc, countries, similarity_th, print_info=False)
+    
+    print("nom_loc_dict", nom_loc_dict)
+
+    # Convert nominatim output to polygons 
+    df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, gpd_files, print_info=False, max_workers=4)
+    print("All locations geocoded")
+
+    # Gather the polygons to df_row 
+    df_geo_output = run_parallel_associate(df_geo, df_geo_individual_locs, gpd_files, split_lowest_levels=split_lowest_levels, polygon_source=polygon_source, max_workers=4)
+
+    # Save the final df
+
+    return df_geo_output
+
+
 
 #### Test for parrallelization 
 
