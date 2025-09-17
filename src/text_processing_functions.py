@@ -2,9 +2,11 @@ import regex as re
 import numpy as np
 import pandas as pd
 import ast
+from scipy.fftpack import ifft2
 import spacy
 import spacy_fastlang
 import unicodedata
+from sympy import I
 from text_to_num import text2num
 from number_spacy import find_numbers
 from spacy.tokens import Span
@@ -69,6 +71,16 @@ def is_float_digit(text):
         return False
 
 #format numbers
+def format_number(num):
+    """
+    Formats a number into a string, removing unnecessary trailing zeros
+    and the decimal point if it's not needed.
+    """
+    if isinstance(num, float) and num.is_integer():
+        # If the number is a float but represents an integer
+        return str(int(num))
+    return str(num).rstrip('0').rstrip('.') if '.' in str(num) else str(num)
+
 def replace_numbers(text_in):
     """
     Replace numbers written out in words with their numeric equivalent.
@@ -290,7 +302,7 @@ def select_hazard_description(text, match_above=True):
             #text[id_top] = match_top.group(1)
 
         #match_end = re.search(r"^(.*?)(?=\s*(operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions))", sentence, re.IGNORECASE)
-        match_end = re.search(r"coordination and partnerships|operational strategy|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions", sentence, re.IGNORECASE)#summary of
+        match_end = re.search(r"coordination and partnerships|operational strategy|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions|national society actions|Summary of measures taken by the National Society", sentence, re.IGNORECASE)#summary of
         if match_end and id_end==None:
             if id_s - id_top < 10:
                 continue #too short
@@ -300,6 +312,42 @@ def select_hazard_description(text, match_above=True):
     #keep everything if no match
     id_end = len(text) if id_end == None else id_end
     return text[id_top:id_end+1]
+
+def select_impact_description(text):
+    headers_keep = [
+        "operation summary", "situation analysis", "background", "description of the crisis",
+        "what happened, where and when", "description of the disaster",
+        "description of the event", "needs (gaps) identified"
+    ]
+    headers_drop = [
+        "coordination and partnerships", "operational strategy", "red cross red crescent action",
+        "operational developments", "summary of response", "the response so far",
+        "previous operations", "current national society actions",
+        "national society actions", "summary of measures taken by the national society"
+    ]
+
+    # Precompile regex patterns
+    keep_pattern = re.compile("|".join(re.escape(h) for h in headers_keep), re.IGNORECASE)
+    drop_pattern = re.compile("|".join(re.escape(h) for h in headers_drop), re.IGNORECASE)
+
+    ids_keep = [i for i, s in enumerate(text) if keep_pattern.search(s)]
+    ids_drop = [i for i, s in enumerate(text) if drop_pattern.search(s)]
+
+    # Default: whole text or to first drop occurence
+    if not ids_keep:
+        if not ids_drop:
+            return text
+        else:
+            return text[0:ids_drop[0]]
+
+    selected_chunks = [text[0:ids_keep[0]]] #always keep start of text
+    for id_k in ids_keep:
+        # Find the first drop section *after* this keep
+        next_drop = min([d for d in ids_drop if d > id_k], default=len(text))
+        selected_chunks.append(text[id_k:next_drop])
+
+    # Flatten chunks
+    return [sent for chunk in selected_chunks for sent in chunk]
 
 # Change the type of hazard to the modified version
 # Caution, several hazards can be present in 'disasterTypeReclassified'
