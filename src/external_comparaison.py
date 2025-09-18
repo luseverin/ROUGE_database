@@ -12,19 +12,19 @@ from src.data import *
 from src.hazard_def import *
 from src.impact_def import *
 
-go_ifrc_impact_source = {"report" : "field_reports_", 
-                         "gov" : "field_reports_gov_", 
+go_ifrc_impact_source = {"report" : "field_reports_",
+                         "gov" : "field_reports_gov_",
                          "other" : "field_reports_other_"
                          }
 
-mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "field_reports_num_affected", "emdat" : "Total Affected"}, 
-                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "field_reports_num_injured", "emdat" : None}, 
-                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "field_reports_num_displaced", "emdat" : None}, 
-                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "field_reports_num_dead", "emdat" : "Total Deaths"}, 
+mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "field_reports_num_affected", "emdat" : "Total Affected"},
+                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "field_reports_num_injured", "emdat" : None},
+                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "field_reports_num_displaced", "emdat" : None},
+                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "field_reports_num_dead", "emdat" : "Total Deaths"},
                        "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "field_reports_num_missing", "emdat" : None}
                        }
 
-### LABELLED AND LLM DATAFRAMES 
+### LABELLED AND LLM DATAFRAMES
 def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
     """
     Consolidates impact values into a single column 'impactValue_final' with priority:
@@ -49,7 +49,7 @@ def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
 
 def consolidate_startYear(row):
     """
-    If no startYear has been detected, take the year of the report 
+    If no startYear has been detected, take the year of the report
     """
     # Check if 'startYear' exists in row
     if 'startYear' in row and pd.isna(row['startYear']):
@@ -63,7 +63,7 @@ def consolidate_startYear(row):
 
 def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Converts the 'locationLowestAdmin' column (format 'ADM_0') 
+    Converts the 'locationLowestAdmin' column (format 'ADM_0')
     into a numeric column 'locationLowestAdminNum'.
     """
     df = df.copy()
@@ -78,7 +78,7 @@ def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
 def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
     """
     Groups quantitative impacts at the country level.
-    
+
     Rules:
     - If rows exist with locationLowestAdminNum == 0:
         * Sum impactValue_final
@@ -107,16 +107,16 @@ def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
                 # row["impactValue_final"] = df_admin_0["impactValue_final"].sum()
                 row["impactValue_final"] = df_admin_0["impactValue_final"].max()
                 df_admin = df_admin_0
-                
-            elif not df_admin_1.empty : 
+
+            elif not df_admin_1.empty :
                 row["impactValue_final"] = df_admin_1["impactValue_final"].sum()
                 df_admin = df_admin_1
 
-            elif not df_admin_2.empty : 
+            elif not df_admin_2.empty :
                 row["impactValue_final"] = df_admin_2["impactValue_final"].sum()
                 df_admin = df_admin_2
 
-            else : 
+            else :
                 continue
 
             # Helper to flatten list-like entries
@@ -157,18 +157,18 @@ def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
                     if not non_nulls.empty:
                         row[col] = non_nulls.iloc[0]
             df_output.append(row)
-                
+
     return pd.DataFrame(df_output)
 
-def clean_group(df_impact) : 
+def clean_group(df_impact) :
     df_output = df_impact.copy()
     df_output['startYear'] = df_output.apply(consolidate_startYear, axis=1)
     df_output = add_location_admin_num(df_output)
     df_output = consolidate_impact_value(df_output)
     df_output = group_quanti_country_level(df_output)
-    return df_output    
+    return df_output
 
-## IFRC_GO 
+## IFRC_GO
 
 def clean_impact_values(row):
     for impact_type, mapping in mapping_impact_type.items():
@@ -181,20 +181,20 @@ def clean_impact_values(row):
                 break  # stop once one source is found
     return row
 
-def open_clean_ifrc_go() : 
-    df_ifrc_go = pd.read_csv(DATA_EXTERNAL_SOURCE + 'ifrc_go_all.csv')
+def open_clean_ifrc_go() :
+    df_ifrc_go = pd.read_csv(DATA_EXTERNAL_SOURCE / 'ifrc_go_all.csv')
 
-    #Retrieve impact value 
+    #Retrieve impact value
     df_ifrc_go = df_ifrc_go.apply(clean_impact_values, axis=1)
 
-    # #Remove extra row 
+    # #Remove extra row
     # raw_cols = [
     # prefix + mapping["go_ifrc"]
     # for prefix in go_ifrc_impact_source.values()
     # for mapping in mapping_impact_type.values()]
     # df_ifrc_go = df_ifrc_go.drop(columns=[c for c in raw_cols if c in df_ifrc_go.columns])
 
-    #Rename columns 
+    #Rename columns
     df_ifrc_go = df_ifrc_go.rename({"appeals_code" : "appealCode"}, axis=1)
     df_ifrc_go["id"] = df_ifrc_go["id"].astype(int)
     return df_ifrc_go
@@ -202,20 +202,20 @@ def open_clean_ifrc_go() :
 
 ## IFRC_MONTY
 
-def open_clean_ifrc_monty(df_ifrc_go) : 
-    df_ifrc_monty = pd.read_csv(DATA_EXTERNAL_SOURCE + 'ifrc_monty_all.csv')
+def open_clean_ifrc_monty(df_ifrc_go) :
+    df_ifrc_monty = pd.read_csv(DATA_EXTERNAL_SOURCE / 'ifrc_monty_all.csv')
 
-    #Use id and df_ifrc_go to fing appealCode 
+    #Use id and df_ifrc_go to fing appealCode
     df_ifrc_monty["id_clean"] = df_ifrc_monty["id"].str.extract(r"ifrcevent-impact--(\d+)-")
     df_ifrc_monty["id_clean"] = df_ifrc_monty["id_clean"].astype(int)
     df_ifrc_monty = df_ifrc_monty.merge(
         df_ifrc_go[["id", "appealCode"]].rename(columns={"id": "id_clean"}),
         on="id_clean",
         how="left")
-    
+
     df_ifrc_monty = df_ifrc_monty.drop(columns=["id_clean"])
 
-    #Rename impact type 
+    #Rename impact type
     monty_map = {
         mapping["monty_ifrc"]: impact_type
         for impact_type, mapping in mapping_impact_type.items()
