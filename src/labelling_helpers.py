@@ -8,6 +8,41 @@ def sort_appeal_type(x):
         if appealtype in list(x['appealType']):
             return x[x['appealType'] == appealtype]
 
+def filter_reports(df, take_latest=True):
+    """
+    Filter reports based on the appeal type and date.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing the reports to be filtered.
+    take_latest : bool, optional
+        If True, select the most recent report for each appeal code.
+        If False, select all reports for each appeal code.
+        Default is True.
+
+    Returns
+    -------
+    filtered_df : pandas.DataFrame
+        DataFrame containing the filtered reports.
+    """
+    df_out = df.copy()
+    df_out = (
+        df_out.groupby("appealCode", as_index=False)
+        .apply(lambda x: sort_appeal_type(x))
+        .reset_index(drop=True)
+    )
+
+    # select most recent reports
+    if take_latest:
+        df_out = (
+            df_out.groupby("appealCode", as_index=False)
+            .apply(lambda x: x.sort_values("reportDate", ascending=False).head(1))
+            .reset_index(drop=True)
+        )
+
+    return df_out
+
 def select_report_by_appealCode(appeal_code, report_df):
     report = report_df.where(report_df.appealCode == appeal_code).dropna()
     return report
