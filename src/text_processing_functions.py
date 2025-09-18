@@ -314,16 +314,33 @@ def select_hazard_description(text, match_above=True):
     return text[id_top:id_end+1]
 
 def select_impact_description(text):
+    """
+    Selects a subset of text that describes the impacts of the hazard event, given a list of sentences.
+
+    The function searches for sentences that match a description of the hazard event, and then selects all sentences until it reaches a phrase that matches a description of the response. If no phrases are found, the whole text is returned.
+
+    Parameters
+    ----------
+    text : list of str
+        List of sentences to be processed
+
+    Returns
+    -------
+    list of str
+        A subset of the original text, describing the impacts of the hazard event
+    """
     headers_keep = [
-        "operation summary", "situation analysis", "background", "description of the crisis",
+        "operation summary", "situation analysis", "description of the crisis",
         "what happened, where and when", "description of the disaster",
         "description of the event", "needs (gaps) identified"
     ]
     headers_drop = [
         "coordination and partnerships", "operational strategy", "red cross red crescent action",
-        "operational developments", "summary of response", "the response so far",
+        "operational developments", "summary of response", "summary of the response","the response so far",
         "previous operations", "current national society actions",
-        "national society actions", "summary of measures taken by the national society"
+        "national society actions", "summary of measures taken by the national society",
+        "detailed operation plan", "summary of the current response",
+        "Overview of Operating National Society Response Action"
     ]
 
     # Precompile regex patterns
