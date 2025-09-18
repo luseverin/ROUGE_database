@@ -340,11 +340,14 @@ def select_impact_description(text):
         else:
             return text[0:ids_drop[0]]
 
-    selected_chunks = [text[0:ids_keep[0]]] #always keep start of text
+
+    last_drop = ids_drop[0] if len(ids_drop) else len(text)
+    selected_chunks = [text[0:last_drop]] #always keep start of text
+    #shorten text if possible
     for id_k in ids_keep:
-        # Find the first drop section *after* this keep
-        next_drop = min([d for d in ids_drop if d > id_k], default=len(text))
-        selected_chunks.append(text[id_k:next_drop])
+        if id_k > last_drop:
+            last_drop = min([d for d in ids_drop if d > id_k], default=len(text))
+            selected_chunks.append(text[id_k:last_drop])
 
     # Flatten chunks
     return [sent for chunk in selected_chunks for sent in chunk]
