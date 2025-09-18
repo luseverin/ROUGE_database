@@ -135,6 +135,7 @@ def identify_impact_dates_prompt(text, impact_description, locations):
 
     Rules:
     - Follow the JSON format strictly; do not add or remove fields.
+    - If you cannot disantangle between different dates, give the earliest date for the starting date and the latest date for the ending date.
     - Provide the exact text excerpt from where you extracted the date information in the `dateAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
     - Ensure all field constraints on allowed values and their data types are respected.
     - Do not add notes or extra text, only output the JSON.
