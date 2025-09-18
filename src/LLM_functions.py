@@ -401,7 +401,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
     return identified_impacts#, error_counts
 
 
-def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, text_pos="below", chunk_size=None, max_rounds=5, res_savename=None, **groq_kwargs):
+def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, chunk_size=None, max_rounds=5, res_savename=None, **groq_kwargs):
     """Wrapper function to do all level promptings for impact extraction
     Version 3 retrying multilevel prompting
 
@@ -430,33 +430,23 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
             chunks = break_down_text(row["nathaz_text"], chunk_size)
             answer_impacts = []
             for chunk in chunks:
-                #user_prompt = groq_user_prompt(str(chunk))
-                answer_impacts.extend(extraction_chain(text, impact_types_dict, hazards_list,
+                answer_impacts.extend(extraction_chain(str(chunk), impact_types_dict, hazards_list,
                                                                         max_rounds=max_rounds,
                                                                         **groq_kwargs))
         else:
             text = str(row["nathaz_text"])
-            #user_prompt = groq_user_prompt(str(text))
             answer_impacts = extraction_chain(text, impact_types_dict, hazards_list,
                                                                         max_rounds=max_rounds,
                                                                         **groq_kwargs)
 
-        #answer_impacts = json_repair.loads(result)
         #further clean-up
-        #answer_impacts = list(chain(*answer_impacts)) #unlist elements
         answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
-        #answer_impacts = list(chain.from_iterable(el if isinstance(el, list) else [el] for el in answer_impacts)) #unzip list elements
         print(f"Impacts {answer_impacts} identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
         if answer_impacts:
             data = deepcopy(add_key_value_pairs(answer_impacts, data))
             response.append(data)
-            #response_unnested = list(chain(*response))
             #construct df
             new_dfs = pd.concat([pd.DataFrame.from_dict(impdict, orient="index").T for impdict in data],axis=0)
-            #new_dfs = pd.concat(
-            #    [pd.DataFrame.from_dict(impdict, orient="columns") for impdict in data],
-            #    axis=0
-            #)
         else:
             #if extraction fail, write empty row with reference info
             new_dfs = pd.DataFrame(columns=columns, data=[reference_info])
