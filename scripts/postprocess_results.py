@@ -14,6 +14,7 @@ from src.geocoding import *
 from src.hazard_def import *
 from src.impact_def import *
 from src.sanity_checks import *
+from src.units import *
 
 ### Post process
 #0. Formatting
@@ -23,9 +24,9 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_impacts_all_v080925" #'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct.csv'
-filename_out =  "post_processed_" + filename_in
-data_path = DATA_LABELLED #DATA_OUT_LLMS (depending on whether we want to process the LLM output or the labelled data)
+filename_in = 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'#"labelled_reports_impacts_all_v080925" 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'
+filename_out =  "pp_reclass_unit_subtype" + filename_in
+data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
