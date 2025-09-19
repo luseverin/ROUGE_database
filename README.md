@@ -1,8 +1,10 @@
 # como_project4
 ## Instructions
 1. Clone the repo, go to branch impact_extraction_multiprompt_clean
-2. install the environment using conda env create -f env_como4.yml
-3. Set-up your paths by changing them in data.py
+2. Install the environment using conda env create -f ifrc_llm_311.yml
+3. Run pip install -e . to install src package
+4. Run python -m spacy download en_core_web_sm to install spacy model
+4. Set-up your paths by changing them in data.py
 
 To reproduce the analysis, run the scripts in the following order:
 1. preproces_reports.py
