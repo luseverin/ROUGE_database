@@ -10,6 +10,7 @@ src/external_comparaison.py
 src/geocoding.py
 src/hazard_def.py
 src/impact_def.py
+src/labelling_helpers.py
 src/plot_functions.py
 src/post_process_functions.py
 src/post_process_impact.py
@@ -18,6 +19,7 @@ src/prompts_hazards.py
 src/prompts_impacts.py
 src/sanity_checks.py
 src/text_processing_functions.py
+src/units.py
 src.egg-info/PKG-INFO
 src.egg-info/SOURCES.txt
 src.egg-info/dependency_links.txt
