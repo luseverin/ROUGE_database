@@ -28,6 +28,15 @@ examples_value_unit = """[{
        "impactValueMin": 4,
        "impactValueMax": null,
        "valueAnnotation": ["At least 4 hospitals have been impacted by a hailstorm in River Nile State alone."]
+       },
+       {
+       "impactSubtype" : "Other Infrastructural Impacts",
+       "impactValue": 4000000,
+       "impactUnit": "CHF",
+       "impactValuePrecision" : "approx",
+       "impactValueMin": 4000000,
+       "impactValueMax": null,
+       "valueAnnotation": ["The dammage to infrastructure amounted to more than CHF 4,000,000 (USD 3,900,000)."]
        }]"""
 
 examples_location = """{
@@ -49,6 +58,10 @@ examples_date = """{
 example_hazards = """{
        "hazards" : ["Mass movement"]
        "hazardsAnnotation": ["Landslides impacted 10000 people in the cities of Abu Hamad and Tokar on the 29 August 2024"]
+       }
+       {
+       "hazards" : ["Convective storm"]
+       "hazardsAnnotation": ["Hailstorms impacted 100 to 200 kg of crop production in Red Sea State between August to October 2024"]
        }"""
 
 
