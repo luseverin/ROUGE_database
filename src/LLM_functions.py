@@ -4,12 +4,12 @@ import pandas as pd
 import json as json
 import regex as re
 import json_repair
-import instructor
+#import instructor
 from pydantic import ValidationError
 from typing import get_type_hints, get_origin, get_args
 from copy import deepcopy
-from itertools import chain
-from langchain_groq import ChatGroq
+#from itertools import chain
+#from langchain_groq import ChatGroq
 from src.hazard_def import *
 from src.impact_def import *
 from src.data import *
@@ -410,6 +410,7 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
     response_df_list = []
     count = 0
     start_time = time.time()
+    last_extract_time = start_time
     for rowid, row in df_labelled.iterrows():
 
         reference_info = {
@@ -438,10 +439,11 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
             answer_impacts = extraction_chain(text, impact_types_dict, hazards_list,
                                                                         max_rounds=max_rounds,
                                                                         **groq_kwargs)
-
         #further clean-up
         answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
         print(f"Impacts {answer_impacts} identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        last_extract_time = time.time()
+        print(f"Extraction time: {last_extract_time - start_time} seconds")
         if answer_impacts:
             data = deepcopy(add_key_value_pairs(answer_impacts, data))
             response.append(data)

@@ -1,15 +1,15 @@
 import regex as re
 import numpy as np
-import pandas as pd
-import ast
+#import pandas as pd
+#import ast
 from scipy.fftpack import ifft2
 import spacy
 import spacy_fastlang
 import unicodedata
 from sympy import I
 from text_to_num import text2num
-from number_spacy import find_numbers
-from spacy.tokens import Span
+#from number_spacy import find_numbers
+#from spacy.tokens import Span
 from pint import UnitRegistry
 
 import nltk

@@ -1,7 +1,7 @@
 #set openai api
 from openai import OpenAI
 import instructor
-import getpass
+#import getpass
 
 global CLIENT
 global MODEL_NAME

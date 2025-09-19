@@ -1,14 +1,14 @@
 import pandas as pd
-import json
-from collections import Counter
+#import json
+#from collections import Counter
 import numpy as np
-import regex as re
-import pycountry
+#import regex as re
+#import pycountry
 from sklearn.metrics.pairwise import cosine_similarity
-import copy as cp
+#import copy as cp
 from src.geocoding import remove_admin_words
-import ast
-from geopy.distance import geodesic
+#import ast
+#from geopy.distance import geodesic
 
 from sklearn.metrics.pairwise import cosine_similarity
 
