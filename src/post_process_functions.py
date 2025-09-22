@@ -50,6 +50,37 @@ def delistify_cols(df):
         if np.any([isinstance(cell, list) for cell in df[col]]):
             df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
     return df
+def listify_strings(x):
+    """
+    Convert strings to lists if possible
+
+    If a string can be parsed as a list, it is converted to a list. If not,
+    the string is wrapped in a list. If the input is already a list, it is
+    returned as is. If the input is None or NaN, an empty list is returned.
+
+    Parameters
+    ----------
+    x : str or list or None or numpy.nan
+        Element to be converted
+
+    Returns
+    -------
+    list
+        The converted element
+    """
+    if isinstance(x, str):
+        try :
+            #x = json.loads(x.replace("'", '"'))
+            x = json_repair.loads(x)
+        except :
+            x = [x]
+        return x
+    elif isinstance(x, list):
+        return x
+    elif pd.isna(x) or x is None:
+        return []
+    else:
+        return x
 def format_output(df, num_cols, list_cols=None):
     """
     Format output of the final report
