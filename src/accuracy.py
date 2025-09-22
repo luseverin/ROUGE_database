@@ -227,11 +227,11 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
     accuracy_matrix = dist_mat[id_match_ext, id_match_lab, :]
 
     #add aggregated similarity scores
+    #if value_match_pre or value_match_post:
+    #    value_diff_all = np.abs(ext_df.iloc[id_match_ext]["impactValue"].values.reshape(-1,1) -
+    #                            lab_df.iloc[id_match_lab]["impactValue"].values.reshape(1,-1)).diagonal()
+    #    accuracy_matrix = np.append(accuracy_matrix, value_diff_all.reshape(-1,1), axis=1)
     agg_sim_candidates = compute_weighted_sim(accuracy_matrix, matching_cols, matching_cols_weights)
-    if value_match_pre or value_match_post:
-        value_diff_all = np.abs(ext_df.iloc[id_match_ext]["impactValue"].values.reshape(-1,1) -
-                                lab_df.iloc[id_match_lab]["impactValue"].values.reshape(1,-1)).diagonal()
-        accuracy_matrix = np.append(accuracy_matrix, value_diff_all.reshape(-1,1), axis=1)
     accuracy_matrix = np.append(accuracy_matrix, agg_sim_candidates.reshape(-1,1), axis=1)##!! in which order columns are added
 
     return reid_match_ext, reid_match_lab, accuracy_matrix
