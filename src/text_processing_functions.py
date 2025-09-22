@@ -313,7 +313,7 @@ def select_hazard_description(text, match_above=True):
     id_end = len(text) if id_end == None else id_end
     return text[id_top:id_end+1]
 
-def select_impact_description(text):
+def select_impact_description(text, buffer=1):
     """
     Selects a subset of text that describes the impacts of the hazard event, given a list of sentences.
 
@@ -359,12 +359,12 @@ def select_impact_description(text):
 
 
     last_drop = ids_drop[0] if len(ids_drop) else len(text)
-    selected_chunks = [text[0:last_drop]] #always keep start of text
+    selected_chunks = [text[0:last_drop+buffer]] #always keep start of text
     #shorten text if possible
     for id_k in ids_keep:
         if id_k > last_drop:
             last_drop = min([d for d in ids_drop if d > id_k], default=len(text))
-            selected_chunks.append(text[id_k:last_drop])
+            selected_chunks.append(text[id_k:last_drop+buffer])
 
     # Flatten chunks
     return [sent for chunk in selected_chunks for sent in chunk]
