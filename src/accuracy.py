@@ -211,6 +211,11 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
         value_diff = calc_value_sim(ext_df["impactValue"].values.reshape(-1,1),
                                      lab_df["impactValue"].values.reshape(1,-1))
         dist_mat = np.append(dist_mat, value_diff[:,:, None], axis=2)
+    else:
+        #be sure to remove impactValue from matching_cols
+        if "impactValue" in matching_cols:
+            matching_cols = matching_cols.copy()
+            matching_cols.remove("impactValue")
 
     #matching based on similarity only
     id_match_ext, id_match_lab = find_match_sim(dist_mat, matching_cols, matching_cols_weights)
