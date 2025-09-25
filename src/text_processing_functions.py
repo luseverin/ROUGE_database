@@ -172,7 +172,7 @@ def could_be_unit(text):
     pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
     return len(pot_units) > 0
 
-def standardize_units(text):
+def text_standardize_units(text):
     """Standardize units to a common baseline in text"""
 
     ureg = UnitRegistry()
