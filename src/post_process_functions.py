@@ -1,16 +1,17 @@
 import pycountry
 import pandas as pd
-import json
+#import json
 import numpy as np
 import regex as re
 import copy as cp
-import ast
+#import ast
 import regex as re
 import json_repair
 from pint import UnitRegistry
-from collections import Counter
+#from collections import Counter
 from price_parser import Price
 from currency_converter import CurrencyConverter, RateNotFoundError
+from shapely import equals
 
 from src.text_processing_functions import *
 from src.units import *
@@ -142,8 +143,10 @@ def format_output(df, num_cols=None, list_cols=None):
         Formatted DataFrame
     """
     if num_cols:
-        df = df.replace(["null", "None", None], np.nan)
-        df[num_cols] = df[num_cols].astype(float)
+        #df = df.replace(["null", "None", None], np.nan)
+        #df[num_cols] = df[num_cols].astype(float)
+        df[num_cols] =df[num_cols].apply(pd.to_numeric, errors='coerce')
+
     if list_cols:
         df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
     return df
@@ -344,10 +347,10 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
 
 def standardize_units(x, std_unit_kw_reclass, unit_mapping):
     """Standardize units to a common baseline in text"""
-    value = x["impactValue"]
+    values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     unit = x["impactUnit"]
     if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
-        return pd.Series({"impactValue": value, "impactUnit": unit})
+        return pd.Series({"impactValueMin": values[0],"impactValue": values[1], "impactValueMax": values[2], "impactUnit": unit})
     ureg = UnitRegistry()
     #print(f"{value} {unit}")
     identified_units = []
@@ -359,19 +362,22 @@ def standardize_units(x, std_unit_kw_reclass, unit_mapping):
                 identified_patterns.append(pattern)
     #matched = [(target_unit, unit_patterns) for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, unit, re.IGNORECASE) for pattern in unit_patterns])]
     if len(identified_units) == 0:
-        return pd.Series({"impactValue": value, "impactUnit": unit})
+        return pd.Series({"impactValueMin": values[0],"impactValue": values[1], "impactValueMax": values[2], "impactUnit": unit})
     elif len(identified_units) > 1:
         raise ValueError(f"Multiple potential units found for token: {unit}")
     identified_unit = identified_units[0]
     identified_pattern = identified_patterns[0]
     si_unit = unit_mapping[identified_unit]
-    # Perform conversion
-    quantity = float(value) * ureg(identified_unit)
-    converted_quantity = quantity.to(si_unit)
-    converted_value = converted_quantity.magnitude
-    converted_unit = re.sub(identified_pattern, si_unit, unit)
 
-    return pd.Series({"impactValue": converted_value, "impactUnit": converted_unit})
+    # Perform conversion
+    converted_unit = re.sub(identified_pattern, si_unit, unit)
+    converted_values = []
+    for value in values:
+        quantity = float(value) * ureg(identified_unit)
+        converted_quantity = quantity.to(si_unit)
+        converted_values.append(converted_quantity.magnitude)
+
+    return pd.Series({"impactValueMin": converted_values[0],"impactValue": converted_values[1], "impactValueMax": converted_values[2], "impactUnit": converted_unit})
 
 def join_value_units(x):
         return str(x["impactValue"]) +  "," + str(x["impactUnit"])
@@ -396,33 +402,52 @@ def convert_monetary_units(x):
         modified row with converted value and unit
     """
     DEF_CUR = "EUR"
-    value_raw = x["impactValue"]
+    values_raw = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     unit_raw = x["impactUnit"]
     report_date = pd.to_datetime(x["reportDate"])
-    parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
-    unit_parsed = parsed_price.currency
-    value_parsed = parsed_price.amount_float
-    if unit_parsed:
-        try:
-            value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
-            unit_parsed = DEF_CUR
-        except RateNotFoundError as e:
-            print(str(e) + "; using default conversion rate")
+    values_parsed = []
+    units_parsed = []
+    for value_raw in values_raw:
+        if pd.isna(value_raw) or value_raw is None:
+            values_parsed.append(value_raw)
+            units_parsed.append(unit_raw)
+            continue
+        parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
+        unit_parsed = parsed_price.currency
+        value_parsed = parsed_price.amount_float
+        if unit_parsed:
             try:
-                value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR)
+                value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
                 unit_parsed = DEF_CUR
+            except RateNotFoundError as e:
+                print(str(e) + "; using default conversion rate")
+                try:
+                    value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR)
+                    unit_parsed = DEF_CUR
+                except Exception as e:
+                    print(f"Fallback failed: {e}")
+                    value_parsed = value_raw
+                    unit_parsed = unit_raw
             except Exception as e:
-                print(e)
+                print(f"General conversion error: {e}")
                 value_parsed = value_raw
                 unit_parsed = unit_raw
-    else:
-        value_parsed = value_raw
+        else:
+            value_parsed = value_raw
+            unit_parsed = unit_raw
+        values_parsed.append(value_parsed)
+        units_parsed.append(unit_parsed)
+    if len(pd.unique(units_parsed)) > 1:
+        print(f"Multiple units parsed: {units_parsed}")
+        values_parsed = values_raw
         unit_parsed = unit_raw
-    return pd.Series({"impactValue": value_parsed, "impactUnit": unit_parsed})
+    else:
+        unit_parsed = units_parsed[0]
+    return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit_parsed})
 
 def replace_numbers_unit(x):
     """
-    Replace numbers written out in words with their numeric equivalent.
+    Move numbers from impactUnit to impactValue
 
     Args:
         text_in (str): The text to replace numbers in.
@@ -433,8 +458,8 @@ def replace_numbers_unit(x):
     nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
     unit = x["impactUnit"]
 
-    if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
-        return pd.Series({"impactValue": x["impactValue"], "impactUnit": x["impactUnit"]})
+    if (pd.isna(unit) or unit is None):
+        return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit})
 
     # Process the text
     doc = nlp(unit)
@@ -447,9 +472,7 @@ def replace_numbers_unit(x):
         #first replace written-out numbers
         if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
             id_number = float(text2num(token.text, "en"))
-            #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
-            next_tokens = take_n_neighb_tokens(token, 2)
-            next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
+            #if the previous token is a number replace by the multiple of the two numbers
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
             if last_token_modified or (prev_token and is_float_digit(prev_token.text)):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
@@ -468,16 +491,16 @@ def replace_numbers_unit(x):
 
     #join tokens back to unit
     cleaned_unit = "".join(modified_tokens)
+
     # try to parse new value
     #keep id_number first if there was no impactValue at first else keep impactValue if no id_number
-    if id_number and x["impactValue"]:
-        new_value = id_number * x["impactValue"]
-    elif id_number and not x["impactValue"]:
-        new_value = id_number
-    else:
-        new_value = x["impactValue"]
+    impact_values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
+    if id_number:
+        new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else id_number for impact_value in impact_values]
+    else: #keep impactValue if no id_number
+        new_imp_values = impact_values
 
-    return pd.Series({"impactValue": new_value, "impactUnit": cleaned_unit})
+    return pd.Series({"impactValueMin": new_imp_values[0], "impactValue": new_imp_values[1], "impactValueMax": new_imp_values[2], "impactUnit": cleaned_unit})
 
 def make_date(report_df):
     """
