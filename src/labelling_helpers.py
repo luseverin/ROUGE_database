@@ -44,11 +44,11 @@ def filter_reports(df, take_latest=True):
     return df_out
 
 def select_report_by_appealCode(appeal_code, report_df):
-    report = report_df.where(report_df.appealCode == appeal_code).dropna()
+    report = report_df.where(report_df.appealCode == appeal_code).dropna(how="all")
     return report
 
 def print_report(appeal_code, report, text_field="nathaz_text"):
-    print(f"{appeal_code}: {report.date}")
+    print(f"{appeal_code}: {report.reportDate}")
     text = report[text_field]
     print("\n".join(text))
 
