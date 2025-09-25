@@ -34,7 +34,7 @@ outformat = 'csv' #csv json
 ## Select data
 fname_in = 'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'test_new_sel_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -51,7 +51,8 @@ filtered_reports = []
 filtered_reports_hazonly = []
 for report in all_ifrc_reports_info_unnested:
     #Filter unwanted report types
-    if report['appealType'] in ['Operations Update', 'DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']:
+    dref_or_mdr = re.search(r"MDR|DREF", report["origType"], re.IGNORECASE)
+    if dref_or_mdr:#report['appealType'] in ['Operations Update', 'DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']:
         if id_language and "language" not in report.keys():
             report['language'] = detect_language(report['text'])
             id_lang=1
@@ -63,12 +64,13 @@ for report in all_ifrc_reports_info_unnested:
             else:
                 report["reportDate"] = report["date"]
             del report["date"]
+            report['text_processed'] = clean_text(report['text'])
             if format_numbers:
                 report['text_processed'] = replace_commas_in_numbers(report['text_processed'])
                 report['text_processed'] = replace_count_suffixes(report['text_processed'])
                 report['text_processed'] = replace_numbers(report['text_processed'])
             if std_units:
-                report['text_processed'] = standardize_units(report['text_processed'])
+                report['text_processed'] = text_standardize_units(report['text_processed'])
             report['sentences'] = sent_tokenize(report['text_processed'])
             report['nathaz_text'] = select_impact_description(report['sentences'])
             report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)
