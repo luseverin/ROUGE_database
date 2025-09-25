@@ -24,14 +24,14 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'#"labelled_reports_impacts_all_v080925" 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'
-filename_out =  "pp_reclass_unit_subtype" + filename_in
+filename_in = "labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'#"labelled_reports_impacts_all_v080925" 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'
+filename_out =  "post_processed_" + filename_in
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 #geocoding params
-geocode = True #whether or not we want to geocode
+geocode = False #whether or not we want to geocode
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -47,15 +47,16 @@ else:
     response_df_proc = cp.deepcopy(response_df)
 
     ## Formatting
-    #get rid of nans
-    response_df_proc = response_df_proc.dropna(subset=["nathaz_text"]) if "nathaz_text" in response_df_proc.columns else response_df_proc
-    #process impactValue
-    response_df_proc[["impactValue", "impactValueMin", "impactValueMax"]] = response_df_proc.apply(parse_impact_value_precision, axis=1)
+    ##get rid of nans
+    #response_df_proc = response_df_proc.dropna(subset=["nathaz_text"]) if "nathaz_text" in response_df_proc.columns else response_df_proc
     #convert numerical columns
     num_cols = ["impactValue", "impactValueMin", "impactValueMax","startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
     list_cols = ["country","location", "hazards", "valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation", "annotation"]
     list_cols = [key for key in list_cols if key in response_df_proc.columns]
     response_df_proc = format_output(response_df_proc, num_cols=num_cols, list_cols=list_cols)
+
+    #process impactValue
+    response_df_proc[["impactValue", "impactValueMin", "impactValueMax"]] = response_df_proc.apply(parse_impact_value_precision, axis=1)
 
     #add iso3
     response_df_proc["country_iso3"] = response_df_proc["country"].apply(list_country_name_to_iso3)
@@ -69,11 +70,11 @@ else:
 
     ## Units reclassification
     #replace numbers in units
-    response_df_proc[["impactValue", "impactUnit"]] = response_df_proc.apply(replace_numbers_unit, axis=1)
+    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit"]] = response_df_proc.apply(replace_numbers_unit, axis=1)
     #convert money
-    response_df_proc[["impactValue", "impactUnit"]] = response_df_proc.apply(convert_monetary_units, axis=1)
+    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit"]] = response_df_proc.apply(convert_monetary_units, axis=1)
     #standardize SI units
-    response_df_proc[["impactValue", "impactUnit"]]  = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
+    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit"]]  = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
     #convert convertible (non-money) units
     response_df_proc = response_df_proc.apply(convert_unit, unit_converter=unit_converter, axis=1)
     #assign unit type (e.g. surface, volume, mass)
