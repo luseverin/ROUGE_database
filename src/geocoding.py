@@ -56,6 +56,18 @@ list_admin_words = [
     "County Borough", "Council Area", "Federal District", "Locality"
 ]
 
+def get_country_languages_dict():
+    """Build a dictionary mapping each country name to its primary language code."""
+    country_languages = {}
+    for country in pycountry.countries:
+        try:
+            lang_code = langcodes.get(country.alpha_2).language
+            if lang_code:
+                country_languages[country.name] = lang_code
+        except:
+            continue
+    return country_languages
+
 LANGUAGES = get_country_languages_dict()
 
 #### Helpers functions
@@ -125,18 +137,21 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
     if polygon_source == "GAUL" : 
         try :
             ##### ADMIN2 From GAUL
-            gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
+            # gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
+            gaul2 = gpd.read_file(os.path.join(ADMIN_PATH, 'GAUL_2024_L2', 'GAUL_2024_L2.shp'))
             gaul2 = gaul2.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1", "gaul2_name":"ADMIN_2"}, axis=1)
             gpd_files["ADM_2"] = gaul2
 
             ##### ADMIN1 From GAUL
-            gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
+            # gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
+            gaul1 = gpd.read_file(os.path.join(ADMIN_PATH, 'GAUL_2024_L1', 'GAUL_2024_L1.shp'))
             gaul1 = gaul1.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1"}, axis=1)
             gaul1["gaul2_code"] = None
             gpd_files["ADM_1"] = gaul1
 
             ##### ADMIN0 From Natural Earth
-            ne_0 = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
+            # ne_0 = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
+            ne_0 = gpd.read_file(os.path.join(ADMIN_PATH, 'ne_10m_admin_0_countries', 'ne_10m_admin_0_countries.shp'))
             ne_0 = ne_0.rename({"ADMIN":"ADMIN_0", "ISO_A3" : "iso3_code"}, axis=1)
             ne_0["gaul1_code"] = None
             ne_0["gaul2_code"] = None
@@ -149,13 +164,15 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
     elif polygon_source == "geoBoundaries" :
         try : 
             ### ADMIN 0
-            geoBoundaries0 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM0.gpkg")
+            # geoBoundaries0 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM0.gpkg")
+            geoBoundaries0 = gpd.read_file(os.path.join(ADMIN_PATH, 'geoBoundaries', 'geoBoundariesCGAZ_ADM0.gpkg'))
             geoBoundaries0 = geoBoundaries0.rename({"shapeName" : "ADMIN_0", "shapeGroup" : "iso3_code"}, axis=1)
             geoBoundaries0 = geoBoundaries0.loc[geoBoundaries0["shapeType"]=="ADM0"]
             gpd_files["ADM_0"] = geoBoundaries0
 
             ### ADMIN 1 
-            geoBoundaries1 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM1.gpkg")
+            # geoBoundaries1 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM1.gpkg")
+            geoBoundaries1 = gpd.read_file(os.path.join(ADMIN_PATH, 'geoBoundaries', 'geoBoundariesCGAZ_ADM1.gpkg'))
             geoBoundaries1 = geoBoundaries1.rename({"shapeName" : "ADMIN_1", "shapeGroup" : "iso3_code"}, axis=1)
             geoBoundaries1 = geoBoundaries1.loc[geoBoundaries1["shapeType"]=="ADM1"]
             geoBoundaries1 = pd.merge(geoBoundaries1, geoBoundaries0[["iso3_code", "ADMIN_0"]], on="iso3_code", how="left").drop_duplicates()
@@ -163,7 +180,8 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
 
             ### ADMIN 2 
             # geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2.gpkg")
-            geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2_corrected.gpkg")
+            # geoBoundaries2 = gpd.read_file(ADMIN_PATH+"geoBoundaries/geoBoundariesCGAZ_ADM2_corrected.gpkg")
+            geoBoundaries2 = gpd.read_file(os.path.join(ADMIN_PATH, 'geoBoundaries', 'geoBoundariesCGAZ_ADM2_corrected.gpkg'))
             geoBoundaries2 = geoBoundaries2.rename({"shapeName" : "ADMIN_2", "shapeGroup" : "iso3_code"}, axis=1)
             geoBoundaries2 = geoBoundaries2.loc[geoBoundaries2["shapeType"]=="ADM2"]
             gpd_files["ADM_2"] = geoBoundaries2
