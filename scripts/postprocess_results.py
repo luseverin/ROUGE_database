@@ -24,8 +24,8 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_llama-3.1-8b-instant84_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'#"labelled_reports_impacts_all_v080925" 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'
-filename_out =  "post_processed_" + filename_in
+filename_in = "labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'#"labelled_reports_impacts_all_v080925" 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'
+filename_out =  "post_processed_flags_" + filename_in
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
@@ -63,24 +63,24 @@ else:
     response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(list_country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
 
     ## Reclassify impacType
-    response_df_proc["impactSubtype"] = response_df_proc.apply(reclassify_impact_subtype, impact_kw_reclass=impact_kw_reclass, axis=1)
+    response_df_proc[["impactSubtype", "flag_impactSubtype_reclass"]] = response_df_proc.apply(reclassify_impact_subtype, impact_kw_reclass=impact_kw_reclass, axis=1)
 
     ## Reclassify hazard
-    response_df_proc["hazards"] = response_df_proc.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
+    response_df_proc[["hazards", "flag_hazards_reclass"]] = response_df_proc.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
 
     ## Units reclassification
     #replace numbers in units
-    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit"]] = response_df_proc.apply(replace_numbers_unit, axis=1)
+    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit", "flag_reformat_unit"]] = response_df_proc.apply(replace_numbers_unit, axis=1)
     #convert money
-    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit"]] = response_df_proc.apply(convert_monetary_units, axis=1)
+    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit", "flag_money_conversion"]] = response_df_proc.apply(convert_monetary_units, axis=1)
     #standardize SI units
-    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit"]]  = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
+    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit", "flag_unit_standardization"]]  = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
     #convert convertible (non-money) units
     response_df_proc = response_df_proc.apply(convert_unit, unit_converter=unit_converter, axis=1)
     #assign unit type (e.g. surface, volume, mass)
-    response_df_proc["unit_type"] = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
+    response_df_proc[["unit_type", "flag_unit_type"]] = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
     #reclassify non convertible units
-    response_df_proc["impactUnit"] = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, axis=1)
+    response_df_proc[["impactUnit", "flag_unit_nonstd", "flag_reclass_subtype_from_unit"]] = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, axis=1)
 
     ## Save pre-geocoding results
     response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)

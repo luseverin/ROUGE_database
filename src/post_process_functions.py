@@ -202,14 +202,11 @@ def parse_impact_value_precision(x):
     min_value = np.nanmin(all_values)
     max_value = np.nanmax(all_values)
 
-    imp_value_min = min_value if not pd.isna(vals[0]) else vals[0]
-    imp_value_max = max_value if not pd.isna(vals[1]) else vals[1]
-    imp_value = imp_value_max if not pd.isna(imp_value_max) else max_value
+    x["impactValueMin"] = min_value if not pd.isna(vals[0]) else vals[0]
+    x["impactValueMax"] = max_value if not pd.isna(vals[1]) else vals[1]
+    x["impactValue"]= x["impactValueMax"] if not pd.isna(x["impactValueMax"]) else max_value
 
-    return pd.Series(
-        [imp_value, imp_value_min, imp_value_max],
-        index=["impactValue", "impactValueMin", "impactValueMax"]
-    )
+    return x
 def reclassify_impact_subtype(x, impact_kw_reclass):
     """
     Reclassify an impact subtype using a dictionary of regular expressions.
@@ -227,17 +224,22 @@ def reclassify_impact_subtype(x, impact_kw_reclass):
     -------
     str
         Reclassified impact subtype
+    flag : bool
+        Flag indicating whether the impact subtype was reclassified
     """
     if x["impactSubtype"] in list(impact_kw_reclass.keys()):
-        return x["impactSubtype"]
+        flag = False
+        return x["impactSubtype"], flag
     candidates = []
     for key, value in impact_kw_reclass.items():
         if re.search(value, x["impactSubtype"], re.IGNORECASE):
             candidates.append(key)
     if len(candidates) == 1:
-        return candidates[0]
+        new_subtype = candidates[0]
     else:
-        return "Unknown"
+        new_subtype = "Unknown"
+    flag = True
+    return new_subtype, flag
 
 def reclassify_hazard(x, hazard_kw_reclass):
     """
@@ -258,7 +260,9 @@ def reclassify_hazard(x, hazard_kw_reclass):
         Reclassified hazard type
     """
     corr_haz = cp.deepcopy(x["hazards"])
+    flag = False
     if any([haz for haz in x["hazards"] if haz not in hazard_kw_reclass.keys()]):
+        flag = True
         for i, haz in enumerate(x["hazards"]):
             if haz not in hazard_kw_reclass.keys():
                 candidates = [haz_corr for haz_corr in hazard_kw_reclass.keys() if re.search(hazard_kw_reclass[haz_corr], haz, re.IGNORECASE)]
@@ -266,26 +270,27 @@ def reclassify_hazard(x, hazard_kw_reclass):
                     corr_haz[i] = candidates[0]
                 else:
                     corr_haz[i] = "Unknown"
-    return corr_haz
+    return corr_haz, flag
 
 def convert_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
 
     unit = x['impactUnit']
+    x["flag_unit_conversion"] = False
     if not isinstance(unit, str):
         return x  # skip if unit is None or not a string
     unit = unit.strip()
     if unit == "":
         return x
     for old_unit, (conv_fact, new_unit) in unit_converter.items():
-        try:
-            if unit == old_unit:
+        if unit == old_unit:
+            x["flag_unit_conversion"] = True
+            try:
                 x["impactValue"] = float(x["impactValue"]) #force conversion to float
                 x["impactValue"] = conv_fact*x["impactValue"]
                 x["impactUnit"] = new_unit
-        except Exception as e:
-            print(f"Skipping unit conversion for row due to error: {e}")
-            continue
+            except Exception as e:
+                print(f"Skipping unit conversion for row due to error: {e}")
     return x
 
 ## assign_unit_type is redundant with standardize_units, could simplified and removed
@@ -294,6 +299,7 @@ def assign_unit_type(x, unit_type_kw_reclass):
        Default to "other"
     """
     unit = str(x["impactUnit"]).lower() #ensure unit is string
+    flag = False
     candidates = [unit_type for unit_type in unit_type_kw_reclass.keys() if re.search(unit_type_kw_reclass[unit_type], unit, re.IGNORECASE)]
     if len(candidates) == 1:
         unit_type = candidates[0]
@@ -301,7 +307,8 @@ def assign_unit_type(x, unit_type_kw_reclass):
         unit_type = "other"
     else:
         unit_type = "multiple"
-    return unit_type
+        flag = True
+    return unit_type, flag
 
 def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subtype=True, reclass_subtype=True):
     """
@@ -325,11 +332,14 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
     """
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     unit_type = x['unit_type']
+    flag_unit_nonstd = False
+    flag_reclass_subtype_from_unit = False
     unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
     candidates = [unit_corr for unit_corr in unit_kw_reclass.keys() if re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE)]
     if len(candidates) == 1:
         reclass_unit = unit_prefix+candidates[0]
     else:
+        flag_unit_nonstd = True
         #no unit identified, infer unit from category
         if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
             reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
@@ -338,10 +348,11 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
     if reclass_subtype:
         possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
         if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
+            flag_reclass_subtype_from_unit = True
             print(f"Reclassified subtype from {x['impactSubtype']} to {possible_subtypes[0]} with unit reclass {reclass_unit} and orig unit {unit}")
             #print(x["valueAnnotation"])
             x["impactSubtype"] = possible_subtypes[0]
-    return reclass_unit
+    return reclass_unit, flag_unit_nonstd, flag_reclass_subtype_from_unit
 
 def standardize_units(x, std_unit_kw_reclass, unit_mapping):
     """Standardize units to a common baseline in text"""
@@ -360,7 +371,7 @@ def standardize_units(x, std_unit_kw_reclass, unit_mapping):
                 identified_patterns.append(pattern)
     #matched = [(target_unit, unit_patterns) for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, unit, re.IGNORECASE) for pattern in unit_patterns])]
     if len(identified_units) == 0:
-        return pd.Series({"impactValueMin": values[0],"impactValue": values[1], "impactValueMax": values[2], "impactUnit": unit})
+        return pd.Series({"impactValueMin": values[0],"impactValue": values[1], "impactValueMax": values[2], "impactUnit": unit, "flag_unit_standardization": False})
     elif len(identified_units) > 1:
         raise ValueError(f"Multiple potential units found for token: {unit}")
     identified_unit = identified_units[0]
@@ -375,7 +386,7 @@ def standardize_units(x, std_unit_kw_reclass, unit_mapping):
         converted_quantity = quantity.to(si_unit)
         converted_values.append(converted_quantity.magnitude)
 
-    return pd.Series({"impactValueMin": converted_values[0],"impactValue": converted_values[1], "impactValueMax": converted_values[2], "impactUnit": converted_unit})
+    return pd.Series({"impactValueMin": converted_values[0],"impactValue": converted_values[1], "impactValueMax": converted_values[2], "impactUnit": converted_unit, "flag_unit_standardization": True})
 
 def join_value_units(x):
         return str(x["impactValue"]) +  "," + str(x["impactUnit"])
@@ -405,6 +416,7 @@ def convert_monetary_units(x):
     report_date = pd.to_datetime(x["reportDate"])
     values_parsed = []
     units_parsed = []
+    flag = False
     for value_raw in values_raw:
         if pd.isna(value_raw) or value_raw is None:
             values_parsed.append(value_raw)
@@ -426,10 +438,12 @@ def convert_monetary_units(x):
                     print(f"Fallback failed: {e}")
                     value_parsed = value_raw
                     unit_parsed = unit_raw
+                    flag = True
             except Exception as e:
                 print(f"General conversion error: {e}")
                 value_parsed = value_raw
                 unit_parsed = unit_raw
+                flag = True
         else:
             value_parsed = value_raw
             unit_parsed = unit_raw
@@ -439,9 +453,10 @@ def convert_monetary_units(x):
         print(f"Multiple units parsed: {units_parsed}")
         values_parsed = values_raw
         unit_parsed = unit_raw
+        flag = True
     else:
         unit_parsed = units_parsed[0]
-    return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit_parsed})
+    return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit_parsed, "flag_money_conversion": flag})
 
 def replace_numbers_unit(x):
     """
@@ -455,7 +470,7 @@ def replace_numbers_unit(x):
     """
     nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
     unit = x["impactUnit"]
-
+    flag = False
     if (pd.isna(unit) or unit is None):
         return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit})
 
@@ -497,8 +512,8 @@ def replace_numbers_unit(x):
         new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else id_number for impact_value in impact_values]
     else: #keep impactValue if no id_number
         new_imp_values = impact_values
-
-    return pd.Series({"impactValueMin": new_imp_values[0], "impactValue": new_imp_values[1], "impactValueMax": new_imp_values[2], "impactUnit": cleaned_unit})
+    flag = True
+    return pd.Series({"impactValueMin": new_imp_values[0], "impactValue": new_imp_values[1], "impactValueMax": new_imp_values[2], "impactUnit": cleaned_unit, "flag_reformat_unit": flag})
 
 def make_date(report_df):
     """
