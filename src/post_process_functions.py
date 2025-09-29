@@ -13,6 +13,7 @@ from price_parser import Price
 from currency_converter import CurrencyConverter, RateNotFoundError
 from shapely import equals
 
+from src import units
 from src.text_processing_functions import *
 from src.units import *
 from src.impact_def import *
@@ -228,8 +229,8 @@ def reclassify_impact_subtype(x, impact_kw_reclass):
         Flag indicating whether the impact subtype was reclassified
     """
     if x["impactSubtype"] in list(impact_kw_reclass.keys()):
-        flag = False
-        return x["impactSubtype"], flag
+        x["flag_impactSubtype_reclass"] = False
+        return x
     candidates = []
     for key, value in impact_kw_reclass.items():
         if re.search(value, x["impactSubtype"], re.IGNORECASE):
@@ -238,8 +239,9 @@ def reclassify_impact_subtype(x, impact_kw_reclass):
         new_subtype = candidates[0]
     else:
         new_subtype = "Unknown"
-    flag = True
-    return new_subtype, flag
+    x["impactSubtype"] = new_subtype
+    x["flag_impactSubtype_reclass"] = True
+    return x
 
 def reclassify_hazard(x, hazard_kw_reclass):
     """
@@ -270,7 +272,9 @@ def reclassify_hazard(x, hazard_kw_reclass):
                     corr_haz[i] = candidates[0]
                 else:
                     corr_haz[i] = "Unknown"
-    return corr_haz, flag
+    x["hazards"] = corr_haz
+    x["flag_hazards_reclass"] = flag
+    return x
 
 def convert_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
@@ -308,7 +312,9 @@ def assign_unit_type(x, unit_type_kw_reclass):
     else:
         unit_type = "multiple"
         flag = True
-    return unit_type, flag
+    x["unit_type"] = unit_type
+    x["flag_unit_type"] = flag
+    return x
 
 def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subtype=True, reclass_subtype=True):
     """
@@ -352,14 +358,18 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
             print(f"Reclassified subtype from {x['impactSubtype']} to {possible_subtypes[0]} with unit reclass {reclass_unit} and orig unit {unit}")
             #print(x["valueAnnotation"])
             x["impactSubtype"] = possible_subtypes[0]
-    return reclass_unit, flag_unit_nonstd, flag_reclass_subtype_from_unit
+    x["impactUnit"] = reclass_unit
+    x["flag_unit_nonstd"] = flag_unit_nonstd
+    x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
+    return x
 
 def standardize_units(x, std_unit_kw_reclass, unit_mapping):
     """Standardize units to a common baseline in text"""
     values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     unit = x["impactUnit"]
     if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
-        return pd.Series({"impactValueMin": values[0],"impactValue": values[1], "impactValueMax": values[2], "impactUnit": unit})
+        x["flag_unit_standardization"] = False
+        return x
     ureg = UnitRegistry()
     #print(f"{value} {unit}")
     identified_units = []
@@ -386,7 +396,12 @@ def standardize_units(x, std_unit_kw_reclass, unit_mapping):
         converted_quantity = quantity.to(si_unit)
         converted_values.append(converted_quantity.magnitude)
 
-    return pd.Series({"impactValueMin": converted_values[0],"impactValue": converted_values[1], "impactValueMax": converted_values[2], "impactUnit": converted_unit, "flag_unit_standardization": True})
+    x["impactValueMin"] = converted_values[0]
+    x["impactValue"] = converted_values[1]
+    x["impactValueMax"] = converted_values[2]
+    x["impactUnit"] = converted_unit
+    x["flag_unit_standardization"] = True
+    return x
 
 def join_value_units(x):
         return str(x["impactValue"]) +  "," + str(x["impactUnit"])
@@ -394,6 +409,22 @@ def join_value_units(x):
 def split_value_units(x):
     return x["value_unit"].split(",")
 
+def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR"):
+    try:
+        value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
+        unit_parsed = DEF_CUR
+    except RateNotFoundError as e:
+        print(str(e) + "; using default conversion rate")
+        try:
+            value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR)
+            unit_parsed = DEF_CUR
+        except Exception as e:
+            print(f"Fallback failed: {e}")
+            flag = True
+    except Exception as e:
+        print(f"General conversion error: {e}")
+        flag = True
+    return value_parsed, unit_parsed, flag
 
 def convert_monetary_units(x):
     """
@@ -411,52 +442,33 @@ def convert_monetary_units(x):
         modified row with converted value and unit
     """
     DEF_CUR = "EUR"
-    values_raw = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
+    value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     unit_raw = x["impactUnit"]
     report_date = pd.to_datetime(x["reportDate"])
-    values_parsed = []
+    values_parsed = {}
     units_parsed = []
-    flag = False
-    for value_raw in values_raw:
-        if pd.isna(value_raw) or value_raw is None:
-            values_parsed.append(value_raw)
-            units_parsed.append(unit_raw)
-            continue
+    flag_failed_conversion = False
+    for value_label in value_labels:
+        value_raw = x[value_label]
         parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
         unit_parsed = parsed_price.currency
         value_parsed = parsed_price.amount_float
-        if unit_parsed:
-            try:
-                value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
-                unit_parsed = DEF_CUR
-            except RateNotFoundError as e:
-                print(str(e) + "; using default conversion rate")
-                try:
-                    value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR)
-                    unit_parsed = DEF_CUR
-                except Exception as e:
-                    print(f"Fallback failed: {e}")
-                    value_parsed = value_raw
-                    unit_parsed = unit_raw
-                    flag = True
-            except Exception as e:
-                print(f"General conversion error: {e}")
-                value_parsed = value_raw
-                unit_parsed = unit_raw
-                flag = True
+        if unit_parsed and value_parsed:#if monetary unit is identified, try to convert it to default currency
+            values_parsed[value_label], unit_parsed, flag_failed_conversion = money_converter(value_parsed, unit_parsed, report_date, flag_failed_conversion, DEF_CUR)
+            units_parsed.append(unit_parsed)
         else:
-            value_parsed = value_raw
-            unit_parsed = unit_raw
-        values_parsed.append(value_parsed)
-        units_parsed.append(unit_parsed)
-    if len(pd.unique(units_parsed)) > 1:
+            values_parsed[value_label] = value_raw
+
+    if len(pd.unique(units_parsed)) > 1:#only do assignment if all units are the same
         print(f"Multiple units parsed: {units_parsed}")
-        values_parsed = values_raw
-        unit_parsed = unit_raw
-        flag = True
-    else:
-        unit_parsed = units_parsed[0]
-    return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit_parsed, "flag_money_conversion": flag})
+        flag_failed_conversion = True
+    elif len(pd.unique(units_parsed)) == 1:
+        for value_label in value_labels:
+            x[value_label] = values_parsed[value_label]
+        x["impactUnit"] = units_parsed[0]
+
+    x["flag_currency_conversion"] = flag_failed_conversion
+    return x
 
 def replace_numbers_unit(x):
     """
@@ -470,9 +482,9 @@ def replace_numbers_unit(x):
     """
     nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
     unit = x["impactUnit"]
-    flag = False
     if (pd.isna(unit) or unit is None):
-        return pd.Series({"impactValueMin": x["impactValueMin"],"impactValue": x["impactValue"], "impactValueMax": x["impactValueMax"], "impactUnit": unit})
+        x["flag_reformat_unit"] = False
+        return x
 
     # Process the text
     doc = nlp(unit)
@@ -512,8 +524,12 @@ def replace_numbers_unit(x):
         new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else id_number for impact_value in impact_values]
     else: #keep impactValue if no id_number
         new_imp_values = impact_values
-    flag = True
-    return pd.Series({"impactValueMin": new_imp_values[0], "impactValue": new_imp_values[1], "impactValueMax": new_imp_values[2], "impactUnit": cleaned_unit, "flag_reformat_unit": flag})
+    x["impactValueMin"] = new_imp_values[0]
+    x["impactValue"] = new_imp_values[1]
+    x["impactValueMax"] = new_imp_values[2]
+    x["impactUnit"] = cleaned_unit
+    x["flag_reformat_unit"] = True
+    return x
 
 def make_date(report_df):
     """

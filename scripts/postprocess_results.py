@@ -56,31 +56,31 @@ else:
     response_df_proc = format_output(response_df_proc, num_cols=num_cols, list_cols=list_cols)
 
     #process impactValue
-    response_df_proc[["impactValue", "impactValueMin", "impactValueMax"]] = response_df_proc.apply(parse_impact_value_precision, axis=1)
+    response_df_proc = response_df_proc.apply(parse_impact_value_precision, axis=1)
 
     #add iso3
     response_df_proc["country_iso3"] = response_df_proc["country"].apply(list_country_name_to_iso3)
     response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(list_country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
 
     ## Reclassify impacType
-    response_df_proc[["impactSubtype", "flag_impactSubtype_reclass"]] = response_df_proc.apply(reclassify_impact_subtype, impact_kw_reclass=impact_kw_reclass, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_impact_subtype, impact_kw_reclass=impact_kw_reclass, axis=1)
 
     ## Reclassify hazard
-    response_df_proc[["hazards", "flag_hazards_reclass"]] = response_df_proc.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
 
     ## Units reclassification
     #replace numbers in units
-    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit", "flag_reformat_unit"]] = response_df_proc.apply(replace_numbers_unit, axis=1)
+    response_df_proc = response_df_proc.apply(replace_numbers_unit, axis=1)
     #convert money
-    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit", "flag_money_conversion"]] = response_df_proc.apply(convert_monetary_units, axis=1)
+    response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
     #standardize SI units
-    response_df_proc[["impactValueMin", "impactValue","impactValueMax", "impactUnit", "flag_unit_standardization"]]  = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
+    response_df_proc = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
     #convert convertible (non-money) units
     response_df_proc = response_df_proc.apply(convert_unit, unit_converter=unit_converter, axis=1)
     #assign unit type (e.g. surface, volume, mass)
-    response_df_proc[["unit_type", "flag_unit_type"]] = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
+    response_df_proc = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
     #reclassify non convertible units
-    response_df_proc[["impactUnit", "flag_unit_nonstd", "flag_reclass_subtype_from_unit"]] = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, axis=1)
 
     ## Save pre-geocoding results
     response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
