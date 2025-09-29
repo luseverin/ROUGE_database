@@ -3,26 +3,24 @@ import pandas as pd
 import numpy as np
 from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers, format_number
 #value in original text
-def flag_value_in_text(extract_df):
+def flag_value_in_text(row):
     """
     Adds a column to the dataframe, "value_in_text", which is
     True if the impactValue is found in the original text and
     False otherwise. If the impactValue is NaN, the value_in_text
     is also NaN.
     """
-    def value_in_text(row):
-        if np.isnan(row["impactValue"]):
-            return np.nan
-        else:
-            text = "".join(row["nathaz_text"])
-            text = replace_commas_in_numbers(text)
-            text = replace_count_suffixes(text)
-            text = replace_numbers(text)
-            return format_number(row["impactValue"]) in text
-    extract_df["value_in_text"] = extract_df.apply(lambda x: value_in_text(x), axis=1)
-    return extract_df
 
-def pop_cntry_check(extracted_data, country_pop):
+    if np.isnan(row["impactValue"]):
+        return np.nan
+    else:
+        text = "".join(row["nathaz_text"])
+        text = replace_commas_in_numbers(text)
+        text = replace_count_suffixes(text)
+        text = replace_numbers(text)
+    return format_number(row["impactValue"]) not in text
+
+def pop_cntry_check(x, country_pop):
     """
     Adds a column to the dataframe, "pop_cntry_check", which is
     True if the impactValue is less than the population of the country
@@ -42,23 +40,25 @@ def pop_cntry_check(extracted_data, country_pop):
     pandas.DataFrame
         The dataframe with the added column
     """
-    def check_pop(x):
-        year = str(pd.to_datetime(x["reportDate"]).year)
-        year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else None
-        if not year_check:
-            years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns if col.isnumeric()])
-            year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
-            print(f"Warning: year {year} not in population data for {x['country_iso3_kw']}"
-                  f"\n Defaulting to year {year_check}")
-        if  x["country_iso3_kw"] not in country_pop["Country Code"].unique():
-            print(f"Warning: country {x['country_iso3_kw']} not in population data")
-            pop_year = np.nan
-        else:
-            pop_year = country_pop[country_pop["Country Code"] == x["country_iso3_kw"]][year_check].values[0]
-        return x["impactValue"] < pop_year if (x["impactUnit"] == "people" and not np.isnan(x["impactValue"]))  else np.nan
-    extracted_data["pop_cntry_check"] = np.nan
-    extracted_data["pop_cntry_check"] = extracted_data.apply(check_pop, axis=1)
-    return extracted_data
+    if not x["impactUnit"] == "people" or np.all(np.isnan(x[["impactValue", "impactValueMax", "impactValueMin"]].values)):
+        return np.nan
+    year = str(pd.to_datetime(x["reportDate"]).year)
+    year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else None
+    if not year_check:
+        years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns if col.isnumeric()])
+        year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
+        print(f"Warning: year {year} not in population data for {x['country_iso3_kw']}"
+              f"\n Defaulting to year {year_check}")
+    if  x["country_iso3_kw"] not in country_pop["Country Code"].unique():
+        print(f"Warning: country {x['country_iso3_kw']} not in population data")
+        pop_year = np.nan
+    else:
+        pop_year = country_pop[country_pop["Country Code"] == x["country_iso3_kw"]][year_check].values[0]
+    flag_pop = False
+    for impval in x[["impactValue", "impactValueMax", "impactValueMin"]].values:
+        if impval > pop_year:
+            flag_pop = True
+    return flag_pop
 
 def flag_hazard(extracted_data, hazard_list):
     """
