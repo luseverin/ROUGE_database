@@ -11,7 +11,7 @@ from pint import UnitRegistry
 #from collections import Counter
 from price_parser import Price
 from currency_converter import CurrencyConverter, RateNotFoundError
-from shapely import equals
+#from shapely import equals
 
 from src import units
 from src.text_processing_functions import *
@@ -481,7 +481,7 @@ def replace_numbers_unit(x):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.load("en_core_web_sm")#spacy.blank('en')
+    nlp = spacy.load("en_core_web_sm")
     unit = x["impactUnit"]
     if (pd.isna(unit) or unit is None):
         x["flag_reformat_unit"] = False
