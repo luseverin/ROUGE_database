@@ -90,7 +90,7 @@ unit_kw_reclass = {
 
     'power and energy production infrastructure facilities': r"\b(power|energy|generators?|wind|solar|hydro|dams?)\b",
 
-    'homes': r"\b(residential|residences?|houses?|homes?|buildings?)\b",
+    'homes': r"\b(residential buildings?|residences?|houses?|homes?)\b",
 
     'education facilities': r"\b(education(al)?|schools?|universit(y|ies)|colleges?)\b",
 
