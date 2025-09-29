@@ -381,7 +381,8 @@ def standardize_units(x, std_unit_kw_reclass, unit_mapping):
                 identified_patterns.append(pattern)
     #matched = [(target_unit, unit_patterns) for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, unit, re.IGNORECASE) for pattern in unit_patterns])]
     if len(identified_units) == 0:
-        return pd.Series({"impactValueMin": values[0],"impactValue": values[1], "impactValueMax": values[2], "impactUnit": unit, "flag_unit_standardization": False})
+        x["flag_unit_standardization"] = False
+        return x
     elif len(identified_units) > 1:
         raise ValueError(f"Multiple potential units found for token: {unit}")
     identified_unit = identified_units[0]
