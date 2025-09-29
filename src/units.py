@@ -82,9 +82,9 @@ unit_kw_reclass = {
 
     'transportation facilities': r"\b(rail(way|road)?s?|train tracks?|airports?|cars?|buses?|bus|taxi(cab)?s?|trucks?)\b",
 
-    'water, sanitation and hygiene facilities': r"\b(water|sanitation|hygiene|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
+    'water, sanitation and hygiene facilities': r"\b((water|sanitation|hygiene) (units?|facilities?|(infra)?structures?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
 
-    'healthcare facilities': r"\b(health(care)?|hospitals?|clinics?|maternit(y|ies)|medical)\b",
+    'healthcare facilities': r"\b((health(care)?|medical) (centers?|centres?|units?|facilities?|(infra)?structures?)|hospitals?|clinics?|maternit(y|ies))\b",
 
     'IT and communication facilities': r"\b(communication(s)?|radios?|tv|cell towers?|antennas?)\b",
 
