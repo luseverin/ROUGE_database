@@ -412,7 +412,7 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
             return None
     return None
 
-def query_reverse_geocode(coords, max_retries=2, initial_delay=1, timeout=10):
+def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=10):
     """
     Make nominatim query with robust error handling
     """
@@ -673,8 +673,7 @@ def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
         for lang in [language, "fr", "es", "de"]:
             if lang:  # Skip None languages
                 coords = (best_nomin.latitude, best_nomin.longitude)
-                address = query_reverse_geocode(coords, 
-                                                best_result["country"], lang)
+                address = query_reverse_geocode(coords, lang)
                 for nomin_key_admin in LOCATION_LEVEL_MAPPING[f"admin{adm_lev}"]["nominatim_keys"]:
                     if nomin_key_admin in address:
                         df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["country_iso"],
@@ -744,8 +743,8 @@ def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locati
             for location, (best_nomin, best_result) in nom_loc_dict.items()
         }
 
-        for future in futures:
-        # for future in tqdm(futures, desc="Geocoding locations"): # Version with prints from the function called 
+        # for future in futures:
+        for future in tqdm(futures, desc="Geocoding locations"): # Version with prints from the function called 
             #location = futures[future]
             try:
                 df = future.result()
