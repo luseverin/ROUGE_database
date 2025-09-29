@@ -210,7 +210,7 @@ def parse_impact_value_precision(x):
         [imp_value, imp_value_min, imp_value_max],
         index=["impactValue", "impactValueMin", "impactValueMax"]
     )
-def reclassify_impact_subtype(x, allowed_impact_types, impact_kw_reclass):
+def reclassify_impact_subtype(x, impact_kw_reclass):
     """
     Reclassify an impact subtype using a dictionary of regular expressions.
 
@@ -218,8 +218,6 @@ def reclassify_impact_subtype(x, allowed_impact_types, impact_kw_reclass):
     ----------
     x : pandas.Series
         Row of data to be processed
-    allowed_impact_types : list
-        List of allowed impact types
     impact_kw_reclass : dict
         Dictionary of regular expressions to match against the impact subtype
         Values of the dictionary should be regular expressions to match against the impact subtype
@@ -230,7 +228,7 @@ def reclassify_impact_subtype(x, allowed_impact_types, impact_kw_reclass):
     str
         Reclassified impact subtype
     """
-    if x["impactSubtype"] in allowed_impact_types:
+    if x["impactSubtype"] in list(impact_kw_reclass.keys()):
         return x["impactSubtype"]
     candidates = []
     for key, value in impact_kw_reclass.items():
