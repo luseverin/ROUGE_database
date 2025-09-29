@@ -23,8 +23,8 @@ nltk.download('punkt')  # Download sentence tokenizer
 nltk.download('stopwords') # Download stopwords
 
 ## load spacy nlp
-nlp = spacy.load("en_core_web_sm")#en_core_web_sm
-nlp.add_pipe("language_detector")
+#nlp = spacy.load("en_core_web_sm")#en_core_web_sm
+#nlp.add_pipe("language_detector")
 #nlp.add_pipe('find_numbers')
 
 ## Detect language
@@ -39,6 +39,8 @@ def detect_language(text):
     Returns:
         str: Detected language.
     """
+    nlp = spacy.load("en_core_web_sm")
+    nlp.add_pipe("language_detector")
     doc = nlp(text)
     return doc._.language  # Check if detected language is English
 
@@ -91,6 +93,7 @@ def replace_numbers(text_in):
     Returns:
         str: The text with numbers replaced.
     """
+    nlp = spacy.load("en_core_web_sm")
     # Process the text
     doc = nlp(text_in)
 
@@ -176,6 +179,7 @@ def text_standardize_units(text):
     """Standardize units to a common baseline in text"""
 
     ureg = UnitRegistry()
+    nlp = spacy.load("en_core_web_sm")
     doc = nlp(text)
     new_text = text
 
@@ -442,6 +446,7 @@ def extract_entities(text):
     entities : list of tuples
         The list of extracted entities, where each tuple contains the text of the entity and its label.
     """
+    nlp = spacy.load("en_core_web_sm")
     doc = nlp(text)
     entities = [(ent.text, ent.label_) for ent in doc.ents]
     return entities
@@ -467,6 +472,7 @@ def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
     causes : list of tuples
         The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
     """
+    nlp = spacy.load("en_core_web_sm")
     doc = nlp(sentence)
     causes = []
 
