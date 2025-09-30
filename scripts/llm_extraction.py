@@ -5,25 +5,29 @@ from src.LLM_functions import *
 from src.labelling_helpers import filter_reports
 
 ## Open and read the JSON file
-file_path = DATA_IN_JSONS / "preproc_filtered_report_types_nat_hazards_bugfix_v180925.csv"#'all_ifrc_reports_info_processed_extended_format_nb_std_units.json' "nathaz_ifrc_reports_info_processed.json"
+file_path = DATA_IN_JSONS / "preproc_filtered_report_types_nat_hazards_bugfix_v240925.csv"#'all_ifrc_reports_info_processed_extended_format_nb_std_units.json' "nathaz_ifrc_reports_info_processed.json"
 ifrc_reports_df = pd.read_csv(file_path)
 
 # filter reports by report type and date
 ifrc_reports_df_filtered = filter_reports(ifrc_reports_df, take_latest=True)
 
 # eventually load labelled reports
-labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_impacts_all_v180925.csv")
+labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_impacts_all_v240925.csv")
 keys = labelled_reports[['appealCode', 'reportDate']].drop_duplicates()
-labelled_reports_raw = ifrc_reports_df.merge(keys, on=['appealCode', 'reportDate'], how='inner')
+labelled_reports_raw = ifrc_reports_df_filtered.merge(keys, on=['appealCode', 'reportDate'], how='inner')
+
+#eventually select by appeal code
+appeals_test = ["MDRUG050"]
+test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
 
 # select reports to process
-nreports = 100
-reports_in = labelled_reports_raw # #ifrc_reports_df_filtered.iloc[:nreports] test_reports
+nreports = 1
+reports_in = labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
 
 ## Parameters
-sim_name = "labelled_reports_test_date"
+sim_name = "labelled_reports"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}.csv" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
 max_rounds = 8 #max number of continuations
