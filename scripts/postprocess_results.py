@@ -24,7 +24,7 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'#"labelled_reports_impacts_all_v080925" 'llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct'
+filename_in = "labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925"#"labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
 filename_out =  "post_processed_flags_" + filename_in
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
@@ -58,6 +58,9 @@ else:
     #process impactValue
     response_df_proc = response_df_proc.apply(parse_impact_value_precision, axis=1)
 
+    #pre conversion flags
+    response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
+
     #add iso3
     response_df_proc["country_iso3"] = response_df_proc["country"].apply(list_country_name_to_iso3)
     response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(list_country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
@@ -82,6 +85,9 @@ else:
     #reclassify non convertible units
     response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, axis=1)
 
+    ## Post conversion flags
+    country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
+    response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
     ## Save pre-geocoding results
     response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
 
