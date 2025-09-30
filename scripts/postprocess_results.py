@@ -24,18 +24,20 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925"#"labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
+filename_in = "labelled_reports_impacts_all_v240925"#"labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
 filename_out =  "post_processed_flags_" + filename_in
-data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_LABELLED #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
+flag_value_text = False #whether or not we want to flag value in text
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
+reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
 #geocoding params
-geocode = False #whether or not we want to geocode
+geocode = True #whether or not we want to geocode
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
-split_lowest_levels = False
+polygon_source="geoBoundaries"
 
 ## Load data
 if not post_proc: #try directly loading the postprocess data
@@ -59,7 +61,8 @@ else:
     response_df_proc = response_df_proc.apply(parse_impact_value_precision, axis=1)
 
     #pre conversion flags
-    response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
+    if flag_value_text:
+        response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
 
     #add iso3
     response_df_proc["country_iso3"] = response_df_proc["country"].apply(list_country_name_to_iso3)
@@ -83,7 +86,7 @@ else:
     #assign unit type (e.g. surface, volume, mass)
     response_df_proc = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
     #reclassify non convertible units
-    response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
 
     ## Post conversion flags
     country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
@@ -93,4 +96,4 @@ else:
 
 ## Geocoding
 if geocode:
-    df_llm_geo = geocode_df_to_polygon(response_df_proc, similarity_th=similarity_th, split_lowest_levels=split_lowest_levels, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out)
+    df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
