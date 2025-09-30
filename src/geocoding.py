@@ -944,10 +944,8 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
         col_to_list = ["location", "country"]
         df_type = "labelled"
 
-    for col in col_to_list :
-        df_geo[col] = df_geo[col].apply(
-            lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
-        )
+    df_geo[col_to_list] = df_geo[col_to_list].map(lambda x: listify_strings(x))
+
 
     # Open Polygons
     gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
