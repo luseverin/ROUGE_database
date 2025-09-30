@@ -40,7 +40,7 @@ def pop_cntry_check(x, country_pop):
     pandas.DataFrame
         The dataframe with the added column
     """
-    if not x["impactUnit"] == "people" or np.all(np.isnan(x[["impactValue", "impactValueMax", "impactValueMin"]].values)):
+    if not x["impactUnit"] == "people" or pd.isna(x[["impactValue", "impactValueMax", "impactValueMin"]]).values.all():
         return np.nan
     year = str(pd.to_datetime(x["reportDate"]).year)
     year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else None
