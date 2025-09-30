@@ -152,37 +152,6 @@ def format_output(df, num_cols=None, list_cols=None):
         df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
     return df
 
-def explode_lists(df):
-    """
-    Explodes columns containing lists in a DataFrame, creating separate rows for each element in the lists.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame with columns that may contain lists.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame where each list element in the specified columns is expanded into its own row.
-    """
-    # Identify columns with lists
-    list_columns = [col for col in df.columns if df[col].apply(lambda x: isinstance(x, list)).any()]
-
-    # Replace `None` or `NaN` with empty lists for exploding
-    for col in list_columns:
-        df[col] = df[col].apply(lambda x: x if isinstance(x, list) else [])
-
-    # Create the repeated index based on the maximum lengths of lists in the list columns
-    repeat_counts = df[list_columns].applymap(len).max(axis=1)
-    df = df.loc[df.index.repeat(repeat_counts)].reset_index(drop=True)
-
-    # Explode each list column
-    for col in list_columns:
-        df[col] = df[col].explode(ignore_index=True)
-
-    return df
-
 def parse_impact_value_precision(x):
     """Parse impact values given precision levels.
     Ensures that min are mins, max are maxs.
