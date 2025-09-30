@@ -28,7 +28,7 @@ hazard_kw_reclass = {
     'Tropical storm': r"\b(tropical\s+storm|typhoon|hurricane|cyclonic\s+storm)s?\b.*",
     'Convective storm': r"\b(convective\s+storm|derecho|hail|lightning|tornado|superstorm|thunderstorm)s?\b.*",
     'Other storm': r"\b(extra-?tropical\s+storm|winter\s*storm|storm\s+surge|windstorm|snowstorm|blizzard)s?\b.*",
-    'Epidemics': r"\b(cholera|dengue|outbreak|epidemic)s?\b.*",
+    'Epidemic': r"\b(cholera|dengue|outbreak|epidemic)s?\b.*",
     'Conflict': r"\b(conflict|war|terrorism|unrest)s?\b.*"
 }
 
