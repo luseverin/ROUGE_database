@@ -52,3 +52,6 @@ else :
 
 # Enables `response_model`
 CLIENT = instructor.patch(client=CLIENT)
+
+## Nominatim
+NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
