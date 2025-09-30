@@ -289,12 +289,13 @@ def convert_unit(x, unit_converter):
     for old_unit, (conv_fact, new_unit) in unit_converter.items():
         if unit == old_unit:
             x["flag_unit_conversion"] = True
-            try:
-                x["impactValue"] = float(x["impactValue"]) #force conversion to float
-                x["impactValue"] = conv_fact*x["impactValue"]
-                x["impactUnit"] = new_unit
-            except Exception as e:
-                print(f"Skipping unit conversion for row due to error: {e}")
+            for key in ["impactValueMin", "impactValueMax", "impactValue"]:
+                try:
+                    x[key] = float(x[key]) #force conversion to float
+                    x[key] = conv_fact*x[key]
+                    x["impactUnit"] = new_unit
+                except Exception as e:
+                    print(f"Skipping unit conversion for row due to error: {e}")
     return x
 
 ## assign_unit_type is redundant with standardize_units, could simplified and removed
@@ -523,13 +524,15 @@ def replace_numbers_unit(x):
     impact_values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     if id_number:
         new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else id_number for impact_value in impact_values]
+        flag_reformat_unit = True
     else: #keep impactValue if no id_number
         new_imp_values = impact_values
+        flag_reformat_unit = False
     x["impactValueMin"] = new_imp_values[0]
     x["impactValue"] = new_imp_values[1]
     x["impactValueMax"] = new_imp_values[2]
     x["impactUnit"] = cleaned_unit
-    x["flag_reformat_unit"] = True
+    x["flag_reformat_unit"] = flag_reformat_unit
     return x
 
 def make_date(report_df):

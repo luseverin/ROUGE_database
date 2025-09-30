@@ -16,7 +16,7 @@ from src.post_process_functions import (
     country_name_to_iso3, list_country_name_to_iso3,
     separate_locs, remove_startspace,
     delistify_cols, listify_strings,
-    format_output, explode_lists,
+    format_output,
     parse_impact_value_precision,
     reclassify_impact_subtype, reclassify_hazard,
     convert_unit, assign_unit_type, reclassify_units,
@@ -147,12 +147,6 @@ class TestDataFrameHelpers(unittest.TestCase):
         out = format_output(df, num_cols=["a"], list_cols=["b"])
         self.assertTrue(np.issubdtype(out["a"].dtype, np.floating))
         self.assertIsInstance(out["b"].iloc[0], list)
-
-    def test_explode_lists(self):
-        df = pd.DataFrame({"a": [[1, 2], [3]], "b": ["x", "y"]})
-        out = explode_lists(df)
-        self.assertEqual(len(out), 3)
-
 
 class TestImpactFunctions(unittest.TestCase):
     def test_parse_impact_value_precision(self):
