@@ -418,7 +418,7 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
     Make nominatim query with robust error handling
     """
     # Initialize geolocator with longer timeout
-    geolocator = gpy.geocoders.Nominatim(user_agent="IFRC/0.1 (laura.hasbini@lsce.ipsl.fr)", timeout=timeout)
+    geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
 
     for attempt in range(max_retries):
         try:
