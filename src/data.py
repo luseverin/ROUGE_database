@@ -1,6 +1,6 @@
 ##paths and variables
 import getpass
-import os
+#import os
 from pathlib import Path
 DATA_PATH_LS = Path('/Users/lseverino/Documents/PhD/Projects/Como/Data_backup/')
 # DATA_PATH_LH = "/scratchx/lhasbini/como_school/"

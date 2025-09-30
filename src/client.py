@@ -5,7 +5,7 @@ import instructor
 
 global CLIENT
 global MODEL_NAME
-MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"#"meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_NAME = "llama-3.1-8b-instant"#"meta-llama/llama-4-scout-17b-16e-instruct"
 ## Examples of models with Groq :
 MODEL_NAME_LIST = [
     "llama3-70b-8192",
