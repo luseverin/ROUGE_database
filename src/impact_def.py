@@ -11,8 +11,8 @@ impactType_list = ["Human",
 impactSubtype_list = ["Affected People", "Injured People", "Displaced People", "Homeless People", "Missing People", "Human Deaths", "Human Health and Wellbeing", "Infected and Ill People",#Affected Families and Households"
                       "Road Infrastructure", "Other Transportation Infrastructure", "Water, Sanitation, and Hygiene Infrastructure", "Healthcare Infrastructure",
                       "IT and Communication Infrastructure", "Residential Buildings", "Informal settlements", "Education Infrastructure", "Power and Energy Production Infrastructure",
-                      "Agriculture Infrastructure", "Crop Production and Forestry", "Affected Livestock and Animals", "Other Economic and Livelihood Impacts", "Recreation, Tourism, and Culture",
-                      "Access to Healthcare", "Access to transport and Mobility", "Water Quality and Availability", "Access to Education", "Access to Power and Energy", "Access to Food", "Access to Water, Sanitation, and Hygiene",
+                      "Agricultural Infrastructure", "Crop Production and Forestry", "Affected Livestock and Animals", "Other Economic Activity & Livelihood Production", "Recreation, Tourism, and Culture",
+                      "Access to Healthcare", "Mobility and Access to Transport", "Water Quality and Availability", "Access to Education", "Access to Power and Energy", "Access to Food", "Access to Water, Sanitation, and Hygiene",
                       "Other Human Impacts","Other Infrastructure Impacts","Other Agricultural Impacts", "Other Service Access Impacts"]
                       #"Health Impacts"]
 
@@ -37,7 +37,7 @@ impact_subtypes_desc_dict = {
     "Healthcare Infrastructure": "Number of healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc.  impacted by a hazard.",
     "IT and Communication Infrastructure": "Number of IT and communication infrastructure  such as data centers, communication towers, and cables impacted by a hazard.",
     "Residential Buildings": "Number of residential buildings impacted by a hazard. This category also encompasses the impact on houses.",
-    "Informal settlements": "Number of informal settlements such as refugee camps, slums, tents, etc. impacted by a hazard.",
+    "Informal Settlements": "Number of informal settlements such as refugee camps, slums, tents, etc. impacted by a hazard.",
     "Education Infrastructure": "Number of education infrastructures such as schools, universities, etc. impacted by a hazard.",
     "Power and Energy Production Infrastructure": "Number of energy production infrastructures such as power plants, turbines, grids, pipelines, etc., impacted by a hazard.",
     "Agricultural Infrastructure": "Number of agricultural infrastructures such as farms, warehouses, greenhouses, etc. impacted by a hazard. This category should also gather impacted infrastructure for fisheries such as vessels, boats, etc.",
@@ -84,7 +84,7 @@ impact_kw_reclass = {
     'IT and Communication Infrastructure': r"\bIT and Communication Infrastructure\b",
 
     'Residential Buildings': r"\bResidential Buildings\b",
-    'Informal settlements': r"\bInformal settlements\b",
+    'Informal Settlements': r"\bInformal settlements\b",
     'Education Infrastructure': r"\bEducation Infrastructure\b",
     'Power and Energy Production Infrastructure': r"\bPower and Energy Production Infrastructure\b",
     'Agricultural Infrastructure': r"\bAgricultur(?:e|al)? Infras(?:tructure|tucture)\b",
