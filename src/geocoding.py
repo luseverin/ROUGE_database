@@ -654,7 +654,7 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
         return None
     except Exception as e:
         print(f"[geocode_from_nomin_output_optimized] {e}. Falling back to country level.")
-        return fallback_country_union(gdf_file, countries).assign(location=location)
+        return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
 
 def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
     """Attempt alternative strategies to match an administrative polygon
