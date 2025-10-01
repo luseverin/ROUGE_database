@@ -54,6 +54,7 @@ else :
 CLIENT = instructor.patch(client=CLIENT)
 
 ## Nominatim
+user = getpass.getuser()
 if user == "lhasbini" :
     NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
 elif user == "lseverino" : 
