@@ -6,6 +6,13 @@ import time
 import itertools
 import regex as re
 from matplotlib import pyplot as plt
+
+import sys
+import os
+current_dir = os.getcwd()
+project_root = os.path.dirname(current_dir)
+sys.path.append(project_root)
+
 from src.data import *
 from src.text_processing_functions import *
 from src.plot_functions import *
@@ -41,9 +48,12 @@ polygon_source="geoBoundaries"
 
 ## Load data
 if not post_proc: #try directly loading the postprocess data
-    response_df_proc = pd.read_csv(DATA_OUT_PROC / (filename_out + ".csv"))
+    # response_df_proc = pd.read_csv(DATA_OUT_PROC / (filename_out + ".csv"))
+    response_df_proc = pd.read_csv(os.path.join(DATA_OUT_PROC, filename_out+'.csv'))
+    
 else:
-    response_df = pd.read_csv(data_path / (filename_in + ".csv"))
+    # response_df = pd.read_csv(data_path / (filename_in + ".csv"))
+    response_df = pd.read_csv(os.path.join(data_path, filename_in+'.csv'))
 
     #copy data
     response_df_proc = cp.deepcopy(response_df)
@@ -89,10 +99,13 @@ else:
     response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
 
     ## Post conversion flags
-    country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
+    # country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
+    country_pop = pd.read_csv(os.path.join(DATA_PATH, "API_SP.POP.TOTL_DS2_en_csv_v2_131993", "API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
+
     response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
     ## Save pre-geocoding results
-    response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+    # response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+    response_df_proc.to_csv(os.path.join(DATA_OUT_PROC, filename_out+"csv"), index=False)
 
 ## Geocoding
 if geocode:
