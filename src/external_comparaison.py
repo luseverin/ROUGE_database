@@ -60,7 +60,6 @@ def consolidate_startYear(row):
         # If column doesn't exist, just return None (or could return reportDate year instead)
         return pd.to_datetime(row['reportDate']).year
 
-
 def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
     """
     Converts the 'locationLowestAdmin' column (format 'ADM_0')
@@ -85,6 +84,9 @@ def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
         * Concatenate unique values of location, locationOsm, locationGaul
         * Union geometries
         * Keep other columns constant (take first non-null)
+    - Other wise : 
+        * Take the highest reported value 
+        * Add other impacts if the the intersection of the polygons is null 
     """
     df_output = []
 
