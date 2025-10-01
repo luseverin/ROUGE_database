@@ -54,4 +54,9 @@ else :
 CLIENT = instructor.patch(client=CLIENT)
 
 ## Nominatim
-NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+if user == "lhasbini" :
+    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+elif user == "lseverino" : 
+    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+else:
+    raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
