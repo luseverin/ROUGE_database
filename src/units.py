@@ -76,7 +76,7 @@ unit_type_kw_reclass = {
 #                         }
 
 unit_kw_reclass = {
-    'people': r"\b(people|persons?|individuals?|residents?|evacuees?)\b",
+    'people': r"\b(people|persons?|individuals?|residents?|evacuees?|lives?|loss(es)? of life)\b",
 
     'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
 
@@ -100,7 +100,9 @@ unit_kw_reclass = {
 
     'affected animals': r"\b(livestock|animals?|fish|cows?|sheep|poultr(y|ies)|cattle|goats?|pigs?|chickens?|horses?|heads?)\b",
 
-    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?)\b"
+    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?)\b",
+
+    'EUR' : r"\b(euro?s?|€)\b"
 }
 
 
