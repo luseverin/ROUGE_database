@@ -119,10 +119,9 @@ def compute_iou(gdf_left, gdf_right):
 
 def scaled_value_diff(v1, v2):
     """Scaled difference between two vectors"""
-    if v1 == 0:
-        res = np.nan
-    else:
-        res = (v1 - v2) / v1
+    v1 = np.asarray(v1)
+    v2 = np.asarray(v2)
+    res = (v1 - v2) / v1
     return res
 
 def max_value_diff(v1, v2):
