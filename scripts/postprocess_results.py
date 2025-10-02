@@ -55,7 +55,7 @@ polygon_source="geoBoundaries"
 if not post_proc: #try directly loading the postprocess data
     # response_df_proc = pd.read_csv(DATA_OUT_PROC / (filename_out + ".csv"))
     response_df_proc = pd.read_csv(os.path.join(DATA_OUT_PROC, filename_out+'.csv'))
-    
+
 else:
     # response_df = pd.read_csv(data_path / (filename_in + ".csv"))
     response_df = pd.read_csv(os.path.join(data_path, filename_in+'.csv'))
@@ -106,8 +106,8 @@ else:
     ## Post conversion flags
     # country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
     country_pop = pd.read_csv(os.path.join(DATA_PATH, "API_SP.POP.TOTL_DS2_en_csv_v2_131993", "API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
-
     response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
+    response_df_proc["flag_value_no_unit"] = response_df_proc.apply(flag_value_no_unit, axis=1)
     ## Save pre-geocoding results
     # response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
     response_df_proc.to_csv(os.path.join(DATA_OUT_PROC, filename_out+"csv"), index=False)

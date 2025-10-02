@@ -20,6 +20,25 @@ def flag_value_in_text(row):
         text = replace_numbers(text)
     return format_number(row["impactValue"]) not in text
 
+def flag_value_no_unit(x):
+    """
+    Adds a column to the dataframe, "value_no_unit", which is
+    True if the impactValue is not NaN and the impactUnit is NaN,
+    and False otherwise. This flag is used to mark values that
+    do not have a unit associated with them.
+
+    Parameters
+    ----------
+    x : pandas.DataFrame
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        A series containing the flag value for each row of the dataframe
+    """
+    return not np.isnan(x["impactValue"]) and pd.isna(x["impactUnit"])
+
 def pop_cntry_check(x, country_pop):
     """
     Adds a column to the dataframe, "pop_cntry_check", which is
