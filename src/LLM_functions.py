@@ -104,21 +104,28 @@ def get_model_response_retry(prompt, output_model, **kwargs):
         except ValidationError as e:
             print("Validation Error:", e)
             #allow one retry prompting the model with its error
-            prompt_system = f"""
-                The previous response was not valid, leading to the following error: {e}. Please try again
-                respecting the output format specified in the instructions to avoid the error."""
+            #Add context messages and build retry messages
+            #Add assistant message and user prompt for continuation
+            retry_prompt = f"""
+            The previous response was not valid due to the error:\n {e}.\n
+            Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
+            Query:\n
+            {prompt}
+            """
+            messages.append({"role": "assistant", "content": response_content})
+            messages.append({"role": "user", "content": retry_prompt})
             try:
                 #messages = build_messages(prompt, prompt_system=prompt_system)
-                retry_messages = [
-                {"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
-                {"role": "user", "content": (
-                    f"Invalid JSON:\n{response_content}\n\n"
-                    f"Validation error:\n{e}\n\n"
-                    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
-                    "Fix the JSON so it passes validation."
-                )}
-                ]
-                response_content = get_model_response(retry_messages, **kwargs)
+                #retry_messages = [
+                #{"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
+                #{"role": "user", "content": (
+                #    f"Invalid JSON:\n{response_content}\n\n"
+                #    f"Validation error:\n{e}\n\n"
+                #    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
+                #    "Fix the JSON so it passes validation."
+                #)}
+                #]
+                response_content = get_model_response(messages, **kwargs)
                 # Parse the response content into a list of ImpactDetail objects
                 response_content = json_repair.loads(response.choices[0].message.content)
                 try:
@@ -159,32 +166,39 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             response_content = force_target_type(output_model, response_content)
             #validation
             structured_response = output_model.model_validate(response_content).model_dump()
-            nb_valid_error = 0
         except ValidationError as e:
-            print(f"Validation Error: {e}. Allowing one retry")
-            #messages.extend([
-            #    {"role": "system", "content": (
-            #        "You must output **ONLY** a JSON object matching this schema exactly. "
-            #        "If your previous answer failed, fix the output strictly following the schema below.\n\n"
-            #        f"SCHEMA:\n{json.dumps(output_model.schema_json(), indent=2)}"
-            #        "\n\nValidation error:\n" + str(e)
-            #    )},
-            #    {"role": "user", "content": "Reformat the output so it is valid JSON that passes the schema above."}
-            #])
-            retry_messages = [
-                {"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
-                {"role": "user", "content": (
-                    f"Invalid JSON:\n{response_content}\n\n"
-                    f"Validation error:\n{e}\n\n"
-                    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
-                    "Fix the JSON so it passes validation."
-                )}
-            ]
+            retry_prompt = f"""
+            The previous response was not valid due to the error:\n {e}.\n
+            Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
+            Query:\n
+            {prompt_user}
+            """
+            messages.append({"role": "assistant", "content": response_content})
+            messages.append({"role": "user", "content": retry_prompt})
+            #print(f"Validation Error: {e}. Allowing one retry")
+            ##messages.extend([
+            ##    {"role": "system", "content": (
+            ##        "You must output **ONLY** a JSON object matching this schema exactly. "
+            ##        "If your previous answer failed, fix the output strictly following the schema below.\n\n"
+            ##        f"SCHEMA:\n{json.dumps(output_model.schema_json(), indent=2)}"
+            ##        "\n\nValidation error:\n" + str(e)
+            ##    )},
+            ##    {"role": "user", "content": "Reformat the output so it is valid JSON that passes the schema above."}
+            ##])
+            #retry_messages = [
+            #    {"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
+            #    {"role": "user", "content": (
+            #        f"Invalid JSON:\n{response_content}\n\n"
+            #        f"Validation error:\n{e}\n\n"
+            #        f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
+            #        "Fix the JSON so it passes validation."
+            #    )}
+            #]
 
             try:
                 #messages.append({"role": "system", "content": prompt_system+prompt_error})
                 #messages = build_messages(prompt_user, prompt_system=prompt_error, prompt_assistant=prompt_assistant)
-                response = get_model_response(retry_messages, **groq_kwargs)
+                response = get_model_response(messages, **groq_kwargs)
             except Exception as e:
                 print("API Error:", e)
                 return {"error": "API call failed.", "details": str(e)}
