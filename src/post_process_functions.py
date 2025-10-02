@@ -245,6 +245,42 @@ def reclassify_hazard(x, hazard_kw_reclass):
     x["flag_hazards_reclass"] = flag
     return x
 
+def reverse_mapping(hazard_mapping_emdat) : 
+    reverse_mapping = {}
+    for main, subs in hazard_mapping_emdat.items():
+        for s in subs:
+            reverse_mapping[s.lower()] = main
+    return reverse_mapping
+
+def reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat):    
+    """
+    Reclassify a hazard type using a dictionary of hazard mapping
+
+    Parameters
+    ----------
+    x : pandas.Series
+        Row of data to be processed, it should be a list 
+    hazard_kw_reclass : dict
+        Dictionary of with list of hazard types to match against the emdat hazard type
+        Values of the dictionary should be list of hazard type
+        Keys of the dictionary should be the emdat reclassified hazard type
+
+    Returns
+    -------
+    list
+        Reclassified hazard type
+    """
+    # Map the row 
+    hazard_emdat_mapped = []
+    for h in x : 
+        h_low = h.lower()
+        if h_low in reverse_hazard_mapping_emdat:
+            hazard_emdat_mapped.append(reverse_hazard_mapping_emdat[h_low])
+
+    # Remove duplicates
+    hazard_emdat_mapped = list(set(hazard_emdat_mapped))
+    return hazard_emdat_mapped 
+
 def convert_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
 
