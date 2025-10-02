@@ -31,12 +31,17 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_impacts_all_v240925"#"labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
+filename_in = "labelled_reports_llama-3.3-70b-versatile_v250925"
+#"llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct"
+#"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
+#"labelled_reports_llama-3.1-8b-instant_v250925"
+# "labelled_reports_impacts_all_v240925"
+# 'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
 filename_out =  "post_processed_flags_" + filename_in
-data_path = DATA_LABELLED #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
-flag_value_text = False #whether or not we want to flag value in text
+flag_value_text = True #whether or not we want to flag value in text
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
 #geocoding params
