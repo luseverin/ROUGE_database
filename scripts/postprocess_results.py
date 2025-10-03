@@ -111,7 +111,7 @@ else:
     response_df_proc["flag_percent"] = response_df_proc.apply(flag_percent, axis=1)
     ## Save pre-geocoding results
     # response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
-    response_df_proc.to_csv(os.path.join(DATA_OUT_PROC, filename_out+"csv"), index=False)
+    response_df_proc.to_csv(os.path.join(DATA_OUT_PROC, filename_out+".csv"), index=False)
 
 ## Geocoding
 if geocode:
