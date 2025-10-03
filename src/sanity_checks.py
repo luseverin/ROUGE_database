@@ -78,6 +78,37 @@ def pop_cntry_check(x, country_pop):
         if impval > pop_year:
             flag_pop = True
     return flag_pop
+def flag_partial_unit(x):
+    """
+    Adds a column to the dataframe, "flag_partial_unit", which is True if the impactUnit is equal to the unit_type, and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    return x["impactUnit"] == x["unit_type"]
+
+def flag_percent(x):
+    """
+    Adds a column to the dataframe, "flag_percent", which is True if the impactValue is a percent and the impactSubtype is not "Other Economic Activity & Livelihood Production", and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    return (x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
 
 def flag_hazard(extracted_data, hazard_list):
     """
