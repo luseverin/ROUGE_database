@@ -20,11 +20,20 @@ go_ifrc_impact_source = {"report" : "field_reports_",
                          "other" : "field_reports_other_"
                          }
 
-mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "field_reports_num_affected", "emdat" : "Total Affected"},
-                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "field_reports_num_injured", "emdat" : None},
-                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "field_reports_num_displaced", "emdat" : None},
-                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "field_reports_num_dead", "emdat" : "Total Deaths"},
-                       "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "field_reports_num_missing", "emdat" : None}
+# mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "field_reports_num_affected", "emdat" : "Total Affected"},
+#                        "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "field_reports_num_injured", "emdat" : None},
+#                        "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "field_reports_num_displaced", "emdat" : None},
+#                        "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "field_reports_num_dead", "emdat" : "Total Deaths"},
+#                        "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "field_reports_num_missing", "emdat" : None}
+#                     #    "Homeless People"
+#                        }
+
+mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "num_affected", "emdat" : "Total Affected"},
+                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "num_injured", "emdat" : None},
+                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "num_displaced", "emdat" : None},
+                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "num_dead", "emdat" : "Total Deaths"},
+                       "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "num_missing", "emdat" : None},
+                       "Homeless People" : {"monty_ifrc" : None, "go_ifrc" : None, "emdat" : "No. Homeless"}
                        }
 
 ### LABELLED AND LLM DATAFRAMES
@@ -178,12 +187,13 @@ def clean_group(df_impact) :
 def clean_impact_values(row):
     for impact_type, mapping in mapping_impact_type.items():
         for impact_source, prefix in go_ifrc_impact_source.items():
-            col = prefix + mapping["go_ifrc"]
-            # check if column exists and has a non-null value
-            if col in row and pd.notna(row[col]):
-                row[impact_type] = row[col]
-                row[f"{impact_type} Source"] = impact_source
-                break  # stop once one source is found
+            if mapping["go_ifrc"] : 
+                col = prefix + mapping["go_ifrc"]
+                # check if column exists and has a non-null value
+                if col in row and pd.notna(row[col]):
+                    row[impact_type] = row[col]
+                    row[f"{impact_type} Source"] = impact_source
+                    break  # stop once one source is found
     return row
 
 def open_clean_ifrc_go() :
@@ -202,6 +212,10 @@ def open_clean_ifrc_go() :
     #Rename columns
     df_ifrc_go = df_ifrc_go.rename({"appeals_code" : "appealCode"}, axis=1)
     df_ifrc_go["id"] = df_ifrc_go["id"].astype(int)
+
+    #Select only DREF reports 
+    df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"]=="DREF"]
+
     return df_ifrc_go
 
 ## IFRC_MONTY
