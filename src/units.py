@@ -57,7 +57,7 @@ unit_type_kw_reclass = {
                         'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
                         'kg' : r"(kg.*|.*kilogram.*)",
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
-                        '%' : r"(%|perc.*)",
+                        '%' : r"(%|perc\.?|percent)",
 }
 #unit_kw_reclass = {
 #                        'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
@@ -76,7 +76,7 @@ unit_type_kw_reclass = {
 #                         }
 
 unit_kw_reclass = {
-    'people': r"\b(people|persons?|individuals?|residents?|evacuees?)\b",
+    'people': r"\b(people|persons?|individuals?|residents?|evacuees?|lives?|loss(es)? of life)\b",
 
     'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
 
@@ -100,7 +100,9 @@ unit_kw_reclass = {
 
     'affected animals': r"\b(livestock|animals?|fish|cows?|sheep|poultr(y|ies)|cattle|goats?|pigs?|chickens?|horses?|heads?)\b",
 
-    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?)\b"
+    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?|shelters?)\b",
+
+    'EUR' : r"\b(euro?s?|€)\b"
 }
 
 

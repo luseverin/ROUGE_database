@@ -31,16 +31,21 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#"labelled_reports_llama-3.1-8b-instant_v250925"#"labelled_reports_impacts_all_v240925"#'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
-filename_out =  "post_processed_flags_" + filename_in
+filename_in = "labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925"
+#"llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct"
+#"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
+#"labelled_reports_llama-3.1-8b-instant_v250925"
+# "labelled_reports_impacts_all_v240925"
+# 'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
+filename_out =  "test_new_flags_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
-flag_value_text = False #whether or not we want to flag value in text
+flag_value_text = True #whether or not we want to flag value in text
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
 #geocoding params
-geocode = True #whether or not we want to geocode
+geocode = False #whether or not we want to geocode
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -103,6 +108,9 @@ else:
     # country_pop = pd.read_csv(os.path.join(DATA_PATH, "API_SP.POP.TOTL_DS2_en_csv_v2_131993", "API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
 
     response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
+    response_df_proc["flag_value_no_unit"] = response_df_proc.apply(flag_value_no_unit, axis=1)
+    response_df_proc["flag_partial_unit"] = response_df_proc.apply(flag_partial_unit, axis=1)
+    response_df_proc["flag_percent"] = response_df_proc.apply(flag_percent, axis=1)
     ## Save pre-geocoding results
     response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
     # response_df_proc.to_csv(os.path.join(DATA_OUT_PROC, filename_out+"csv"), index=False)
