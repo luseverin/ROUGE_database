@@ -6,11 +6,14 @@ import numpy as np
 import ast
 from shapely.ops import unary_union
 import pandas as pd
+import copy as cp
+import datetime
 from src.LLM_functions import *
 from src.plot_functions import *
 from src.data import *
 from src.hazard_def import *
 from src.impact_def import *
+from src.post_process_functions import *
 
 go_ifrc_impact_source = {"report" : "field_reports_",
                          "gov" : "field_reports_gov_",
@@ -201,7 +204,6 @@ def open_clean_ifrc_go() :
     df_ifrc_go["id"] = df_ifrc_go["id"].astype(int)
     return df_ifrc_go
 
-
 ## IFRC_MONTY
 
 def open_clean_ifrc_monty(df_ifrc_go) :
@@ -228,3 +230,180 @@ def open_clean_ifrc_monty(df_ifrc_go) :
     df_ifrc_monty["impact_type"] = df_ifrc_monty["impact_type"].replace(monty_map)
 
     return df_ifrc_monty
+
+## EMDAT 
+
+def choose_unique_disno(df_llm_em_dat, column_minimize):
+    # Count number of impacts per DisNo
+    if df_llm_em_dat["DisNo."].nunique() == 1:
+        return df_llm_em_dat["DisNo."].iloc[0]
+
+    # print(top_disnos)
+    # # Tie case: pick closest EntryDate to reportDate
+    # tied = group[group["DisNo."].isin(top_disnos)].copy()
+    # tied["date_diff"] = (tied["EntryDate"] - tied["reportDate"]).abs()
+    # return tied.loc[tied["date_diff"].idxmin(), "DisNo."]
+    # print(group)
+
+    # Filter over impact with a Glide number 
+    df_llm_em_dat_glide = df_llm_em_dat.copy()
+    # df_llm_em_dat_glide = df_llm_em_dat_glide.dropna(subset=["External IDs"])
+
+    # if df_llm_em_dat_glide.empty:
+    #     df_llm_em_dat_filtered = df_llm_em_dat.copy()
+    # else : 
+    #     df_llm_em_dat_filtered = df_llm_em_dat_glide
+    df_llm_em_dat_filtered = df_llm_em_dat_glide
+
+    # Select the DisNo. with the most numerous number of associated impact 
+    counts = df_llm_em_dat_filtered["DisNo."].value_counts()  # assuming you have an "impact_id" col
+    max_count = counts.max()
+    top_disnos = counts[counts == max_count].index
+
+    # # Minimize distance in declaration date 
+    # df_llm_em_dat_filtered["date_diff"] = (df_llm_em_dat_filtered['Entry Date'] - df_llm_em_dat_filtered["reportDate"]).abs()
+    # min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.")["date_diff"].min()
+    # chosen_disno = min_diff.idxmin()
+
+    #Minimize the distance between start dates
+    min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.")[column_minimize].min()
+    chosen_disno = min_diff.idxmin()
+    return chosen_disno
+
+def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) : 
+    """
+    df1 : DataFrame with the llm output 
+    df2 : DataFrame with the emdat data 
+    """
+    df1 = cp.deepcopy(df_llm)
+    df2 = cp.deepcopy(df_em_dat)
+
+    # Map the hazard to emdat type 
+    reverse_hazard_mapping_emdat = reverse_mapping(hazard_mapping_emdat) 
+    df1["hazards_reclass"] = df1["hazards"].apply(lambda x: reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat)) ## ADD the reverse_haazrd_mapping
+    
+    # Explode countries 
+    df1 = df1.explode("country").reset_index(drop=True)
+
+    # Rename and add columns 
+    df2 = df2.rename({'Country' : 'country_emdat'}, axis=1)
+
+    ## First occurence year
+    # df_llm_em_dat = df2.merge(df1, left_on='Start Year', right_on = 'startYear', how='inner')
+    df_llm_em_dat = df2.merge(
+        df1,
+        left_on="country_emdat",
+        right_on="country",
+        how="inner"
+    )
+
+    # df_llm_em_dat = (
+    #     df2.merge(df1, how="cross")  # every combination
+    #     .query("abs(`Start Year` - startYear) <= 1")
+    # )
+
+    ## Keep only rows where Disaster Type is inside hazards list
+    df_llm_em_dat = df_llm_em_dat[
+        df_llm_em_dat.apply(lambda row: row["Disaster Type"] in row["hazards_reclass"], axis=1)
+    ].reset_index(drop=True)
+
+    # ## Macth with countries 
+    # df_llm_em_dat = df_llm_em_dat[
+    #     df_llm_em_dat.apply(lambda row: row["country_emdat"] in row["country"], axis=1)
+    # ].reset_index(drop=True)
+
+    # Create date columns 
+    df_llm_em_dat["Start Month"] = df_llm_em_dat["Start Month"].fillna(1).astype(int)
+    df_llm_em_dat["Start Day"] = df_llm_em_dat["Start Day"].fillna(1).astype(int)
+    df_llm_em_dat["Start Date"] = pd.to_datetime(
+        df_llm_em_dat[["Start Year", "Start Month", "Start Day"]].rename(
+            columns={"Start Year": "year", "Start Month": "month", "Start Day": "day"}
+        ),
+        errors="coerce"
+    )
+
+    df_llm_em_dat["End Month"] = df_llm_em_dat["End Month"].fillna(1).astype(int)
+    df_llm_em_dat["End Day"] = df_llm_em_dat["End Day"].fillna(1).astype(int)
+    df_llm_em_dat["End Date"] = pd.to_datetime(
+        df_llm_em_dat[["End Year", "End Month", "End Day"]].rename(
+            columns={"End Year": "year", "End Month": "month", "End Day": "day"}
+        ),
+        errors="coerce"
+    )
+
+    df_llm_em_dat["startMonth"] = df_llm_em_dat["startMonth"].fillna(1).astype(int)
+    df_llm_em_dat["startDay"] = df_llm_em_dat["startDay"].fillna(1).astype(int)
+    df_llm_em_dat["startDate"] = pd.to_datetime(
+        df_llm_em_dat[["startYear", "startMonth", "startDay"]].rename(
+            columns={"startYear": "year", "startMonth": "month", "startDay": "day"}
+        ),
+        errors="coerce"
+    )
+
+    df_llm_em_dat["endMonth"] = df_llm_em_dat["endMonth"].fillna(1).astype(int)
+    df_llm_em_dat["endDay"] = df_llm_em_dat["endDay"].fillna(1).astype(int)
+    df_llm_em_dat["endDate"] = pd.to_datetime(
+        df_llm_em_dat[["endYear", "endMonth", "endDay"]].rename(
+            columns={"endYear": "year", "endMonth": "month", "endDay": "day"}
+        ),
+        errors="coerce"
+    )
+
+    # # Keep only the ones with a difference of starting date smaller than a threshold 
+    # date_diff_th = datetime.timedelta(days=6*30) ## Verify how to define the timedelta
+    df_llm_em_dat["date_diff_start"] = (df_llm_em_dat['Start Date'] - df_llm_em_dat["startDate"]).abs()
+    df_llm_em_dat["date_diff_end"] = (df_llm_em_dat['End Date'] - df_llm_em_dat["endDate"]).abs()
+    df_llm_em_dat = df_llm_em_dat.loc[df_llm_em_dat["date_diff_start"]<date_diff_th]
+    df_llm_em_dat = df_llm_em_dat.loc[df_llm_em_dat["date_diff_end"]<date_diff_th]
+
+    df_llm_em_dat["date_diff_mean"] = (df_llm_em_dat["date_diff_start"] + df_llm_em_dat["date_diff_end"])/2
+    # Match with GLIDE and closest date 
+    df_llm_em_dat["DisNo."] = df_llm_em_dat["DisNo."].astype(str)
+
+    appeal_to_disno = (
+        df_llm_em_dat.groupby("appealCode")
+        .apply(lambda x: choose_unique_disno(x, column_minimize))
+        .reset_index()
+        .rename(columns={0: "chosen_DisNo"})
+    )
+
+    df1 = df1.merge(appeal_to_disno, on="appealCode", how="left")
+
+    df_matched = df1.merge(
+        df2,
+        left_on="chosen_DisNo",
+        right_on="DisNo.",
+        how="left"
+    )
+
+    return df_matched, df_llm_em_dat
+
+def match_impact_values(df_llm_all_geo_linked, impactType): 
+    appealCodelist = df_llm_all_geo_linked["appealCode"].unique()
+    df_emdat_linked = df_llm_all_geo_linked.copy()
+    emdat_col = mapping_impact_type[impactType]["emdat"]
+
+    #Select impact values from the LLM
+    df1 = (
+            df_llm_all_geo_linked[(df_llm_all_geo_linked["impactSubtype"] == impactType) &
+                        (df_llm_all_geo_linked["appealCode"].isin(appealCodelist))]
+            [["appealCode", "impactValue_final"]]
+            .groupby("appealCode", as_index=False)
+            .sum()
+            .rename(columns={"impactValue_final": "LLM_extracted"})
+        )
+    df1 = df1.dropna(subset=["LLM_extracted"])
+
+    #Impact values from EMDAT
+    df3 = (
+            df_emdat_linked.loc[df_emdat_linked["appealCode"].isin(appealCodelist), ["appealCode", emdat_col]]
+            .rename(columns={emdat_col: "EM-DAT"})
+            .drop_duplicates()
+            )
+    df3 = df3.dropna(subset=["EM-DAT"])
+
+    df_merge = pd.merge(df1, df3, on="appealCode", how='inner')
+    df_merge["match"] = df_merge["LLM_extracted"] == df_merge["EM-DAT"]
+
+    # df_merge_uniquely_linked = df_merge.loc[df_merge["appealCode"].isin(appeal_uniquely_linked)]
+    return df_merge
