@@ -246,6 +246,21 @@ def reclassify_hazard(x, hazard_kw_reclass):
     return x
 
 def reverse_mapping(hazard_mapping_emdat) : 
+    """
+    Reclassify a hazard type using a dictionary of hazard mapping
+
+    Parameters
+    ----------
+    hazard_kw_reclass : dict
+        Dictionary of with list of hazard types to match against the emdat hazard type
+        Values of the dictionary should be list of hazard type
+        Keys of the dictionary should be the emdat reclassified hazard type
+
+    Returns
+    -------
+    dict
+        hazard_mapping_emdat Reverse dictionnary to map each hazard type to the corresponding emdat hazard type
+    """
     reverse_mapping = {}
     for main, subs in hazard_mapping_emdat.items():
         for s in subs:
@@ -260,10 +275,10 @@ def reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat):
     ----------
     x : pandas.Series
         Row of data to be processed, it should be a list 
-    hazard_kw_reclass : dict
-        Dictionary of with list of hazard types to match against the emdat hazard type
-        Values of the dictionary should be list of hazard type
-        Keys of the dictionary should be the emdat reclassified hazard type
+    reverse_hazard_mapping_emdat : dict
+        Reversed dictionary of hazards types and the corresponding emdat hazard type
+        Values of the dictionary should be emdat hazard type
+        Keys of the dictionary should be the original hazard type
 
     Returns
     -------
