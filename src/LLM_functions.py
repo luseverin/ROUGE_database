@@ -1,6 +1,7 @@
 #Functions to extract data with LLMs
 import time
 import pandas as pd
+import numpy as np
 import json as json
 import regex as re
 import json_repair
@@ -150,6 +151,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
     full_response_raw = "" #need to feed raw response to llm otherwise causes issues with output format
     full_response_formatted = []
     valid_error_count = {i: 0 for i in range(max_rounds)}
+    nb_extracted_impacts = {}
 
     messages = build_messages(prompt_user, prompt_system=prompt_system, prompt_assistant=prompt_assistant)
     #get model response
@@ -159,9 +161,6 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         except Exception as e:
             print("API Error:", e)
             return {"error": "API call failed.", "details": str(e)}
-
-        #if is_extraction_finished(response.choices[0].message.content):
-        #    break
 
         # Parse the response content into a list of ImpactDetail objects
         response_content = json_repair.loads(response.choices[0].message.content)
@@ -178,7 +177,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             Query:\n
             {prompt_user}
             """
-            messages.append({"role": "assistant", "content": response_content})
+            messages.append({"role": "assistant", "content": str(response_content)})
             messages.append({"role": "user", "content": retry_prompt})
             #print(f"Validation Error: {e}. Allowing one retry")
             ##messages.extend([
@@ -206,20 +205,19 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                 response = get_model_response(messages, **groq_kwargs)
             except Exception as e:
                 print("API Error:", e)
-                return {"error": "API call failed.", "details": str(e)}
+                return {"error": "API call failed.", "details": str(e)}, "API ERROR"
             response_content = json_repair.loads(response.choices[0].message.content)
             try:
                 #hotfix to avoid too many retrials
                 response_content = force_target_type(output_model, response_content)
                 structured_response = output_model.model_validate(response_content).model_dump()  # Return as Python object
-                nb_valid_error = 0
             except ValidationError as e:
                 print("Validation Error:", e)
-                nb_valid_error = e.error_count()
+                #nb_valid_error = e.error_count()
                 valid_error_count[i] += 1
+                nb_extracted_impacts[i] = 0
                 continue
                 #structured_response = response_content
-
         #deduplicate output
         try:
             structured_response = deduplicate_structured_responses(full_response_formatted, structured_response)
@@ -228,12 +226,12 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
 
         if not len(structured_response) : #if no new content, stop
             break
-
+        nb_extracted_impacts[i] = len(structured_response)
         full_response_raw+=response.choices[0].message.content#keep raw output so it does not mess with formating instructions
         full_response_formatted.extend(structured_response)
 
         # Add assistant message and user prompt for continuation
-        messages.append({"role": "assistant", "content": json.dumps(full_response_formatted)})
+        messages.append({"role": "assistant", "content": str(json.dumps(full_response_formatted))})
         messages.append({
                          "role": "user",
                          "content":
@@ -249,7 +247,10 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                      })
 
     print(f"Nb. of iterations: {i}")
-    return full_response_formatted, valid_error_count
+    #extend and flatten list
+    valid_error_ext = [list(np.repeat([valid_error_count[it]], nb_extracted_impacts[it])) for it in range(i)]
+    valid_error_ext = [x for xs in valid_error_ext for x in xs]
+    return full_response_formatted, valid_error_ext
 
 def is_extraction_finished(response_content):
     """check if extraction is finished"""
@@ -364,60 +365,70 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
         5. Hazards
     """
     error_counts = {}
+    ## Identify impact subtypes
     prompt_impact_type = identify_impacts_prompt(text, impact_types_dict)
     impact_types_list = list(impact_types_dict.keys())
     ImpactSubtypes.set_allowed_subtypes(impact_types_list)
-    answer_impact_types = get_model_response_retry(prompt_impact_type, ImpactSubtypes, **groq_kwargs)
+    answer_impact_types, valid_errors_impSubT = get_model_response_retry(prompt_impact_type, ImpactSubtypes, **groq_kwargs)
     if not answer_impact_types or not len(answer_impact_types):
         return None
     impact_types = answer_impact_types["impactSubtypes"]
+
+    ## Identify impact values
     prompt_value_unit = identify_value_unit_prompt(text, impact_types)
     ImpactValue.set_allowed_subtypes(impact_types)
-    answer_impact_values, value_error_count = get_model_response_retry_continue(prompt_value_unit, ImpactValueList, max_rounds=max_rounds, **groq_kwargs)
-    error_counts["value"] = value_error_count
+    answer_impact_values, valid_errors_impVal = get_model_response_retry_continue(prompt_value_unit, ImpactValueList, max_rounds=max_rounds, **groq_kwargs)
     identified_impacts = []
-    for impact in answer_impact_values:
+
+    ## Localize, date and find hazards of each impact value
+    for i, impact in enumerate(answer_impact_values):
+        #track errors in impact extraction
+        impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
+
         #retrieve impact Value
         if isinstance(impact, list) and len(impact) == 1:
             impact = impact[0]
         elif (isinstance(impact, dict) and "impactValue" not in impact.keys()) or not isinstance(impact, dict):
             print(f"discarding impact: {impact}")
-            error_counts
             continue
-
-        #impact_parsed = parse_impact_value_precision(pd.DataFrame(impact)) #ensure impactValue is consistent
-        #impact["impactValue"] = impact_parsed["impactValue"]
-        #impact["impactValueMin"] = impact_parsed["impactValueMin"]
-        #impact["impactValueMax"] = impact_parsed["impactValueMax"]
         impact_value = extract_impact_value(pd.DataFrame(impact))
         impact_unit = impact["impactUnit"]
         impact_desc = make_impact_description(impact, impact_value, impact_unit)
+
+        ## Find locs
         prompt_impact_loc = identify_impact_loc_prompt(text, impact_desc)
-        answer_loc = get_model_response_retry(prompt_impact_loc, ImpactLocation, **groq_kwargs)
+        answer_loc, valid_errors_loc = get_model_response_retry(prompt_impact_loc, ImpactLocation, **groq_kwargs)
         if isinstance(answer_loc, list) and len(answer_loc) == 1:
             answer_loc = answer_loc[0]
         if not isinstance(answer_loc, dict):
             answer_loc = {"country": None, "location": None, "locationAnnotation": None}
+        answer_loc["valid_errors_loc"] = valid_errors_loc
         impact.update(answer_loc)
+
+        ## Find dates
         prompt_impact_dates = identify_impact_dates_prompt(text, impact, answer_loc)
-        answer_dates = get_model_response_retry(prompt_impact_dates, ImpactDates, **groq_kwargs)
+        answer_dates, valid_errors_dates = get_model_response_retry(prompt_impact_dates, ImpactDates, **groq_kwargs)
         if isinstance(answer_dates, list) and len(answer_dates) == 1:
             answer_dates = answer_dates[0]
         if not isinstance(answer_dates, dict):
             answer_dates = {"startYear": None, "startMonth": None, "startDay": None, "endYear": None, "endMonth": None, "endDay": None, "dateAnnotation": None}
+        answer_dates["valid_errors_dates"] = valid_errors_dates
         impact.update(answer_dates)
+
+        ## Find hazards
         prompt_impact_hazards = identify_impact_hazards_prompt(text, impact_desc, answer_loc, answer_dates, hazards_list)
         ImpactHazards.set_allowed_classes(hazards_list)
-        answer_hazards = get_model_response_retry(prompt_impact_hazards, ImpactHazards, **groq_kwargs)
+        answer_hazards, valid_errors_haz = get_model_response_retry(prompt_impact_hazards, ImpactHazards, **groq_kwargs)
         if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
             answer_hazards = answer_hazards[0]
         if not isinstance(answer_hazards, dict):
             answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+        answer_dates["valid_errors_haz"] = valid_errors_haz
         impact.update(answer_hazards)
 
         identified_impacts.append(impact)
 
-    return identified_impacts#, error_counts
+    return identified_impacts
 
 
 def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, chunk_size=None, max_rounds=5, res_savename=None, **groq_kwargs):
@@ -481,9 +492,6 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
     nreports = len(df_labelled)
     dtime = end_time - start_time
     n_extracted_fields = len(all_response_df) if answer_impacts else 0
-    print(f"{MODEL_NAME}; time taken: {dtime} seconds, {dtime/nreports} seconds per report")
-    #store time in df
-    #df_time = pd.DataFrame({"model": [MODEL_NAME], "time_per_report": [dtime/nreports], "n_extracted_fields": [n_extracted_fields]})
-    #df_time.to_csv(DATA_PATH + "{MODEL_NAME}_time_per_report.csv", index=False, mode="a", header=False)
+    print(f"{MODEL_NAME}; time taken: {dtime} seconds, , {n_extracted_fields} fields extracted in {dtime/nreports} seconds per report")
 
     return (response, all_response_df)
