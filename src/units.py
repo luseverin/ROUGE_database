@@ -59,24 +59,15 @@ unit_type_kw_reclass = {
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
                         '%' : r"(%|perc\.?|percent)",
 }
-#unit_kw_reclass = {
-#                        'people': r"people|persons?|individuals?|residents?|evacuees?",#women.*|men.*|child.*|adult.*|elder.*|infant.*
-#                        'roads' : r"road.*|route.*|bridge.*|highway.*|motorway.*",#r"(?<!kilometer|kilometre|km).*(road.*|route.*|.*bridge.*|.*highway.*|.*motorway.*)",
-#                        'transportation facilities' : r"rail.*|train track.*|airport.*|\scar.*|railway.*|train.*|buse?s?\b|taxi.*|taxicab.*|truck.*",
-#                        'water, sanitation and hygiene facilities' : r"water.*|sanitation.*|hygiene.*|latrine.*|well.*|tap.*|reservoir.*|aqueduct.*",
-#                        'healthcare facilities' : r"health|hospitals?\b|clinic.*|maternity.*|medical",
-#                        'IT and communication facilities' : r"communication.*|radio.*|tv.*|cell tower.*|antenna.*",
-#                        'power and energy production infrastructure facilities' : r"power.*|energy.*|generator.*|wind.*|solar.*|hydro.*|dams?",
-#                        'homes' : r"residential.*|residence.|hous.*|home.*|building.*",
-#                        'education facilities' : r"education.*|school.*|university.*|college.*",
-#                        'crop production and forestry' : r"crop.*|field.*|forest.*|tree.*|banana.*|coffee.*|cocoa.*|cotton.*|maize.*|rice.*|sorghum.*|soybean.*|sugar.*|tobacco.*|wheat.*",
-#                        'agricultural facilities' : r"irrigation.*|barn.*|farm.*",
-#                        'affected animals' : r"livestock.*|animal.*|fish.*|cow.*|sheep.*|poult.*|cattle.*|goat.*|pig.*|chick.*|horse.*|heads?",
-#                        'informal settlements' : r"camp.?|tent.?|refuge.?|settlement.?"
-#                         }
 
 unit_kw_reclass = {
     'people': r"\b(people|persons?|individuals?|residents?|evacuees?|lives?|loss(es)? of life)\b",
+
+    'families' : r"\b(family|households?)\b",
+
+    'communities' : r"\b(community)\b",
+
+    'villages' : r"\b(villages?|hamlets?)\b",
 
     'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
 
