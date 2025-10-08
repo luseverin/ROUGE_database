@@ -115,7 +115,7 @@ def get_model_response_retry(prompt, output_model, **kwargs):
             Query:\n
             {prompt}
             """
-            messages.append({"role": "assistant", "content": response_content})
+            messages.append({"role": "assistant", "content": str(response_content)})
             messages.append({"role": "user", "content": retry_prompt})
             try:
                 #messages = build_messages(prompt, prompt_system=prompt_system)
@@ -140,7 +140,7 @@ def get_model_response_retry(prompt, output_model, **kwargs):
                     return response_content, nb_valid_error
             except Exception as e:
                 print("API Error:", e)
-            return {"error": "Response validation failed.", "details": str(e)}
+                return {"error": "Response validation failed.", "details": str(e)}
     except Exception as e:
         print("API Error:", e)
         return {"error": "API call failed.", "details": str(e)}
@@ -220,12 +220,15 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                 #structured_response = response_content
         #deduplicate output
         try:
+            structured_response_non_dedup = structured_response
             structured_response = deduplicate_structured_responses(full_response_formatted, structured_response)
+            print(f"Deduplicated {len(structured_response_non_dedup)-len(structured_response)} impacts")
         except Exception as e:
             print("deduplicate_structured_responses error:", e)
 
         if not len(structured_response) : #if no new content, stop
             break
+
         nb_extracted_impacts[i] = len(structured_response)
         full_response_raw+=response.choices[0].message.content#keep raw output so it does not mess with formating instructions
         full_response_formatted.extend(structured_response)
@@ -471,9 +474,11 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
                                                                         **groq_kwargs)
         #further clean-up
         answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
-        print(f"Impacts {answer_impacts} identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
-        last_extract_time = time.time()
-        print(f"Extraction time: {last_extract_time - start_time} seconds")
+        print(f"Impacts {len(answer_impacts)} impacts identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        now_extract_time = time.time()
+        print(f"Extraction time: {now_extract_time - last_extract_time} seconds")
+        last_extract_time = now_extract_time
+
         if answer_impacts:
             data = deepcopy(add_key_value_pairs(answer_impacts, data))
             response.append(data)
