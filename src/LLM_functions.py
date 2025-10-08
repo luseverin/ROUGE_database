@@ -91,6 +91,7 @@ def get_model_response(messages, **kwargs):
 def get_model_response_retry(prompt, output_model, **kwargs):
     """Get model response structured using OpenAI API allowing for one retry prompting the model with its error
     from pydantic ValidationError"""
+    nb_valid_error = 0
     try:
         #get model response
         messages = build_messages(prompt)
@@ -100,8 +101,9 @@ def get_model_response_retry(prompt, output_model, **kwargs):
         response_content = json_repair.loads(response.choices[0].message.content)
         try:
             structured_response = output_model.model_validate(response_content)
-            return structured_response.model_dump()  # Return as Python object
+            return structured_response.model_dump(), nb_valid_error  # Return as Python object
         except ValidationError as e:
+            nb_valid_error += 1
             print("Validation Error:", e)
             #allow one retry prompting the model with its error
             #Add context messages and build retry messages
@@ -130,10 +132,11 @@ def get_model_response_retry(prompt, output_model, **kwargs):
                 response_content = json_repair.loads(response.choices[0].message.content)
                 try:
                     structured_response = output_model.model_validate(response_content)
-                    return structured_response.model_dump()  # Return as Python object
+                    return structured_response.model_dump(), nb_valid_error  # Return as Python object
                 except ValidationError as e:
                     print("Validation Error:", e)
-                    return response_content
+                    nb_valid_error += 1
+                    return response_content, nb_valid_error
             except Exception as e:
                 print("API Error:", e)
             return {"error": "Response validation failed.", "details": str(e)}
@@ -146,7 +149,8 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
      impacts are extracted."""
     full_response_raw = "" #need to feed raw response to llm otherwise causes issues with output format
     full_response_formatted = []
-    error_count = 0
+    valid_error_count = {i: 0 for i in range(max_rounds)}
+
     messages = build_messages(prompt_user, prompt_system=prompt_system, prompt_assistant=prompt_assistant)
     #get model response
     for i in range(max_rounds):
@@ -167,6 +171,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             #validation
             structured_response = output_model.model_validate(response_content).model_dump()
         except ValidationError as e:
+            valid_error_count[i] += 1
             retry_prompt = f"""
             The previous response was not valid due to the error:\n {e}.\n
             Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
@@ -211,7 +216,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             except ValidationError as e:
                 print("Validation Error:", e)
                 nb_valid_error = e.error_count()
-                error_count += 1
+                valid_error_count[i] += 1
                 continue
                 #structured_response = response_content
 
@@ -244,7 +249,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                      })
 
     print(f"Nb. of iterations: {i}")
-    return full_response_formatted, error_count
+    return full_response_formatted, valid_error_count
 
 def is_extraction_finished(response_content):
     """check if extraction is finished"""
