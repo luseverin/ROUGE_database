@@ -165,8 +165,11 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         # Parse the response content into a list of ImpactDetail objects
         response_content = json_repair.loads(response.choices[0].message.content)
         try:
-            #hotfix to avoid too many retrials
+            #hotfixes to avoid too many retrials
+            #ensure output is of target type
             response_content = force_target_type(output_model, response_content)
+            #parse str None to None
+            response_content = parse_none_str(response_content)
             #validation
             structured_response = output_model.model_validate(response_content).model_dump()
         except ValidationError as e:
@@ -226,10 +229,12 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         except Exception as e:
             print("deduplicate_structured_responses error:", e)
 
-        if not len(structured_response) : #if no new content, stop
+        valid_error_count[i] = valid_error_count.get(i, 0)
+        if len(structured_response):
+            nb_extracted_impacts[i] = len(structured_response)
+        else:
+            nb_extracted_impacts[i] = 0
             break
-
-        nb_extracted_impacts[i] = len(structured_response)
         full_response_raw+=response.choices[0].message.content#keep raw output so it does not mess with formating instructions
         full_response_formatted.extend(structured_response)
 
@@ -251,14 +256,37 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
 
     print(f"Nb. of iterations: {i}")
     #extend and flatten list
-    valid_error_ext = [list(np.repeat([valid_error_count[it]], nb_extracted_impacts[it])) for it in range(i)]
-    valid_error_ext = [x for xs in valid_error_ext for x in xs]
+    valid_error_ext = []
+    for it in nb_extracted_impacts.keys():
+        count = nb_extracted_impacts[it]
+        errs = valid_error_count.get(it, 0)
+        valid_error_ext.extend([errs] * count)
+    #valid_error_ext = [list(np.repeat([valid_error_count[it]], nb_extracted_impacts[it])) for it in range(i)]
+    #valid_error_ext = [x for xs in valid_error_ext for x in xs]
     return full_response_formatted, valid_error_ext
 
 def is_extraction_finished(response_content):
     """check if extraction is finished"""
     return "__end__" in response_content.lower()
 
+def parse_none_str(output):
+    """
+    Parse "None" strings in a list or dictionary and replace them with None value.
+
+    Args:
+        output (list or dict): List or dictionary to parse.
+
+    Returns:
+        list or dict: List or dictionary with "None" strings replaced by None value.
+    """
+    if isinstance(output, list):
+        for el in output:
+            if isinstance(el, dict):
+                output = {k: None if v in ["None","none", "Null", "null"] else v for k, v in el.items()}
+    elif isinstance(output, dict):
+        output = {k: None if v in ["None","none", "Null", "null"] else v for k, v in el.items()}
+
+    return output
 
 def get_target_type(output_model):
     """Infer target type from output_model"""
