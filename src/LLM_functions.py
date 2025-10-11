@@ -329,18 +329,18 @@ def deduplicate_structured_responses(prev_responses, new_responses):
     seen = set([(entry["impactSubtype"],
              entry["impactValue"],
              entry["impactUnit"],
-             #tuple(entry.get("location") or []),
-             #tuple(entry.get("country") or []),
-             #tuple(entry.get("hazards") or [])
+             tuple(entry.get("location") or []),
+             tuple(entry.get("country") or []),
+             tuple(entry.get("hazards") or [])
              ) for entry in prev_responses])
 
     for new_entry in new_responses:
         entry_key = (new_entry["impactSubtype"],
                      new_entry["impactValue"],
                      new_entry["impactUnit"],
-                     #tuple(new_entry.get("location") or []),
-                     #tuple(new_entry.get("country") or []),
-                     #tuple(new_entry.get("hazards") or []),
+                     tuple(new_entry.get("location") or []),
+                     tuple(new_entry.get("country") or []),
+                     tuple(new_entry.get("hazards") or []),
                      )
         if entry_key not in seen:
             seen.add(entry_key)
@@ -454,7 +454,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
             answer_hazards = answer_hazards[0]
         if not isinstance(answer_hazards, dict):
             answer_hazards = {"hazards": None, "hazardsAnnotation": None}
-        answer_dates["valid_errors_haz"] = valid_errors_haz
+        answer_hazards["valid_errors_haz"] = valid_errors_haz
         impact.update(answer_hazards)
 
         identified_impacts.append(impact)
