@@ -149,9 +149,10 @@ def get_model_response_retry(prompt, output_model, **kwargs):
         retry_prompt = f"""
         The previous response was not valid due to the error:\n {e}.\n
         Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
-        Query:\n
-        {prompt}
         """
+        #Query:\n
+        #{prompt}
+        #"""
         messages.append({"role": "assistant", "content": str(response_content)})
         messages.append({"role": "user", "content": retry_prompt})
 
@@ -202,9 +203,10 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             retry_prompt = f"""
             The previous response was not valid due to the error:\n {e}.\n
             Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
-            Query:\n
-            {prompt_user}
             """
+            #Query:\n
+            #{prompt_user}
+            #"""
             messages.append({"role": "assistant", "content": str(response_content)})
             messages.append({"role": "user", "content": retry_prompt})
             #print(f"Validation Error: {e}. Allowing one retry")
