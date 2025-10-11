@@ -97,53 +97,53 @@ def get_model_response_retry(prompt, output_model, **kwargs):
         #get model response
         messages = build_messages(prompt)
         response = get_model_response(messages, **kwargs)
-
-        # Parse the response content into a list of ImpactDetail objects
-        response_content = json_repair.loads(response.choices[0].message.content)
-        try:
-            structured_response = output_model.model_validate(response_content)
-            return structured_response.model_dump(), nb_valid_error  # Return as Python object
-        except ValidationError as e:
-            nb_valid_error += 1
-            print("Validation Error:", e)
-            #allow one retry prompting the model with its error
-            #Add context messages and build retry messages
-            #Add assistant message and user prompt for continuation
-            retry_prompt = f"""
-            The previous response was not valid due to the error:\n {e}.\n
-            Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
-            Query:\n
-            {prompt}
-            """
-            messages.append({"role": "assistant", "content": str(response_content)})
-            messages.append({"role": "user", "content": retry_prompt})
-            try:
-                #messages = build_messages(prompt, prompt_system=prompt_system)
-                #retry_messages = [
-                #{"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
-                #{"role": "user", "content": (
-                #    f"Invalid JSON:\n{response_content}\n\n"
-                #    f"Validation error:\n{e}\n\n"
-                #    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
-                #    "Fix the JSON so it passes validation."
-                #)}
-                #]
-                response_content = get_model_response(messages, **kwargs)
-                # Parse the response content into a list of ImpactDetail objects
-                response_content = json_repair.loads(response.choices[0].message.content)
-                try:
-                    structured_response = output_model.model_validate(response_content)
-                    return structured_response.model_dump(), nb_valid_error  # Return as Python object
-                except ValidationError as e:
-                    print("Validation Error:", e)
-                    nb_valid_error += 1
-                    return response_content, nb_valid_error
-            except Exception as e:
-                print("API Error:", e)
-                return {"error": "Response validation failed.", "details": str(e)}
     except Exception as e:
         print("API Error:", e)
         return {"error": "API call failed.", "details": str(e)}
+
+    # Parse the response content into a list of ImpactDetail objects
+    response_content = json_repair.loads(response.choices[0].message.content)
+    try:
+        structured_response = output_model.model_validate(response_content)
+        return structured_response.model_dump(), nb_valid_error  # Return as Python object
+    except ValidationError as e:
+        nb_valid_error += 1
+        print("Validation Error:", e)
+        #allow one retry prompting the model with its error
+        #Add context messages and build retry messages
+        #Add assistant message and user prompt for continuation
+        retry_prompt = f"""
+        The previous response was not valid due to the error:\n {e}.\n
+        Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
+        Query:\n
+        {prompt}
+        """
+        messages.append({"role": "assistant", "content": str(response_content)})
+        messages.append({"role": "user", "content": retry_prompt})
+        try:
+            #messages = build_messages(prompt, prompt_system=prompt_system)
+            #retry_messages = [
+            #{"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
+            #{"role": "user", "content": (
+            #    f"Invalid JSON:\n{response_content}\n\n"
+            #    f"Validation error:\n{e}\n\n"
+            #    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
+            #    "Fix the JSON so it passes validation."
+            #)}
+            #]
+            response_content = get_model_response(messages, **kwargs)
+            # Parse the response content into a list of ImpactDetail objects
+            response_content = json_repair.loads(response.choices[0].message.content)
+            try:
+                structured_response = output_model.model_validate(response_content)
+                return structured_response.model_dump(), nb_valid_error  # Return as Python object
+            except ValidationError as e:
+                print("Validation Error:", e)
+                nb_valid_error += 1
+                return response_content, nb_valid_error
+        except Exception as e:
+            print("API Error:", e)
+            return {"error": "Response validation failed.", "details": str(e)}
 
 def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
     """Get continued model response reprompting the model with the previous response. Stops when max_rounds is reached or now new (not duplicate)
