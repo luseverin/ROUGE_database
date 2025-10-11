@@ -5,6 +5,7 @@ import numpy as np
 import json as json
 import regex as re
 import json_repair
+import random
 #import instructor
 from pydantic import ValidationError
 from typing import get_type_hints, get_origin, get_args
@@ -80,26 +81,59 @@ def build_messages(prompt, prompt_system=None, prompt_assistant=None):
         messages.append({"role": "assistant", "content": prompt_assistant})
     return messages
 
-def get_model_response(messages, **kwargs):
-    """Get model response structured using OpenAI API"""
-    completion = CLIENT.chat.completions.create(
-        model=MODEL_NAME,
-        messages=messages,
-        **kwargs
-    )
-    return completion
+#def get_model_response(messages, **kwargs):
+#    """Get model response structured using OpenAI API"""
+#    try:
+#        #get model response
+#        completion = CLIENT.chat.completions.create(
+#        model=MODEL_NAME,
+#        messages=messages,
+#        **kwargs
+#        )
+#    except Exception as e:
+#        print("API Error:", e)
+#        return {"error": "API call failed.", "details": str(e)}
+#
+#    return completion
+
+
+def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
+    """Query Groq API with retry and exponential backoff when hitting 429 errors."""
+
+    for attempt in range(max_retries):
+        try:
+            completion = CLIENT.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                **kwargs
+            )
+            return completion  # ✅ Success, return response immediately
+
+        except Exception as e:
+            error_message = str(e)
+
+            # Handle rate limit or token errors
+            if "429" in error_message or "rate" in error_message.lower():
+                wait_time = initial_wait * (2 ** attempt) + random.uniform(0.1, 0.5)  # jitter to avoid thundering herd
+                print(f"[Rate Limit] 429 received. Retry {attempt+1}/{max_retries} in {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
+                continue
+
+            # Other errors → stop immediately
+            print(f"[API Error - Not Retrying] {error_message}")
+            return {"error": "API call failed.", "details": error_message}
+
+    return {"error": "Max retries exceeded due to rate limits."}
 
 def get_model_response_retry(prompt, output_model, **kwargs):
     """Get model response structured using OpenAI API allowing for one retry prompting the model with its error
     from pydantic ValidationError"""
     nb_valid_error = 0
-    try:
-        #get model response
-        messages = build_messages(prompt)
-        response = get_model_response(messages, **kwargs)
-    except Exception as e:
-        print("API Error:", e)
-        return {"error": "API call failed.", "details": str(e)}
+    messages = build_messages(prompt)
+    #get model response
+    response = get_model_response(messages, **kwargs)
+    if response.keys()[0] == "error":
+        return response
 
     # Parse the response content into a list of ImpactDetail objects
     response_content = json_repair.loads(response.choices[0].message.content)
@@ -120,30 +154,22 @@ def get_model_response_retry(prompt, output_model, **kwargs):
         """
         messages.append({"role": "assistant", "content": str(response_content)})
         messages.append({"role": "user", "content": retry_prompt})
+
+        #get model response
+        response = get_model_response(messages, **kwargs)
+        if response.keys()[0] == "error":
+            return response
+
+        # Parse the response content into a list of ImpactDetail objects
+        response_content = json_repair.loads(response.choices[0].message.content)
         try:
-            #messages = build_messages(prompt, prompt_system=prompt_system)
-            #retry_messages = [
-            #{"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
-            #{"role": "user", "content": (
-            #    f"Invalid JSON:\n{response_content}\n\n"
-            #    f"Validation error:\n{e}\n\n"
-            #    f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
-            #    "Fix the JSON so it passes validation."
-            #)}
-            #]
-            response_content = get_model_response(messages, **kwargs)
-            # Parse the response content into a list of ImpactDetail objects
-            response_content = json_repair.loads(response.choices[0].message.content)
-            try:
-                structured_response = output_model.model_validate(response_content)
-                return structured_response.model_dump(), nb_valid_error  # Return as Python object
-            except ValidationError as e:
-                print("Validation Error:", e)
-                nb_valid_error += 1
-                return response_content, nb_valid_error
-        except Exception as e:
-            print("API Error:", e)
-            return {"error": "Response validation failed.", "details": str(e)}
+            structured_response = output_model.model_validate(response_content)
+            return structured_response.model_dump(), nb_valid_error  # Return as Python object
+        except ValidationError as e:
+            print("Validation Error:", e)
+            nb_valid_error += 1
+            return response_content, nb_valid_error
+
 
 def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
     """Get continued model response reprompting the model with the previous response. Stops when max_rounds is reached or now new (not duplicate)
@@ -156,11 +182,10 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
     messages = build_messages(prompt_user, prompt_system=prompt_system, prompt_assistant=prompt_assistant)
     #get model response
     for i in range(max_rounds):
-        try:
-            response = get_model_response(messages, **groq_kwargs)
-        except Exception as e:
-            print("API Error:", e)
-            return {"error": "API call failed.", "details": str(e)}
+        #get model response
+        response = get_model_response(messages, **groq_kwargs)
+        if response.keys()[0] == "error":
+            return response
 
         # Parse the response content into a list of ImpactDetail objects
         response_content = json_repair.loads(response.choices[0].message.content)
@@ -202,13 +227,11 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             #    )}
             #]
 
-            try:
-                #messages.append({"role": "system", "content": prompt_system+prompt_error})
-                #messages = build_messages(prompt_user, prompt_system=prompt_error, prompt_assistant=prompt_assistant)
-                response = get_model_response(messages, **groq_kwargs)
-            except Exception as e:
-                print("API Error:", e)
-                return {"error": "API call failed.", "details": str(e)}, "API ERROR"
+            #get model response
+            response = get_model_response(messages, **groq_kwargs)
+            if response.keys()[0] == "error":
+                return response
+
             response_content = json_repair.loads(response.choices[0].message.content)
             try:
                 #hotfix to avoid too many retrials
