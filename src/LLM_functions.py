@@ -126,10 +126,9 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
     print("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
     return None#{"error": "Max retries exceeded due to rate limits."}
 
-def get_model_response_retry(prompt, output_model, **kwargs):
+def get_model_response_retry(prompt, output_model, nb_valid_error=0, trials=0, trials_limit=2, **kwargs):
     """Get model response structured using OpenAI API allowing for one retry prompting the model with its error
     from pydantic ValidationError"""
-    nb_valid_error = 0
     messages = build_messages(prompt)
     #get model response
     response = get_model_response(messages, **kwargs)
@@ -157,20 +156,25 @@ def get_model_response_retry(prompt, output_model, **kwargs):
         messages.append({"role": "assistant", "content": str(response_content)})
         messages.append({"role": "user", "content": retry_prompt})
 
-        #get model response
-        response = get_model_response(messages, **kwargs)
-        if not response:
-            return response
-
-        # Parse the response content into a list of ImpactDetail objects
-        response_content = json_repair.loads(response.choices[0].message.content)
-        try:
-            structured_response = output_model.model_validate(response_content)
-            return structured_response.model_dump(), nb_valid_error  # Return as Python object
-        except ValidationError as e:
-            print("Validation Error:", e)
-            nb_valid_error += 1
+        trials+=1
+        if trials < trials_limit:
+            return get_model_response_retry(prompt, output_model, nb_valid_error, trials, trials_limit, **kwargs)
+        else:
             return response_content, nb_valid_error
+        ##get model response
+        #response = get_model_response(messages, **kwargs)
+        #if not response:
+        #    return response
+#
+        ## Parse the response content into a list of ImpactDetail objects
+        #response_content = json_repair.loads(response.choices[0].message.content)
+        #try:
+        #    structured_response = output_model.model_validate(response_content)
+        #    return structured_response.model_dump(), nb_valid_error  # Return as Python object
+        #except ValidationError as e:
+        #    print("Validation Error:", e)
+        #    nb_valid_error += 1
+        #    return response_content, nb_valid_error
 
 
 def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
