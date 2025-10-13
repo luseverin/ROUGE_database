@@ -133,19 +133,18 @@ def get_model_response_retry(prompt, output_model, nb_valid_error=0, trials=0, t
     #get model response
     response = get_model_response(messages, **kwargs)
     if not response:
-        return response
+        return None, None, None
 
     # Parse the response content into a list of ImpactDetail objects
     response_content = json_repair.loads(response.choices[0].message.content)
     try:
         structured_response = output_model.model_validate(response_content)
-        return structured_response.model_dump(), nb_valid_error  # Return as Python object
+        return response, structured_response.model_dump(), nb_valid_error  # Return as Python object
     except ValidationError as e:
         nb_valid_error += 1
         print("Validation Error:", e)
         #allow one retry prompting the model with its error
         #Add context messages and build retry messages
-        #Add assistant message and user prompt for continuation
         retry_prompt = f"""
         The previous response was not valid due to the error:\n {e}.\n
         Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
@@ -160,21 +159,7 @@ def get_model_response_retry(prompt, output_model, nb_valid_error=0, trials=0, t
         if trials < trials_limit:
             return get_model_response_retry(prompt, output_model, nb_valid_error, trials, trials_limit, **kwargs)
         else:
-            return response_content, nb_valid_error
-        ##get model response
-        #response = get_model_response(messages, **kwargs)
-        #if not response:
-        #    return response
-#
-        ## Parse the response content into a list of ImpactDetail objects
-        #response_content = json_repair.loads(response.choices[0].message.content)
-        #try:
-        #    structured_response = output_model.model_validate(response_content)
-        #    return structured_response.model_dump(), nb_valid_error  # Return as Python object
-        #except ValidationError as e:
-        #    print("Validation Error:", e)
-        #    nb_valid_error += 1
-        #    return response_content, nb_valid_error
+            return response_content, response_content, nb_valid_error
 
 
 def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
@@ -189,50 +174,11 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
     #get model response
     for i in range(max_rounds):
         #get model response
-        response = get_model_response(messages, **groq_kwargs)
-        if not response:
-            return response
-
-        # Parse the response content into a list of ImpactDetail objects
-        response_content = json_repair.loads(response.choices[0].message.content)
-        try:
-            #hotfixes to avoid too many retrials
-            #ensure output is of target type
-            response_content = force_target_type(output_model, response_content)
-            #parse str None to None
-            response_content = parse_none_str(response_content)
-            #validation
-            structured_response = output_model.model_validate(response_content).model_dump()
-        except ValidationError as e:
-            print("Validation Error:", e)
-            valid_error_count[i] += 1
-            retry_prompt = f"""
-            The previous response was not valid due to the error:\n {e}.\n
-            Please answer again the query respecting the output format specified and the instructions to avoid the error.\n
-            """
-            #Query:\n
-            #{prompt_user}
-            #"""
-            messages.append({"role": "assistant", "content": str(response_content)})
-            messages.append({"role": "user", "content": retry_prompt})
-
-            #get model response
-            response = get_model_response(messages, **groq_kwargs)
-            if not response:
-                return response
-
-            response_content = json_repair.loads(response.choices[0].message.content)
-            try:
-                #hotfix to avoid too many retrials
-                response_content = force_target_type(output_model, response_content)
-                structured_response = output_model.model_validate(response_content).model_dump()  # Return as Python object
-            except ValidationError as e:
-                print("Validation Error:", e)
-                #nb_valid_error = e.error_count()
-                valid_error_count[i] += 1
-                nb_extracted_impacts[i] = 0
-                continue
-                #structured_response = response_content
+        raw_response, structured_response, nb_valid_error = get_model_response_retry(prompt_user, output_model, valid_error_count[i], **groq_kwargs)
+        valid_error_count[i] += nb_valid_error
+        if not structured_response:
+            nb_extracted_impacts[i] = 0
+            continue
         #deduplicate output
         try:
             structured_response_non_dedup = structured_response
@@ -247,7 +193,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         else:
             nb_extracted_impacts[i] = 0
             break
-        full_response_raw+=response.choices[0].message.content#keep raw output so it does not mess with formating instructions
+        full_response_raw+=raw_response.choices[0].message.content#keep raw output so it does not mess with formating instructions
         full_response_formatted.extend(structured_response)
 
         # Add assistant message and user prompt for continuation
@@ -257,13 +203,6 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                          "content":
                             "Check for NEW impacts not already extracted above. "
                             "Do NOT return repeated impacts under any circumstances."
-                            #"If there are NO NEW impacts not already listed above, return only: '__END__'. "
-                             #"Previously extracted impacts:\n"
-                             #+ "\n".join([
-                             #    ann for item in full_response_formatted if (ann := '; '.join(item['impactsAnnotation']))
-                             #])
-                             #+ "\n\nContinue the extraction ONLY IF there are new impacts not mentioned above. "
-                             #"If everything is covered, return '__END__'."
                      })
 
     print(f"Nb. of iterations: {i}")
@@ -273,8 +212,6 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         count = nb_extracted_impacts[it]
         errs = valid_error_count.get(it, 0)
         valid_error_ext.extend([errs] * count)
-    #valid_error_ext = [list(np.repeat([valid_error_count[it]], nb_extracted_impacts[it])) for it in range(i)]
-    #valid_error_ext = [x for xs in valid_error_ext for x in xs]
     return full_response_formatted, valid_error_ext
 
 def is_extraction_finished(response_content):
@@ -414,7 +351,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
     prompt_impact_type = identify_impacts_prompt(text, impact_types_dict)
     impact_types_list = list(impact_types_dict.keys())
     ImpactSubtypes.set_allowed_subtypes(impact_types_list)
-    answer_impact_types, valid_errors_impSubT = get_model_response_retry(prompt_impact_type, ImpactSubtypes, **groq_kwargs)
+    _, answer_impact_types, valid_errors_impSubT = get_model_response_retry(prompt_impact_type, ImpactSubtypes, **groq_kwargs)
     if not answer_impact_types or not len(answer_impact_types):
         return None
     impact_types = answer_impact_types["impactSubtypes"]
@@ -442,7 +379,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
 
         ## Find locs
         prompt_impact_loc = identify_impact_loc_prompt(text, impact_desc)
-        answer_loc, valid_errors_loc = get_model_response_retry(prompt_impact_loc, ImpactLocation, **groq_kwargs)
+        _, answer_loc, valid_errors_loc = get_model_response_retry(prompt_impact_loc, ImpactLocation, **groq_kwargs)
         if isinstance(answer_loc, list) and len(answer_loc) == 1:
             answer_loc = answer_loc[0]
         if not isinstance(answer_loc, dict):
@@ -452,7 +389,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
 
         ## Find dates
         prompt_impact_dates = identify_impact_dates_prompt(text, impact, answer_loc)
-        answer_dates, valid_errors_dates = get_model_response_retry(prompt_impact_dates, ImpactDates, **groq_kwargs)
+        _, answer_dates, valid_errors_dates = get_model_response_retry(prompt_impact_dates, ImpactDates, **groq_kwargs)
         if isinstance(answer_dates, list) and len(answer_dates) == 1:
             answer_dates = answer_dates[0]
         if not isinstance(answer_dates, dict):
@@ -463,7 +400,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
         ## Find hazards
         prompt_impact_hazards = identify_impact_hazards_prompt(text, impact_desc, answer_loc, answer_dates, hazards_list)
         ImpactHazards.set_allowed_classes(hazards_list)
-        answer_hazards, valid_errors_haz = get_model_response_retry(prompt_impact_hazards, ImpactHazards, **groq_kwargs)
+        _, answer_hazards, valid_errors_haz = get_model_response_retry(prompt_impact_hazards, ImpactHazards, **groq_kwargs)
         if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
             answer_hazards = answer_hazards[0]
         if not isinstance(answer_hazards, dict):
