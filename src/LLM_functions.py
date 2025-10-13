@@ -211,25 +211,6 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             #"""
             messages.append({"role": "assistant", "content": str(response_content)})
             messages.append({"role": "user", "content": retry_prompt})
-            #print(f"Validation Error: {e}. Allowing one retry")
-            ##messages.extend([
-            ##    {"role": "system", "content": (
-            ##        "You must output **ONLY** a JSON object matching this schema exactly. "
-            ##        "If your previous answer failed, fix the output strictly following the schema below.\n\n"
-            ##        f"SCHEMA:\n{json.dumps(output_model.schema_json(), indent=2)}"
-            ##        "\n\nValidation error:\n" + str(e)
-            ##    )},
-            ##    {"role": "user", "content": "Reformat the output so it is valid JSON that passes the schema above."}
-            ##])
-            #retry_messages = [
-            #    {"role": "system", "content": "You are a strict JSON reformatter. Output only valid JSON matching the schema."},
-            #    {"role": "user", "content": (
-            #        f"Invalid JSON:\n{response_content}\n\n"
-            #        f"Validation error:\n{e}\n\n"
-            #        f"Schema:\n{json.dumps(output_model.schema_json())}\n\n"
-            #        "Fix the JSON so it passes validation."
-            #    )}
-            #]
 
             #get model response
             response = get_model_response(messages, **groq_kwargs)
