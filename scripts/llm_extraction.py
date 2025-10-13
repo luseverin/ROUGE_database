@@ -1,5 +1,7 @@
 
 import datetime as dt
+
+from attr import validate
 from src.data import *
 from src.LLM_functions import *
 from src.labelling_helpers import filter_reports
@@ -12,7 +14,7 @@ ifrc_reports_df = pd.read_csv(file_path)
 ifrc_reports_df_filtered = filter_reports(ifrc_reports_df, take_latest=True)
 
 # eventually load labelled reports
-labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_impacts_all_v240925.csv")
+labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_impacts_all_v111025.csv")
 keys = labelled_reports[['appealCode', 'reportDate']].drop_duplicates()
 labelled_reports_raw = ifrc_reports_df.merge(keys, on=['appealCode', 'reportDate'], how='inner')
 
@@ -22,21 +24,26 @@ test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals
 
 # select reports to process
 nreports = 1
-reports_in = labelled_reports_raw#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+reports_in = test_reports#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
 
 ## Parameters
-sim_name = "labelled_reports_ext_flags"#name of simulation "labelled_reports"
+sim_name = "labelled_reports_test_turnoff_subtype_val"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}.csv" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
-max_rounds = 8 #max number of continuations
+max_rounds = 15 #max number of continuations
 
 #chose hazard and impact cats
 hazcat = list(hazard_main_types_emdat_desc.keys())
 impmaintype = impactType_list
 impsubtype_dict = impact_subtypes_desc_dict
 impsubtype = list(impact_subtypes_desc_dict.keys())
+
+#Validation
+validate_impSubtypes = False
+validate_hazards = True #deactivate hazards validation as cause issues
+
 #impunit = impactUnit_list_prompting
 #impunittype = impactUnitType_list
 #descriptions_impact = format_desc(impact_subtypes_desc_dict)
@@ -77,6 +84,8 @@ print(f"Processing {res_savename}")
 response, response_df = get_event_impacts_multiprompt(reports_in,
                                                       impact_types_dict=impsubtype_dict,
                                                       hazards_list=hazcat,
+                                                      validate_impSubtypes=validate_impSubtypes,
+                                                      validate_hazards=validate_hazards,
                                                       chunk_size=chunk_size,
                                                       max_rounds=max_rounds,
                                                       res_savename=res_savename,

@@ -30,6 +30,13 @@ class ImpactValue(BaseModel):
 
     _impactSubtypes_list: List[str]
 
+    #marker to do impactSubtypes validation or not
+    _validate_impactSubtypes = True
+
+    @classmethod
+    def turn_off_impactSubtypes_validation(cls):
+        cls._validate_impactSubtypes = False
+
     @classmethod
     def set_allowed_subtypes(cls, impact_subtypes: List[str]):
         cls._impactSubtypes_list = impact_subtypes
@@ -37,7 +44,10 @@ class ImpactValue(BaseModel):
     @field_validator("impactSubtype")
     def validate_impact_subtype(cls, value):
         if value not in cls._impactSubtypes_list:
-            raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
+            if cls._validate_impactSubtypes:
+                raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
+            else:
+                print(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
         return value
 
 

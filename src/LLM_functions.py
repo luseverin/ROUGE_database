@@ -81,22 +81,6 @@ def build_messages(prompt, prompt_system=None, prompt_assistant=None):
         messages.append({"role": "assistant", "content": prompt_assistant})
     return messages
 
-#def get_model_response(messages, **kwargs):
-#    """Get model response structured using OpenAI API"""
-#    try:
-#        #get model response
-#        completion = CLIENT.chat.completions.create(
-#        model=MODEL_NAME,
-#        messages=messages,
-#        **kwargs
-#        )
-#    except Exception as e:
-#        print("API Error:", e)
-#        return {"error": "API call failed.", "details": str(e)}
-#
-#    return completion
-
-
 def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
     """Query Groq API with retry and exponential backoff when hitting 429 errors."""
 
@@ -126,10 +110,9 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
     print("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
     return None#{"error": "Max retries exceeded due to rate limits."}
 
-def get_model_response_retry(prompt, output_model, nb_valid_error=0, trials=0, trials_limit=2, **kwargs):
+def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0, trials_limit=2, **kwargs):
     """Get model response structured using OpenAI API allowing for one retry prompting the model with its error
     from pydantic ValidationError"""
-    messages = build_messages(prompt)
     #get model response
     response = get_model_response(messages, **kwargs)
     if not response:
@@ -157,7 +140,7 @@ def get_model_response_retry(prompt, output_model, nb_valid_error=0, trials=0, t
 
         trials+=1
         if trials < trials_limit:
-            return get_model_response_retry(prompt, output_model, nb_valid_error, trials, trials_limit, **kwargs)
+            return get_model_response_retry(messages, output_model, nb_valid_error, trials, trials_limit, **kwargs)
         else:
             return response_content, response_content, nb_valid_error
 
@@ -174,7 +157,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
     #get model response
     for i in range(max_rounds):
         #get model response
-        raw_response, structured_response, nb_valid_error = get_model_response_retry(prompt_user, output_model, valid_error_count[i], **groq_kwargs)
+        raw_response, structured_response, nb_valid_error = get_model_response_retry(messages, output_model, valid_error_count[i], **groq_kwargs)
         valid_error_count[i] += nb_valid_error
         if not structured_response:
             nb_extracted_impacts[i] = 0
@@ -337,7 +320,7 @@ def extract_impact_value(impact):
     """
     return impact[["impactValue","impactValueMin", "impactValueMax"]].max()
 
-def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq_kwargs):
+def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes=True, validate_hazards=True, max_rounds=5, **groq_kwargs):
     """
     Multiprompt extraction chain with following sequence
         1. Type
@@ -348,7 +331,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
     """
     error_counts = {}
     ## Identify impact subtypes
-    prompt_impact_type = identify_impacts_prompt(text, impact_types_dict)
+    prompt_impact_type = build_messages(identify_impacts_prompt(text, impact_types_dict))
     impact_types_list = list(impact_types_dict.keys())
     ImpactSubtypes.set_allowed_subtypes(impact_types_list)
     _, answer_impact_types, valid_errors_impSubT = get_model_response_retry(prompt_impact_type, ImpactSubtypes, **groq_kwargs)
@@ -359,6 +342,8 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
     ## Identify impact values
     prompt_value_unit = identify_value_unit_prompt(text, impact_types)
     ImpactValue.set_allowed_subtypes(impact_types)
+    if not validate_impSubtypes:
+        ImpactValue.turn_off_impactSubtypes_validation()
     answer_impact_values, valid_errors_impVal = get_model_response_retry_continue(prompt_value_unit, ImpactValueList, max_rounds=max_rounds, **groq_kwargs)
     identified_impacts = []
 
@@ -378,7 +363,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
         impact_desc = make_impact_description(impact, impact_value, impact_unit)
 
         ## Find locs
-        prompt_impact_loc = identify_impact_loc_prompt(text, impact_desc)
+        prompt_impact_loc = build_messages(identify_impact_loc_prompt(text, impact_desc))
         _, answer_loc, valid_errors_loc = get_model_response_retry(prompt_impact_loc, ImpactLocation, **groq_kwargs)
         if isinstance(answer_loc, list) and len(answer_loc) == 1:
             answer_loc = answer_loc[0]
@@ -388,7 +373,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
         impact.update(answer_loc)
 
         ## Find dates
-        prompt_impact_dates = identify_impact_dates_prompt(text, impact, answer_loc)
+        prompt_impact_dates = build_messages(identify_impact_dates_prompt(text, impact, answer_loc))
         _, answer_dates, valid_errors_dates = get_model_response_retry(prompt_impact_dates, ImpactDates, **groq_kwargs)
         if isinstance(answer_dates, list) and len(answer_dates) == 1:
             answer_dates = answer_dates[0]
@@ -398,8 +383,10 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
         impact.update(answer_dates)
 
         ## Find hazards
-        prompt_impact_hazards = identify_impact_hazards_prompt(text, impact_desc, answer_loc, answer_dates, hazards_list)
+        prompt_impact_hazards = build_messages(identify_impact_hazards_prompt(text, impact_desc, answer_loc, answer_dates, hazards_list))
         ImpactHazards.set_allowed_classes(hazards_list)
+        if not validate_hazards:
+            ImpactHazards.turn_off_hazard_validation()
         _, answer_hazards, valid_errors_haz = get_model_response_retry(prompt_impact_hazards, ImpactHazards, **groq_kwargs)
         if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
             answer_hazards = answer_hazards[0]
@@ -413,7 +400,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, max_rounds=5, **groq
     return identified_impacts
 
 
-def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, chunk_size=None, max_rounds=5, res_savename=None, **groq_kwargs):
+def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, validate_impSubtypes=True, validate_hazards=True, chunk_size=None, max_rounds=5, res_savename=None, **groq_kwargs):
     """Wrapper function to do all level promptings for impact extraction
     Version 3 retrying multilevel prompting
 
@@ -444,12 +431,16 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
             answer_impacts = []
             for chunk in chunks:
                 answer_impacts.extend(extraction_chain(str(chunk), impact_types_dict, hazards_list,
+                                                                        validate_impSubtypes=validate_impSubtypes,
+                                                                        validate_hazards=validate_hazards,
                                                                         max_rounds=max_rounds,
                                                                         **groq_kwargs))
         else:
             text = str(row["nathaz_text"])
             answer_impacts = extraction_chain(text, impact_types_dict, hazards_list,
                                                                         max_rounds=max_rounds,
+                                                                        validate_impSubtypes=validate_impSubtypes,
+                                                                        validate_hazards=validate_hazards,
                                                                         **groq_kwargs)
         #further clean-up
         answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
