@@ -229,11 +229,6 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                 nb_extracted_impacts[i] = 0
                 continue
                 #structured_response = response_content
-        except Exception as e:
-            print("An unexpected error occurred:", e)
-            valid_error_count[i] += 1
-            nb_extracted_impacts[i] = 0
-            continue
         #deduplicate output
         try:
             structured_response_non_dedup = structured_response
