@@ -107,6 +107,7 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
                 messages=messages,
                 **kwargs
             )
+            print(f"Total tokens used for request: {completion.usage.total_tokens}")
             return completion  # ✅ Success, return response immediately
 
         except Exception as e:
@@ -121,9 +122,9 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
 
             # Other errors → stop immediately
             print(f"[API Error - Not Retrying] {error_message}")
-            return {"error": "API call failed.", "details": error_message}
-
-    return {"error": "Max retries exceeded due to rate limits."}
+            return None#{"error": "API call failed.", "details": error_message}
+    print("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
+    return None#{"error": "Max retries exceeded due to rate limits."}
 
 def get_model_response_retry(prompt, output_model, **kwargs):
     """Get model response structured using OpenAI API allowing for one retry prompting the model with its error
@@ -132,7 +133,7 @@ def get_model_response_retry(prompt, output_model, **kwargs):
     messages = build_messages(prompt)
     #get model response
     response = get_model_response(messages, **kwargs)
-    if response.keys()[0] == "error":
+    if not response:
         return response
 
     # Parse the response content into a list of ImpactDetail objects
@@ -158,7 +159,7 @@ def get_model_response_retry(prompt, output_model, **kwargs):
 
         #get model response
         response = get_model_response(messages, **kwargs)
-        if response.keys()[0] == "error":
+        if not response:
             return response
 
         # Parse the response content into a list of ImpactDetail objects
@@ -185,7 +186,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
     for i in range(max_rounds):
         #get model response
         response = get_model_response(messages, **groq_kwargs)
-        if response.keys()[0] == "error":
+        if not response:
             return response
 
         # Parse the response content into a list of ImpactDetail objects
@@ -199,6 +200,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
             #validation
             structured_response = output_model.model_validate(response_content).model_dump()
         except ValidationError as e:
+            print("Validation Error:", e)
             valid_error_count[i] += 1
             retry_prompt = f"""
             The previous response was not valid due to the error:\n {e}.\n
@@ -231,7 +233,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
 
             #get model response
             response = get_model_response(messages, **groq_kwargs)
-            if response.keys()[0] == "error":
+            if not response:
                 return response
 
             response_content = json_repair.loads(response.choices[0].message.content)
@@ -246,6 +248,11 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                 nb_extracted_impacts[i] = 0
                 continue
                 #structured_response = response_content
+        except Exception as e:
+            print("An unexpected error occurred:", e)
+            valid_error_count[i] += 1
+            nb_extracted_impacts[i] = 0
+            continue
         #deduplicate output
         try:
             structured_response_non_dedup = structured_response
@@ -305,9 +312,11 @@ def parse_none_str(output):
         list or dict: List or dictionary with "None" strings replaced by None value.
     """
     if isinstance(output, list):
+        new_output = []
         for el in output:
             if isinstance(el, dict):
-                output = {k: None if v in ["None","none", "Null", "null"] else v for k, v in el.items()}
+                new_output.append({k: None if v in ["None","none", "Null", "null"] else v for k, v in el.items()})
+        output = new_output
     elif isinstance(output, dict):
         output = {k: None if v in ["None","none", "Null", "null"] else v for k, v in el.items()}
 
