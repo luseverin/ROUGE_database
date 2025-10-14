@@ -33,7 +33,7 @@ std_unit_kw_reclass = {
                     'kg' : [r"\b(kgs?|kilograms?)\b"],
                     'm**3' : [r"\b(?<=(cube|cubic))\s*(meters?|metres?|m)\b",
                             r"\b(meters?|metres?|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)\b(?<!\.\d)"],
-                    "acre": [r"\b(acres?)\b"],
+                    "acre": [r"\b(acres?|acers?)\b"],
                     "feet": [r"(?<!\b(squared?|cube|cubic)\s*)\b(feet|foot|ft)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
                     "hectare": [r"\b(hectares?|ha|hectors?)\b"],
                     "ton": [r"\b(?<!\b(metric)\s*)(ton|tons)\b"],
