@@ -63,9 +63,9 @@ unit_type_kw_reclass = {
 unit_kw_reclass = {
     'people': r"\b(people|persons?|individuals?|residents?|evacuees?|lives?|loss(es)? of life)\b",
 
-    'families' : r"\b(family|households?)\b",
+    'families' : r"\b(family|families|households?)\b",
 
-    'communities' : r"\b(community)\b",
+    'communities' : r"\b(community|communities)\b",
 
     'villages' : r"\b(villages?|hamlets?)\b",
 
