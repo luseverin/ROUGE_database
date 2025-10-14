@@ -142,7 +142,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
         if trials < trials_limit:
             return get_model_response_retry(messages, output_model, nb_valid_error, trials, trials_limit, **kwargs)
         else:
-            return response_content, response_content, nb_valid_error
+            return response, response_content, nb_valid_error
 
 
 def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
