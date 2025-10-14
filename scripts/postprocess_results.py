@@ -1,3 +1,4 @@
+from urllib import response
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -31,21 +32,24 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925"
+filename_in = "labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
+#"labelled_reports_ext_flags_meta-llama_llama-4-scout-17b-16e-instruct_v111025"
+#"labelled_reports_impacts_all_v111025"
 #"llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct"
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 # "labelled_reports_impacts_all_v240925"
 # 'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
-filename_out =  "test_new_flags_" + filename_in#post_processed_flags_
+filename_out =  "post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
 flag_value_text = True #whether or not we want to flag value in text
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
+filter_unknown_subtype = True #whether or not we want to filter out unknown impact subtype
 #geocoding params
-geocode = False #whether or not we want to geocode
+geocode = True #whether or not we want to geocode
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -55,7 +59,7 @@ polygon_source="geoBoundaries"
 if not post_proc: #try directly loading the postprocess data
     response_df_proc = pd.read_csv(DATA_OUT_PROC / (filename_out + ".csv"))
     # response_df_proc = pd.read_csv(os.path.join(DATA_OUT_PROC, filename_out+'.csv'))
-    
+
 else:
     response_df = pd.read_csv(data_path / (filename_in + ".csv"))
     # response_df = pd.read_csv(os.path.join(data_path, filename_in+'.csv'))
@@ -85,6 +89,8 @@ else:
 
     ## Reclassify impacType
     response_df_proc = response_df_proc.apply(reclassify_impact_subtype, impact_kw_reclass=impact_kw_reclass, axis=1)
+    if filter_unknown_subtype:
+        response_df_proc = response_df_proc[response_df_proc["impactSubtype"] != "Unknown"]
 
     ## Reclassify hazard
     response_df_proc = response_df_proc.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
