@@ -69,7 +69,7 @@ impact_subtypes_desc_dict = {
 impact_kw_reclass = {
     'Affected People': r"\bAffected People\b",
     'Injured People': r"\bInjured People\b",
-    'Displaced People': r"\bDisplaced People\b",
+    'Displaced People': r"\b(Displaced People|Displacement)\b",
     'Homeless People': r"\bHomeless People\b",
     'Missing People': r"\bMissing People\b",
     'Human Deaths': r"\bHuman Deaths\b",
