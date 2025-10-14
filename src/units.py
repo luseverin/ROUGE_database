@@ -71,11 +71,13 @@ unit_kw_reclass = {
 
     'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
 
+    'vehicles' : r"\b(vehicles?|motor vehicles?|cars?|trucks?|vessels?|boats?)\b",
+
     'transportation facilities': r"\b(rail(way|road)?s?|train tracks?|airports?|cars?|buses?|bus|taxi(cab)?s?|trucks?)\b",
 
-    'water, sanitation and hygiene facilities': r"\b((water|sanitation|hygiene) (units?|facilities?|(infra)?structures?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
+    'water, sanitation and hygiene facilities': r"\b((water|sanitation|hygiene|wastewater) (units?|facility|facilities|(infra)?structures?|sources?|plants?|treatment plants?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
 
-    'healthcare facilities': r"\b((health(care)?|medical) (centers?|centres?|units?|facilities?|(infra)?structures?)|hospitals?|clinics?|maternit(y|ies))\b",
+    'healthcare facilities': r"\b((health(care)?|medical) (centers?|centres?|units?|facility|facilities|(infra)?structures?)|hospitals?|clinics?|maternit(y|ies))\b",
 
     'IT and communication facilities': r"\b(communication(s)?|radios?|tv|cell towers?|antennas?)\b",
 
@@ -85,7 +87,9 @@ unit_kw_reclass = {
 
     'education facilities': r"\b(education(al)?|schools?|universit(y|ies)|colleges?)\b",
 
-    'crop production and forestry': r"\b(crops?|fields?|forests?|trees?|bananas?|coffee|cocoa|cotton|maize|rice|sorghum|soybeans?|sugar|tobacco|wheat)\b",
+    'critical facilities' : r"\b(critical ((infra)?structures?|facility|facilities|units?))\b",
+
+    'crop production and forestry': r"\b(crops?|lands?|fields?|forests?|trees?|bananas?|coffee|cocoa|cotton|maize|rice|sorghum|soybeans?|sugar|tobacco|wheat)\b",
 
     'agricultural facilities': r"\b(irrigation|barns?|farms?)\b",
 
@@ -93,7 +97,11 @@ unit_kw_reclass = {
 
     'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?|shelters?)\b",
 
-    'EUR' : r"\b(euro?s?|€)\b"
+    'EUR' : r"\b(euro?s?|€)\b",
+
+    'businesses' : r"\b(business(es)?|companies?|industries?|sectors?|enterprises?)\b",
+
+    'null' : r"\b(null|none|nan|np.nan)\b",
 }
 
 
@@ -118,15 +126,15 @@ expected_unit_subtype = {
     "Agriculture Infrastructure": "agricultural facilities",
     "Affected Livestock and Animals": "affected animals",
     "Recreation, Tourism, and Culture": "unknown",
-    "Economy and Market": "unknown",
     "Access to Healthcare": "people",
     "Access to transport and Mobility": "people",
     "Access to Food": "people",
     "Access to Water, Sanitation, and Hygiene": "people",
     "Other Human Impacts": "unknown",
-    "Other Infrastructure Impacts": "unknown",
+    "Other Infrastructure Impacts": "critical facilities",
     "Other Agricultural Impacts": "unknown",
     "Other Service Access Impacts": "people",
+    'Other Economic and Livelihood Impacts' : "businesses"
 }
 default_subtype_unit = {
     'Affected People': "people",
