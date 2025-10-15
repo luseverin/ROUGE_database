@@ -6,7 +6,7 @@ import spacy
 from src.text_processing_functions import (
     detect_language, written_num, is_float_digit,
     replace_numbers, replace_commas_in_numbers, replace_count_suffixes,
-    could_be_unit, standardize_units,
+    could_be_unit, standardize_metric_units,
     clean_text, fix_pdf_text,
     select_hazard_description, change_hazard,
     check_hazard_type_keyword, extract_entities, extract_causal_relationships
@@ -70,19 +70,19 @@ class TestTextProcessing(unittest.TestCase):
     def test_could_be_unit_false(self):
         self.assertFalse(could_be_unit("5 apples"))
 
-    def test_standardize_units_simple(self):
-        result = standardize_units("10 miles")
+    def test_standardize_metric_units_simple(self):
+        result = standardize_metric_units("10 miles")
         converted = "kilometer "
         self.assertIn("16.09344 kilometer", result)
 
-    def test_standardize_units_no_units(self):
+    def test_standardize_metric_units_no_units(self):
         text = "There are 5 apples"
-        self.assertEqual(standardize_units(text), text)
+        self.assertEqual(standardize_metric_units(text), text)
 
-    def test_standardize_units_multiple_matches(self):
+    def test_standardize_metric_units_multiple_matches(self):
         # "10 ton tonne" matches both ton and tonne -> ValueError
         with self.assertRaises(ValueError):
-            standardize_units("10 ton tonne")
+            standardize_metric_units("10 ton tonne")
 
     # ---------------- Text cleaning ----------------
     def test_clean_text_remove_numbers(self):

@@ -100,7 +100,7 @@ else:
     #convert money
     response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
     #standardize SI units
-    response_df_proc = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
+    response_df_proc = response_df_proc.apply(standardize_metric_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
     #assign unit type (e.g. surface, volume, mass)
     response_df_proc = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
     #harmonize non SI units

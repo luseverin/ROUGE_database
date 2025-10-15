@@ -70,7 +70,7 @@ for report in all_ifrc_reports_info_unnested:
                 report['text_processed'] = replace_count_suffixes(report['text_processed'])
                 report['text_processed'] = replace_numbers(report['text_processed'])
             if std_units:
-                report['text_processed'] = text_standardize_units(report['text_processed'])
+                report['text_processed'] = text_standardize_metric_units(report['text_processed'])
             report['sentences'] = sent_tokenize(report['text_processed'])
             report['nathaz_text'] = select_impact_description(report['sentences'])
             report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)

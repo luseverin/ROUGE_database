@@ -20,7 +20,7 @@ from src.post_process_functions import (
     parse_impact_value_precision,
     reclassify_impact_subtype, reclassify_hazard,
     convert_unit, assign_unit_type, reclassify_units,
-    standardize_units, join_value_units, split_value_units,
+    standardize_metric_units, join_value_units, split_value_units,
     convert_monetary_units, replace_numbers_unit,
     make_date
 )
@@ -180,9 +180,9 @@ class TestImpactFunctions(unittest.TestCase):
         out = reclassify_units(x.copy(), unit_kw_reclass, default_subtype_unit)
         self.assertIn("people", out)
 
-    def test_standardize_units(self):
+    def test_standardize_metric_units(self):
         x = pd.Series({"impactValue": 10, "impactUnit": "kg"})
-        out = standardize_units(x, std_unit_kw_reclass, unit_mapping)
+        out = standardize_metric_units(x, std_unit_kw_reclass, unit_mapping)
         self.assertEqual(out["impactUnit"], "kg")
 
     def test_join_split_value_units(self):
