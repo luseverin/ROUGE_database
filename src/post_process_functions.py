@@ -295,8 +295,38 @@ def reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat):
     # Remove duplicates
     hazard_emdat_mapped = list(set(hazard_emdat_mapped))
     return hazard_emdat_mapped
+def harmonize_units(x):
+    """
+    Harmonize units by replacing equivalent units.
 
-def convert_unit(x, unit_converter):
+    Parameters
+    ----------
+    x : str
+        String containing the unit to be harmonized
+
+    Returns
+    -------
+    str
+        Harmonized unit string
+
+    Notes
+    -----
+    This function uses a predefined dictionary of unit mappings to replace
+    equivalent units. For example, "individuals" is replaced with "people".
+    """
+    unit = x['impactUnit']
+    x["flag_unit_harmonization"] = False
+    if not isinstance(unit, str):
+        return x  # skip if unit is None or not a string
+    unit = unit.strip()
+    unit_original = unit
+    for target_unit, regex_unit in harmonize_units_kw.items():
+        unit = re.sub(regex_unit, target_unit, unit)
+    if unit != unit_original:
+        x["flag_unit_harmonization"] = True
+    return unit
+
+def convert_people_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
 
     unit = x['impactUnit']
@@ -318,7 +348,7 @@ def convert_unit(x, unit_converter):
                     print(f"Skipping unit conversion for row due to error: {e}")
     return x
 
-## assign_unit_type is redundant with standardize_units, could simplified and removed
+## assign_unit_type is redundant with standardize_metric_units, could simplified and removed
 def assign_unit_type(x, unit_type_kw_reclass):
     """Detect if dimension of unit can be identified e.g. length, mass,...
        Default to "other"
@@ -384,7 +414,7 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
     x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
     return x
 
-def standardize_units(x, std_unit_kw_reclass, unit_mapping):
+def standardize_metric_units(x, std_unit_kw_reclass, unit_mapping):
     """Standardize units to a common baseline in text"""
     values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     unit = x["impactUnit"]
