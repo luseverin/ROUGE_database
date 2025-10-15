@@ -31,17 +31,18 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
+filename_in =  "labelled_reports_impacts_all_v240925"
+#"labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
 #"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
 #"labelled_reports_ext_flags_meta-llama_llama-4-scout-17b-16e-instruct_v111025"
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 # "labelled_reports_impacts_all_v240925"
 filename_out =  "post_processed_" + filename_in#post_processed_flags_
-data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_LABELLED #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
-flag_value_text = True #whether or not we want to flag value in text
+flag_value_text = False #whether or not we want to flag value in text
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
 filter_unknown_subtype = True #whether or not we want to filter out unknown impact subtype
@@ -100,12 +101,12 @@ else:
     response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
     #standardize SI units
     response_df_proc = response_df_proc.apply(standardize_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
-    #convert convertible (non-money) units
-    response_df_proc = response_df_proc.apply(convert_unit, unit_converter=unit_converter, axis=1)
     #assign unit type (e.g. surface, volume, mass)
     response_df_proc = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
-    #reclassify non convertible units
+    #harmonize non SI units
     response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
+    #convert convertible (non-money) units
+    response_df_proc = response_df_proc.apply(convert_unit, unit_converter=unit_converter, axis=1)
 
     ## Post conversion flags
     country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
