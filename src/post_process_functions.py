@@ -336,14 +336,14 @@ def convert_unit(x, unit_converter):
     unit = unit.strip()
     if unit == "":
         return x
-    for old_unit, (conv_fact, new_unit) in unit_converter.items():
-        if unit == old_unit:
+    for old_unit_pattern, (conv_fact, new_unit) in unit_converter.items():
+        if re.search(old_unit_pattern, unit, re.IGNORECASE):
             x["flag_unit_conversion"] = True
             for key in ["impactValueMin", "impactValueMax", "impactValue"]:
                 try:
                     x[key] = float(x[key]) #force conversion to float
                     x[key] = conv_fact*x[key]
-                    x["impactUnit"] = new_unit
+                    x["impactUnit"] = re.sub(old_unit_pattern, new_unit, unit) #replace unit with new_unit
                 except Exception as e:
                     print(f"Skipping unit conversion for row due to error: {e}")
     return x
