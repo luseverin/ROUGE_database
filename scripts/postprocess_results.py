@@ -1,4 +1,3 @@
-from urllib import response
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -32,14 +31,12 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
+filename_in = "labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
+#"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
 #"labelled_reports_ext_flags_meta-llama_llama-4-scout-17b-16e-instruct_v111025"
-#"labelled_reports_impacts_all_v111025"
-#"llm_response_impact_labelled_reports_test_multiprompt_continue_v050925_21rep_meta-llama_llama-4-scout-17b-16e-instruct"
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 # "labelled_reports_impacts_all_v240925"
-# 'labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v230925'
 filename_out =  "post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
@@ -50,6 +47,7 @@ reclass_subtype = True #whether or not we want to reclassify impact subtype in f
 filter_unknown_subtype = True #whether or not we want to filter out unknown impact subtype
 #geocoding params
 geocode = True #whether or not we want to geocode
+geocode_load = f"post_processed_{filename_in}_GEOCODE_v141025" #geocoded file to load or false
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -124,3 +122,7 @@ else:
 ## Geocoding
 if geocode:
     df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
+elif geocode_load:
+    #load geocoded data
+    df_geo_output_split = gpd.read_file(DATA_OUT_PROC / (geocode_load.replace("GEOCODE", "geo_split_lowest")+".gpkg"))
+    df_geo_output =  gpd.read_file(DATA_OUT_PROC / (geocode_load.replace("GEOCODE", "geo")+".gpkg"))
