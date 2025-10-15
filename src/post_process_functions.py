@@ -326,7 +326,7 @@ def harmonize_units(x):
         x["flag_unit_harmonization"] = True
     return unit
 
-def convert_people_unit(x, unit_converter):
+def convert_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
 
     unit = x['impactUnit']
