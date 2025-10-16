@@ -1,5 +1,5 @@
 # Define unit conversion mapping
-unit_mapping = {
+METRIC_UNIT_MAPPING = {
     'km': 'km',
     'km**2': 'km**2',
     'miles': 'km',
@@ -20,7 +20,7 @@ unit_mapping = {
     "l": "m**3",
     "gallon": "m**3",
 }
-std_unit_kw_reclass = {
+METRIC_UNIT_KW_RECLASS = {
                     'km' : [r"(?<!\b(squared?)\b)\s\b(kilometers?|kilometres?|kms?)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2)\b)"],
                     'km**2' : [r"\b(?<=(squared?))\s*(kilometers?|kilometres?|kms?)\b",
                             r"\b(kilometers?|kilometres?|kms?)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
@@ -46,7 +46,7 @@ std_unit_kw_reclass = {
 }
 
 #reclassify units
-unit_converter = {
+UNIT_CONVERTER = {
     r"\b(families)\b" : (3, "people"),
     r"\b(households)\b": (3, "people"),
     r"\b(village)\b": (1000, "people"),
@@ -54,14 +54,14 @@ unit_converter = {
     }
 
 PEOPLE_NORMALIZER = r"\b^(people|deaths|cases|injuries|displaced|missings|homelesses)$\b"
-unit_type_kw_reclass = {
+UNIT_TYPE_KW_RECLASS = {
                         'km' : r"\b(kilometer|kilometre|km)s?(?!\s*(\*\*\s*2|\^2|²|square|squared|2))",
                         'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
                         'kg' : r"(kg.*|.*kilogram.*)",
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
                         '%' : r"(%|perc\.?|percent)",
 }
-harmonize_units_kw = {
+HARMONIZE_UNITS_KW = {
     'people': r"\b(people|persons?|individuals?|residents?)\b",
     'families' : r"\b(family|families|households?)\b",
     'communities' : r"\b(community|communities)\b",
@@ -72,7 +72,7 @@ harmonize_units_kw = {
     'homes' : r"\b(residences?|houses?|homes?)\b",
 
 }
-unit_kw_reclass = {
+UNIT_KW_RECLASS = {
     'people': r"\b(^people$|of people)\b",
     'deaths' : r"\b(fatalities?|deaths?|lives|loss(es)? of life|deceased|dead)\b",
     'displaced' : r"\b(displaced|evacuees?|evacuated|idps?$)\b",
@@ -82,10 +82,10 @@ unit_kw_reclass = {
     'cases' : r"\b(cases?|cases of|cases of illness|infected)\b",
     'roads' : r"\b(roads)\b",
     'transportation structures': r"\b(rail(way|road)?s?|train tracks?|airports?|vehicles?)\b",
-    'water, sanitation and hygiene structures': r"\b((water|sanitation|hygiene|wastewater) (structures|sources?|plants?|treatment plants?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
+    'WASH structures': r"\b((water|sanitation|hygiene|wastewater) (structures|sources?|plants?|treatment plants?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
     'healthcare structures': r"\b((health(care)?|medical) (centers?|centres?|units?|structures)|hospitals?|clinics?|maternit(y|ies))\b",
     'IT and communication structures': r"\b(communication(s)? structures|radios?|tv|cell towers?|antennas?)\b",
-    'power and energy production infrastructure structures': r"\b((power|energy|wind|solar|hydro) structures|generators?|dams?)\b",
+    'power and energy production structures': r"\b((power|energy|wind|solar|hydro) structures|generators?|dams?)\b",
     'homes': r"\b(residential structures|homes?)\b",
     'education structures': r"\b(education(al)? (centers?|centres?|units?|structure)|schools?|universit(y|ies)|colleges?)\b",
     'undefined structures' : r"\b((critical|public) (structures|units?)|^structures$|of structures)\b",
@@ -99,73 +99,73 @@ unit_kw_reclass = {
 }
 
 
-expected_unit_subtype = {
-    "Affected People": "people",
-    "Injured People": "injuries",
-    "Displaced People": "displaced",
-    "Homeless People": "homelesses",
-    "Missing People": "missings",
-    "Human Deaths": "deaths",
-    "Residential Buildings": "homes",
-    "Informal Settlements": "informal settlements",
-    "Education Infrastructure": "education facilities",
-    "Human Health and Wellbeing" : "unknown",
-    "Infected and Ill People": "cases",
-    "Road Infrastructure" : "roads",
-    "Other Transportation Infrastructure" : "transportation facilities",
-    "Water, Sanitation, and Hygiene Infrastructure": "water, sanitation and hygiene facilities",
-    "Healthcare Infrastructure": "healthcare facilities",
-    "IT and Communication Infrastructure": "IT and communication facilities",
-    "Power and Energy Production Infrastructure" : "power and energy production infrastructure facilities",
-    "Agriculture Infrastructure": "agricultural facilities",
-    "Affected Livestock and Animals": "affected animals",
-    "Recreation, Tourism, and Culture": "unknown",
-    "Access to Healthcare": "people",
-    "Access to transport and Mobility": "people",
-    "Access to Food": "people",
-    "Access to Water, Sanitation, and Hygiene": "people",
-    "Other Human Impacts": "unknown",
-    "Other Infrastructure Impacts": "undefined facilities",
-    "Other Agricultural Impacts": "unknown",
-    "Other Service Access Impacts": "people",
-    'Other Economic and Livelihood Impacts' : "businesses"
-}
-default_subtype_unit = {
-    'Affected People': "people",
-    'Injured People': "people",
-    'Displaced People': "people",
-    'Homeless People': "people",
-    'Missing People': "people",
-    'Human Deaths': "people",
-    'Residential Buildings': "homes",
-    'Informal settlements': "undefined informal settlements",
-    'Education Infrastructure': "schools",
-    'Human Health and Wellbeing' : "unknown",
-    'Infected and Ill People': "people",
-    'Road Infrastructure' : "roads",
-    'Other Transportation Infrastructure' : "undefined other transportation infrastructure",
-    'Water, Sanitation, and Hygiene Infrastructure': "undefined WASH facilities",
-    'Healthcare Infrastructure': "undefined healthcare facilities",
-    'IT and Communication Infrastructure': "undefined IT and communication facilities",
-    'Education Infrastructure': "schools",
-    'Power and Energy Production Infrastructure' : "undefined power and energy production infrastructure facilities",
-    'Agriculture Infrastructure': "undefined agricultural facilities",
-    'Crop Production and Forestry': "undefined crop production and forestry",
-    'Affected Livestock and Animals': "undefined affected animals",
-    'Other Economic and Livelihood Impacts': "CHF",
-    'Recreation, Tourism, and Culture' : "unknown",
-    'Access to Healthcare': "people",
-    'Access to transport and Mobility': "people",
-    'Water Quality and Availability' : "unknown",
-    'Access to Education':"people",
-    'Access to Power and Energy':"people",
-    'Access to Food':"people",
-    'Access to Water, Sanitation, and Hygiene':"people",
-    'Other Human Impacts': "unknown",
-    'Other Infrastructure Impacts': "unknown",
-    'Other Agricultural Impacts': "unknown",
-    'Other Service Access Impacts': "people"
-}
+#expected_unit_subtype = {
+#    "Affected People": "people",
+#    "Injured People": "injuries",
+#    "Displaced People": "displaced",
+#    "Homeless People": "homelesses",
+#    "Missing People": "missings",
+#    "Human Deaths": "deaths",
+#    "Residential Buildings": "homes",
+#    "Informal Settlements": "informal settlements",
+#    "Education Infrastructure": "education facilities",
+#    "Human Health and Wellbeing" : "unknown",
+#    "Infected and Ill People": "cases",
+#    "Road Infrastructure" : "roads",
+#    "Other Transportation Infrastructure" : "transportation facilities",
+#    "Water, Sanitation, and Hygiene Infrastructure": "water, sanitation and hygiene facilities",
+#    "Healthcare Infrastructure": "healthcare facilities",
+#    "IT and Communication Infrastructure": "IT and communication facilities",
+#    "Power and Energy Production Infrastructure" : "power and energy production infrastructure facilities",
+#    "Agriculture Infrastructure": "agricultural facilities",
+#    "Affected Livestock and Animals": "affected animals",
+#    "Recreation, Tourism, and Culture": "unknown",
+#    "Access to Healthcare": "people",
+#    "Access to transport and Mobility": "people",
+#    "Access to Food": "people",
+#    "Access to Water, Sanitation, and Hygiene": "people",
+#    "Other Human Impacts": "unknown",
+#    "Other Infrastructure Impacts": "undefined facilities",
+#    "Other Agricultural Impacts": "unknown",
+#    "Other Service Access Impacts": "people",
+#    'Other Economic and Livelihood Impacts' : "businesses"
+#}
+#default_subtype_unit = {
+#    'Affected People': "people",
+#    'Injured People': "people",
+#    'Displaced People': "people",
+#    'Homeless People': "people",
+#    'Missing People': "people",
+#    'Human Deaths': "people",
+#    'Residential Buildings': "homes",
+#    'Informal settlements': "undefined informal settlements",
+#    'Education Infrastructure': "schools",
+#    'Human Health and Wellbeing' : "unknown",
+#    'Infected and Ill People': "people",
+#    'Road Infrastructure' : "roads",
+#    'Other Transportation Infrastructure' : "undefined other transportation infrastructure",
+#    'Water, Sanitation, and Hygiene Infrastructure': "undefined WASH facilities",
+#    'Healthcare Infrastructure': "undefined healthcare facilities",
+#    'IT and Communication Infrastructure': "undefined IT and communication facilities",
+#    'Education Infrastructure': "schools",
+#    'Power and Energy Production Infrastructure' : "undefined power and energy production infrastructure facilities",
+#    'Agriculture Infrastructure': "undefined agricultural facilities",
+#    'Crop Production and Forestry': "undefined crop production and forestry",
+#    'Affected Livestock and Animals': "undefined affected animals",
+#    'Other Economic and Livelihood Impacts': "CHF",
+#    'Recreation, Tourism, and Culture' : "unknown",
+#    'Access to Healthcare': "people",
+#    'Access to transport and Mobility': "people",
+#    'Water Quality and Availability' : "unknown",
+#    'Access to Education':"people",
+#    'Access to Power and Energy':"people",
+#    'Access to Food':"people",
+#    'Access to Water, Sanitation, and Hygiene':"people",
+#    'Other Human Impacts': "unknown",
+#    'Other Infrastructure Impacts': "unknown",
+#    'Other Agricultural Impacts': "unknown",
+#    'Other Service Access Impacts': "people"
+#}
 
 #impactUnitType_list = ["count", "distance", "area", "weight", "volume"]
 

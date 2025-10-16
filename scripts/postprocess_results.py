@@ -19,9 +19,7 @@ from src.plot_functions import *
 from src.post_process_functions import *
 from src.geocoding import *
 from src.hazard_def import *
-from src.impact_def import *
 from src.sanity_checks import *
-from src.units import *
 
 ### Post process
 #0. Formatting
@@ -31,24 +29,24 @@ from src.units import *
 #4. Geocoding
 
 ## Parameters
-filename_in =  "labelled_reports_impacts_all_v240925"
+filename_in =  "labelled_reports_impacts_all_v111025"
+#"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
 #"labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
 #"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
 #"labelled_reports_ext_flags_meta-llama_llama-4-scout-17b-16e-instruct_v111025"
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
-# "labelled_reports_impacts_all_v240925"
-filename_out =  "post_processed_" + filename_in#post_processed_flags_
+#"labelled_reports_impacts_all_v111025"
+filename_out =  "post_processed_new_unit_std_" + filename_in#post_processed_flags_
 data_path = DATA_LABELLED #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
-flag_value_text = False #whether or not we want to flag value in text
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
 filter_unknown_subtype = True #whether or not we want to filter out unknown impact subtype
 #geocoding params
 geocode = True #whether or not we want to geocode
-geocode_load = f"post_processed_{filename_in}_GEOCODE_v141025" #geocoded file to load or false
+geocode_load = False #f"post_processed_{filename_in}_GEOCODE_v141025" #geocoded file to load or false
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -79,7 +77,7 @@ else:
     response_df_proc = response_df_proc.apply(parse_impact_value_precision, axis=1)
 
     #pre conversion flags
-    if flag_value_text:
+    if "nathaz_text" in response_df_proc.columns:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
 
     #add iso3
@@ -87,7 +85,7 @@ else:
     response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(list_country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
 
     ## Reclassify impacType
-    response_df_proc = response_df_proc.apply(reclassify_impact_subtype, impact_kw_reclass=impact_kw_reclass, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_impact_subtype, axis=1)
     if filter_unknown_subtype:
         response_df_proc = response_df_proc[response_df_proc["impactSubtype"] != "Unknown"]
 
@@ -99,14 +97,18 @@ else:
     response_df_proc = response_df_proc.apply(replace_numbers_unit, axis=1)
     #convert money
     response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
-    #standardize SI units
-    response_df_proc = response_df_proc.apply(standardize_metric_units, std_unit_kw_reclass=std_unit_kw_reclass, unit_mapping=unit_mapping, axis=1)
+    #standardize metric units
+    response_df_proc = response_df_proc.apply(standardize_metric_units, axis=1)
     #assign unit type (e.g. surface, volume, mass)
-    response_df_proc = response_df_proc.apply(assign_unit_type, unit_type_kw_reclass=unit_type_kw_reclass, axis=1)
-    #harmonize non SI units
-    response_df_proc = response_df_proc.apply(reclassify_units, unit_kw_reclass=unit_kw_reclass, default_subtype_unit=default_subtype_unit, force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
+    response_df_proc = response_df_proc.apply(assign_unit_type, axis=1)
+    #harmonize non metric units
+    response_df_proc = response_df_proc.apply(harmonize_units, axis=1)
     #convert convertible (non-money) units
-    response_df_proc = response_df_proc.apply(convert_unit, unit_converter=unit_converter, axis=1)
+    response_df_proc = response_df_proc.apply(convert_unit, axis=1)
+    #reclassify units
+    response_df_proc = response_df_proc.apply(reclassify_units, axis=1)
+    #normalize people units
+    response_df_proc = response_df_proc.apply(normalize_people_unit, axis=1)
 
     ## Post conversion flags
     country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)

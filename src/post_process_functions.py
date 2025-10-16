@@ -19,8 +19,6 @@ from src.units import *
 from src.impact_def import *
 from src.hazard_def import *
 
-
-
 def country_name_to_iso3(name):
     """
     Convert a country name to its ISO 3 letter code.
@@ -177,7 +175,7 @@ def parse_impact_value_precision(x):
     x["impactValue"]= x["impactValueMax"] if not pd.isna(x["impactValueMax"]) else max_value
 
     return x
-def reclassify_impact_subtype(x, impact_kw_reclass):
+def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     """
     Reclassify an impact subtype using a dictionary of regular expressions.
 
@@ -295,7 +293,7 @@ def reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat):
     # Remove duplicates
     hazard_emdat_mapped = list(set(hazard_emdat_mapped))
     return hazard_emdat_mapped
-def harmonize_units(x):
+def harmonize_units(x, harmonize_units_kw=HARMONIZE_UNITS_KW):
     """
     Harmonize units by replacing equivalent units.
 
@@ -327,7 +325,7 @@ def harmonize_units(x):
         x["flag_unit_harmonization"] = True
     return x
 
-def convert_unit(x, unit_converter):
+def convert_unit(x, unit_converter=UNIT_CONVERTER):
     """Convert units that can be converted e.g. families => people"""
 
     unit = x['impactUnit']
@@ -350,7 +348,7 @@ def convert_unit(x, unit_converter):
     return x
 
 ## assign_unit_type is redundant with standardize_metric_units, could simplified and removed
-def assign_unit_type(x, unit_type_kw_reclass):
+def assign_unit_type(x, unit_type_kw_reclass=UNIT_TYPE_KW_RECLASS):
     """Detect if dimension of unit can be identified e.g. length, mass,...
        Default to "other"
     """
@@ -368,7 +366,7 @@ def assign_unit_type(x, unit_type_kw_reclass):
     x["flag_unit_type"] = flag
     return x
 
-def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subtype=True, reclass_subtype=True):
+def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=IMPACT_EXPECTED_UNITS, default_subtype_unit=IMPACT_DEFAULT_UNITS, force_unit_to_subtype=True, reclass_subtype=True):
     """
     Reclassify units based on keywords
 
@@ -417,7 +415,7 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
     x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
     return x
 
-def standardize_metric_units(x, std_unit_kw_reclass, unit_mapping):
+def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit_mapping=METRIC_UNIT_MAPPING):
     """Standardize units to a common baseline in text"""
     values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     unit = x["impactUnit"]
