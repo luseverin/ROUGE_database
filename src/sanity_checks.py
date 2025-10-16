@@ -62,20 +62,24 @@ def pop_cntry_check(x, country_pop):
     if not x["impactUnit"] == "people" or pd.isna(x[["impactValue", "impactValueMax", "impactValueMin"]]).values.all():
         return np.nan
     year = str(pd.to_datetime(x["reportDate"]).year)
-    year_check = year if year in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns else None
-    if not year_check:
-        years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == x["country_iso3_kw"]].columns if col.isnumeric()])
-        year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
-        print(f"Warning: year {year} not in population data for {x['country_iso3_kw']}"
-              f"\n Defaulting to year {year_check}")
-    if  x["country_iso3_kw"] not in country_pop["Country Code"].unique():
-        print(f"Warning: country {x['country_iso3_kw']} not in population data")
-        pop_year = np.nan
-    else:
-        pop_year = country_pop[country_pop["Country Code"] == x["country_iso3_kw"]][year_check].values[0]
+    population = 0
+    countries = np.unique(x["country_iso3"])
+    for country in countries:
+        year_check = year if year in country_pop[country_pop["Country Code"] == country].columns else None
+        if not year_check:
+            years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == country].columns if col.isnumeric()])
+            year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
+            print(f"Warning: year {year} not in population data for {country}"
+                  f"\n Defaulting to year {year_check}")
+        if  country not in country_pop["Country Code"].unique():
+            print(f"Warning: country {country} not in population data")
+            pop_year = np.nan
+        else:
+            pop_year = country_pop[country_pop["Country Code"] == country][year_check].values[0]
+        population += pop_year
     flag_pop = False
     for impval in x[["impactValue", "impactValueMax", "impactValueMin"]].values:
-        if impval > pop_year:
+        if impval > population:
             flag_pop = True
     return flag_pop
 def flag_partial_unit(x):
