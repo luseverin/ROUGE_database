@@ -322,9 +322,10 @@ def harmonize_units(x):
     unit_original = unit
     for target_unit, regex_unit in harmonize_units_kw.items():
         unit = re.sub(regex_unit, target_unit, unit)
+        x['impactUnit'] = unit
     if unit != unit_original:
         x["flag_unit_harmonization"] = True
-    return unit
+    return x
 
 def convert_unit(x, unit_converter):
     """Convert units that can be converted e.g. families => people"""
@@ -337,7 +338,7 @@ def convert_unit(x, unit_converter):
     if unit == "":
         return x
     for old_unit_pattern, (conv_fact, new_unit) in unit_converter.items():
-        if re.search(old_unit_pattern, unit, re.IGNORECASE):
+        if re.search(old_unit_pattern, unit, re.IGNORECASE) and not re.search(r"\b(people)\b", unit, re.IGNORECASE): #avoid conversion when people already in unit e.g. people per household
             x["flag_unit_conversion"] = True
             for key in ["impactValueMin", "impactValueMax", "impactValue"]:
                 try:
@@ -396,6 +397,8 @@ def reclassify_units(x, unit_kw_reclass, default_subtype_unit,force_unit_to_subt
     if len(candidates) == 1:
         reclass_unit = unit_prefix+candidates[0]
     else:
+        if len(candidates) > 1:
+            print(f"Multiple candidates found for {unit}: {candidates}")
         flag_unit_nonstd = True
         #no unit identified, infer unit from category
         if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
@@ -453,6 +456,27 @@ def standardize_metric_units(x, std_unit_kw_reclass, unit_mapping):
     x["impactValueMax"] = converted_values[2]
     x["impactUnit"] = converted_unit
     x["flag_unit_standardization"] = True
+    return x
+
+def normalize_people_unit(x):
+    """
+    Normalize people unit (e.g.) deaths to people.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The series containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the normalized unit
+    """
+    unit = x["impactUnit"]
+    if not isinstance(unit, str):
+        return x  # skip if unit is None or not a string
+    if re.search(PEOPLE_NORMALIZER, unit, re.IGNORECASE):
+        x["impactUnit"] = "people"
     return x
 
 def join_value_units(x):

@@ -46,12 +46,14 @@ std_unit_kw_reclass = {
 }
 
 #reclassify units
-unit_converter = {"families" : (3, "people"),
-                  "households": (3, "people"),
-                  "village": (1000, "people"),
-                  "communities": (100, "people"),
-                  }
+unit_converter = {
+    r"\b(families)\b" : (3, "people"),
+    r"\b(households)\b": (3, "people"),
+    r"\b(village)\b": (1000, "people"),
+    r"\b(communities)\b": (100, "people"),
+    }
 
+PEOPLE_NORMALIZER = r"\b^(people|deaths|cases|injuries|displaced|missings|homelesses)$\b"
 unit_type_kw_reclass = {
                         'km' : r"\b(kilometer|kilometre|km)s?(?!\s*(\*\*\s*2|\^2|²|square|squared|2))",
                         'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
@@ -59,64 +61,56 @@ unit_type_kw_reclass = {
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
                         '%' : r"(%|perc\.?|percent)",
 }
-
-unit_kw_reclass = {
-    'people': r"\b(people|persons?|individuals?|residents?|evacuees?|lives?|loss(es)? of life)\b",
-
+harmonize_units_kw = {
+    'people': r"\b(people|persons?|individuals?|residents?)\b",
     'families' : r"\b(family|families|households?)\b",
-
     'communities' : r"\b(community|communities)\b",
-
     'villages' : r"\b(villages?|hamlets?)\b",
-
     'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
-
     'vehicles' : r"\b(vehicles?|motor vehicles?|cars?|trucks?|vessels?|boats?)\b",
+    'structures' : r"\b(facilities|facility|buildings?|(infra)?structures?|buildings?|utilities?)\b",
+    'homes' : r"\b(residences?|houses?|homes?)\b",
 
-    'transportation facilities': r"\b(rail(way|road)?s?|train tracks?|airports?|cars?|buses?|bus|taxi(cab)?s?|trucks?)\b",
-
-    'water, sanitation and hygiene facilities': r"\b((water|sanitation|hygiene|wastewater) (units?|facility|facilities|(infra)?structures?|sources?|plants?|treatment plants?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
-
-    'healthcare facilities': r"\b((health(care)?|medical) (centers?|centres?|units?|facility|facilities|(infra)?structures?)|hospitals?|clinics?|maternit(y|ies))\b",
-
-    'IT and communication facilities': r"\b(communication(s)?|radios?|tv|cell towers?|antennas?)\b",
-
-    'power and energy production infrastructure facilities': r"\b(power|energy|generators?|wind|solar|hydro|dams?)\b",
-
-    'homes': r"\b(residential buildings?|residences?|houses?|homes?)\b",
-
-    'education facilities': r"\b(education(al)?|schools?|universit(y|ies)|colleges?)\b",
-
-    'critical facilities' : r"\b(critical ((infra)?structures?|facility|facilities|units?))\b",
-
-    'crop production and forestry': r"\b(crops?|lands?|fields?|forests?|trees?|bananas?|coffee|cocoa|cotton|maize|rice|sorghum|soybeans?|sugar|tobacco|wheat)\b",
-
-    'agricultural facilities': r"\b(irrigation|barns?|farms?)\b",
-
+}
+unit_kw_reclass = {
+    'people': r"\b(^people$|of people)\b",
+    'deaths' : r"\b(fatalities?|deaths?|lives|loss(es)? of life|deceased|dead)\b",
+    'displaced' : r"\b(displaced|evacuees?|evacuated|idps?$)\b",
+    'homelesses' : r"\b(homeless(es)?|homeless people)\b",
+    'injuries' : r"\b(injuries?|injured|injury)\b",
+    'missings' : r"\b(missing|missing persons?|missing individuals?|missing residents?|missing people|disappeared)\b",
+    'cases' : r"\b(cases?|cases of|cases of illness|infected)\b",
+    'roads' : r"\b(roads)\b",
+    'transportation structures': r"\b(rail(way|road)?s?|train tracks?|airports?|vehicles?)\b",
+    'water, sanitation and hygiene structures': r"\b((water|sanitation|hygiene|wastewater) (structures|sources?|plants?|treatment plants?)|latrines?|wells?|taps?|reservoirs?|aqueducts?)\b",
+    'healthcare structures': r"\b((health(care)?|medical) (centers?|centres?|units?|structures)|hospitals?|clinics?|maternit(y|ies))\b",
+    'IT and communication structures': r"\b(communication(s)? structures|radios?|tv|cell towers?|antennas?)\b",
+    'power and energy production infrastructure structures': r"\b((power|energy|wind|solar|hydro) structures|generators?|dams?)\b",
+    'homes': r"\b(residential structures|homes?)\b",
+    'education structures': r"\b(education(al)? (centers?|centres?|units?|structure)|schools?|universit(y|ies)|colleges?)\b",
+    'undefined structures' : r"\b((critical|public) (structures|units?)|^structures$|of structures)\b",
+    'crop production and forestry': r"\b(crops?|(farm)?lands?|fields?|forests?|trees?|bananas?|coffee|cocoa|cotton|maize|rice|sorghum|soybeans?|sugar|tobacco|wheat)\b",
+    'agricultural structures': r"\b(irrigation|barns?|farms?)\b",
     'affected animals': r"\b(livestock|animals?|fish|cows?|sheep|poultr(y|ies)|cattle|goats?|pigs?|chickens?|horses?|heads?)\b",
-
-    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?|shelters?)\b",
-
+    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?|shelters?|idp sites?)\b",
     'EUR' : r"\b(euro?s?|€)\b",
-
     'businesses' : r"\b(business(es)?|companies?|industries?|sectors?|enterprises?)\b",
-
     'null' : r"\b(null|none|nan|np.nan)\b",
 }
 
 
 expected_unit_subtype = {
     "Affected People": "people",
-    "Injured People": "people",
-    "Displaced People": "people",
-    "Homeless People": "people",
-    "Missing People": "people",
-    "Human Deaths": "people",
+    "Injured People": "injuries",
+    "Displaced People": "displaced",
+    "Homeless People": "homelesses",
+    "Missing People": "missings",
+    "Human Deaths": "deaths",
     "Residential Buildings": "homes",
-    "Informal settlements": "informal settlements",
+    "Informal Settlements": "informal settlements",
     "Education Infrastructure": "education facilities",
     "Human Health and Wellbeing" : "unknown",
-    "Infected and Ill People": "people",
+    "Infected and Ill People": "cases",
     "Road Infrastructure" : "roads",
     "Other Transportation Infrastructure" : "transportation facilities",
     "Water, Sanitation, and Hygiene Infrastructure": "water, sanitation and hygiene facilities",
@@ -131,7 +125,7 @@ expected_unit_subtype = {
     "Access to Food": "people",
     "Access to Water, Sanitation, and Hygiene": "people",
     "Other Human Impacts": "unknown",
-    "Other Infrastructure Impacts": "critical facilities",
+    "Other Infrastructure Impacts": "undefined facilities",
     "Other Agricultural Impacts": "unknown",
     "Other Service Access Impacts": "people",
     'Other Economic and Livelihood Impacts' : "businesses"
