@@ -6,6 +6,8 @@ import json as json
 import regex as re
 import json_repair
 import random
+import json
+import re
 #import instructor
 from pydantic import ValidationError
 from typing import get_type_hints, get_origin, get_args
@@ -81,6 +83,16 @@ def build_messages(prompt, prompt_system=None, prompt_assistant=None):
         messages.append({"role": "assistant", "content": prompt_assistant})
     return messages
 
+def extract_json_block(text):
+    """
+    Attempts to extract the first JSON-like block from text.
+    Supports arrays and objects.
+    """
+    match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
+    if match:
+        return match.group(1)
+    return text  # fallback to raw
+
 def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
     """Query Groq API with retry and exponential backoff when hitting 429 errors."""
 
@@ -119,7 +131,21 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
         return None, None, None
 
     # Parse the response content into a list of ImpactDetail objects
-    response_content = json_repair.loads(response.choices[0].message.content)
+    raw_text = response.choices[0].message.content
+
+    try:
+        response_content = json_repair.loads(raw_text)
+    except Exception as e:
+        print(f"[JSON_REPAIR ERROR] Falling back to raw content. Error: {e}")
+        # Try a simpler parse: extract JSON substring or force minimal cleanup
+        try:
+            json_str = extract_json_block(raw_text)  # custom helper to extract {...} or [...]
+            response_content = json.loads(json_str)
+        except Exception as e2:
+            print(f"[SECONDARY JSON LOAD FAILURE] {e2}")
+            return None, None, None
+
+    #response_content = json_repair.loads(response.choices[0].message.content)
     try:
         structured_response = output_model.model_validate(response_content)
         return response, structured_response.model_dump(), nb_valid_error  # Return as Python object
