@@ -19,27 +19,26 @@ keys = labelled_reports[['appealCode', 'reportDate']].drop_duplicates()
 labelled_reports_raw = ifrc_reports_df.merge(keys, on=['appealCode', 'reportDate'], how='inner')
 
 #eventually select by appeal code
-appeals_test = ["MDRSD034"]
+appeals_test = ["MDRYE011"]
 test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
 
 # select reports to process
 nreports = 1
-reports_in = test_reports#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+reports_in = labelled_reports_raw#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
 
 ## Parameters
-sim_name = "labelled_reports_test_turnoff_subtype_val"#name of simulation "labelled_reports"
+sim_name = "labelled_reports_turnoff_subtype_val"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}.csv" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
-max_rounds = 15 #max number of continuations
+max_rounds = 10 #max number of continuations
 
 #chose hazard and impact cats
 hazcat = list(hazard_main_types_emdat_desc.keys())
-impmaintype = impactType_list
-impsubtype_dict = impact_subtypes_desc_dict
-impsubtype = list(impact_subtypes_desc_dict.keys())
-
+impmaintype = IMPACT_TYPES
+impsubtype_dict = IMPACT_DESCRIPTIONS
+impsubtype = IMPACT_SUBTYPES
 #Validation
 validate_impSubtypes = False
 validate_hazards = True #deactivate hazards validation as cause issues
