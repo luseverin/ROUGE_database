@@ -40,7 +40,7 @@ def get_nan_ids(df,key):
     """split a dataframe into two, according to whether the column key contains nans"""
     return df[~df[key].isna()].index.values, df[df[key].isna()].index.values
 
-def split_nans(ext_df, lab_df, key, loose_nan_policy=True):
+def split_nans(ext_df, lab_df, key, nan_policy="strict"):
     """
     Split DataFrames into rows with and without NaNs in the given key column.
 
@@ -52,9 +52,9 @@ def split_nans(ext_df, lab_df, key, loose_nan_policy=True):
         Labelled DataFrame.
     key : str
         Column name to check for NaN values.
-    loose_nan_policy : bool, optional
-        If True, allow NaNs from one side to be matched with all rows
-        from the other side. Default is True.
+    nan_policy : "strict", "loose"
+        If "loose", allow NaNs from one side to be matched with all rows
+        from the other side. Default is "strict".
 
     Returns
     -------
@@ -78,12 +78,12 @@ def split_nans(ext_df, lab_df, key, loose_nan_policy=True):
         nan_lab_df = lab_df.loc[nan_id_lab]
 
     elif len(nan_id_ext):  # Only ext has NaNs
-        if loose_nan_policy:
+        if nan_policy == "loose":
             nan_ext_df = ext_df.loc[nan_id_ext]
             nan_lab_df = lab_df
 
     elif len(nan_id_lab):  # Only lab has NaNs
-        if loose_nan_policy:
+        if nan_policy == "loose":
             nan_ext_df = ext_df
             nan_lab_df = lab_df.loc[nan_id_lab]
 
@@ -211,7 +211,7 @@ def split_nans_sim_matrix(dist_mat, nan_id_ext, nan_id_lab):
     dist_mat_notna = None if dist_mat_notna.size == 0 else dist_mat_notna
     return dist_mat_notna, dist_mat_na
 
-def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols, matching_cols_weights, geo_match=False, value_match_pre=False, value_match_post=False):
+def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols, matching_cols_weights, geo_match=False, value_match=None):
     """Match rows between extracted and labelled dataframes"""
 
     #compute cosine distance
@@ -223,21 +223,21 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
         dist_mat = np.append(dist_mat, iou_mat[:,:, None], axis=2)
 
     #calculate diff
-    if value_match_pre:
-        value_diff = calc_value_sim(ext_df["impactValue"].values.reshape(-1,1),
-                                     lab_df["impactValue"].values.reshape(1,-1))
-        dist_mat = np.append(dist_mat, value_diff[:,:, None], axis=2)
-    else:
+    if value_match != "pre":
         #be sure to remove impactValue from matching_cols
         if "impactValue" in matching_cols:
             matching_cols = matching_cols.copy()
             matching_cols.remove("impactValue")
+    else:
+        value_diff = calc_value_sim(ext_df["impactValue"].values.reshape(-1,1),
+                                     lab_df["impactValue"].values.reshape(1,-1))
+        dist_mat = np.append(dist_mat, value_diff[:,:, None], axis=2)
 
     #matching based on similarity only
     id_match_ext, id_match_lab = find_match_sim(dist_mat, matching_cols, matching_cols_weights)
 
     # refine best candidates by minimizing value diff
-    if value_match_post:
+    if value_match == "post":
         id_match_ext, id_match_lab = find_match_value(ext_df, lab_df, id_match_ext, id_match_lab)
 
     #reindex back in original df
@@ -246,14 +246,6 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
 
     #slice dist_mat only including best candidates to store accuracy results
     accuracy_matrix = dist_mat[id_match_ext, id_match_lab, :]
-
-    #add aggregated similarity scores
-    #if value_match_pre or value_match_post:
-    #    value_diff_all = np.abs(ext_df.iloc[id_match_ext]["impactValue"].values.reshape(-1,1) -
-    #                            lab_df.iloc[id_match_lab]["impactValue"].values.reshape(1,-1)).diagonal()
-    #    accuracy_matrix = np.append(accuracy_matrix, value_diff_all.reshape(-1,1), axis=1)
-    agg_sim_candidates = compute_weighted_sim(accuracy_matrix, matching_cols, matching_cols_weights)
-    accuracy_matrix = np.append(accuracy_matrix, agg_sim_candidates.reshape(-1,1), axis=1)##!! in which order columns are added
 
     return reid_match_ext, reid_match_lab, accuracy_matrix
 
