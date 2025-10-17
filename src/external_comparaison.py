@@ -15,25 +15,25 @@ from src.hazard_def import *
 from src.impact_def import *
 from src.post_process_functions import *
 
-go_ifrc_impact_source = {"report" : "field_reports_",
+ifrc_go_impact_source = {"report" : "field_reports_",
                          "gov" : "field_reports_gov_",
                          "other" : "field_reports_other_"
                          }
 
-# mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "field_reports_num_affected", "emdat" : "Total Affected"},
-#                        "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "field_reports_num_injured", "emdat" : None},
-#                        "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "field_reports_num_displaced", "emdat" : None},
-#                        "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "field_reports_num_dead", "emdat" : "Total Deaths"},
-#                        "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "field_reports_num_missing", "emdat" : None}
+# mapping_impact_type = {"Affected People" : {"ifrc_monty" : "affected_total", "ifrc_go" : "field_reports_num_affected", "emdat" : "Total Affected"},
+#                        "Injured People" : {"ifrc_monty" : "injured", "ifrc_go" : "field_reports_num_injured", "emdat" : None},
+#                        "Displaced People" : {"ifrc_monty" : "displaced_total", "ifrc_go" : "field_reports_num_displaced", "emdat" : None},
+#                        "Human Deaths" : {"ifrc_monty" : "death", "ifrc_go" : "field_reports_num_dead", "emdat" : "Total Deaths"},
+#                        "Missing People" : {"ifrc_monty" : "missing", "ifrc_go" : "field_reports_num_missing", "emdat" : None}
 #                     #    "Homeless People"
 #                        }
 
-mapping_impact_type = {"Affected People" : {"monty_ifrc" : "affected_total", "go_ifrc" : "num_affected", "emdat" : "Total Affected"},
-                       "Injured People" : {"monty_ifrc" : "injured", "go_ifrc" : "num_injured", "emdat" : None},
-                       "Displaced People" : {"monty_ifrc" : "displaced_total", "go_ifrc" : "num_displaced", "emdat" : None},
-                       "Human Deaths" : {"monty_ifrc" : "death", "go_ifrc" : "num_dead", "emdat" : "Total Deaths"},
-                       "Missing People" : {"monty_ifrc" : "missing", "go_ifrc" : "num_missing", "emdat" : None},
-                       "Homeless People" : {"monty_ifrc" : None, "go_ifrc" : None, "emdat" : "No. Homeless"}
+mapping_impact_type = {"Affected People" : {"ifrc_monty" : "affected_total", "ifrc_go" : "num_affected", "emdat" : "Total Affected"},
+                       "Injured People" : {"ifrc_monty" : "injured", "ifrc_go" : "num_injured", "emdat" : None},
+                       "Displaced People" : {"ifrc_monty" : "displaced_total", "ifrc_go" : "num_displaced", "emdat" : None},
+                       "Human Deaths" : {"ifrc_monty" : "death", "ifrc_go" : "num_dead", "emdat" : "Total Deaths"},
+                       "Missing People" : {"ifrc_monty" : "missing", "ifrc_go" : "num_missing", "emdat" : None},
+                       "Homeless People" : {"ifrc_monty" : None, "ifrc_go" : None, "emdat" : "No. Homeless"}
                        }
 
 ### LABELLED AND LLM DATAFRAMES
@@ -186,9 +186,9 @@ def clean_group(df_impact) :
 
 def clean_impact_values(row):
     for impact_type, mapping in mapping_impact_type.items():
-        for impact_source, prefix in go_ifrc_impact_source.items():
-            if mapping["go_ifrc"] : 
-                col = prefix + mapping["go_ifrc"]
+        for impact_source, prefix in ifrc_go_impact_source.items():
+            if mapping["ifrc_go"] : 
+                col = prefix + mapping["ifrc_go"]
                 # check if column exists and has a non-null value
                 if col in row and pd.notna(row[col]):
                     row[impact_type] = row[col]
@@ -204,8 +204,8 @@ def open_clean_ifrc_go() :
 
     # #Remove extra row
     # raw_cols = [
-    # prefix + mapping["go_ifrc"]
-    # for prefix in go_ifrc_impact_source.values()
+    # prefix + mapping["ifrc_go"]
+    # for prefix in ifrc_go_impact_source.values()
     # for mapping in mapping_impact_type.values()]
     # df_ifrc_go = df_ifrc_go.drop(columns=[c for c in raw_cols if c in df_ifrc_go.columns])
 
@@ -235,9 +235,9 @@ def open_clean_ifrc_monty(df_ifrc_go) :
 
     #Rename impact type
     monty_map = {
-        mapping["monty_ifrc"]: impact_type
+        mapping["ifrc_monty"]: impact_type
         for impact_type, mapping in mapping_impact_type.items()
-        if mapping["monty_ifrc"] is not None
+        if mapping["ifrc_monty"] is not None
         }
 
     # Replace values in the column
