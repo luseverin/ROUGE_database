@@ -29,7 +29,7 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in =  "labelled_reports_impacts_all_v111025"
+filename_in =  "labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
 #"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
 #"labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
 #"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
@@ -38,7 +38,7 @@ filename_in =  "labelled_reports_impacts_all_v111025"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
 filename_out =  "post_processed_new_unit_std_" + filename_in#post_processed_flags_
-data_path = DATA_LABELLED #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
@@ -106,7 +106,7 @@ else:
     #convert convertible (non-money) units
     response_df_proc = response_df_proc.apply(convert_unit, axis=1)
     #reclassify units
-    response_df_proc = response_df_proc.apply(reclassify_units, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
     #normalize people units
     response_df_proc = response_df_proc.apply(normalize_people_unit, axis=1)
 

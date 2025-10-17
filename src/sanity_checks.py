@@ -112,7 +112,7 @@ def flag_percent(x):
     pandas.Series
         The series with the added column
     """
-    return x["unit_type"] == "percent"#(x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
+    return x["unit_type"] == "%"#(x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
 
 def flag_hazard(extracted_data, hazard_list):
     """
