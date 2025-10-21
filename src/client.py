@@ -5,9 +5,10 @@ import getpass
 
 global CLIENT
 global MODEL_NAME
-MODEL_NAME = "llama-3.1-8b-instant"#"meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"#"meta-llama/llama-4-scout-17b-16e-instruct"
 ## Examples of models with Groq :
 MODEL_NAME_LIST = [
+    "openai/gpt-oss-20b",
     "llama3-70b-8192",
     "llama3-8b-8192",
     "mistral-saba-24b",
@@ -57,7 +58,7 @@ CLIENT = instructor.patch(client=CLIENT)
 user = getpass.getuser()
 if user == "lhasbini" :
     NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-elif user == "lseverino" : 
+elif user == "lseverino" :
     NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
 else:
     raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
