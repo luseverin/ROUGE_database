@@ -211,6 +211,8 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                          "role": "user",
                          "content":
                             "Check for NEW impacts not already extracted above. "
+                            "Only return the NEW impacts, do not return the ones already extracted. "
+                            "Answer in the same format as before. "
                             "Do NOT return repeated impacts under any circumstances."
                      })
 
@@ -289,18 +291,18 @@ def deduplicate_structured_responses(prev_responses, new_responses):
     seen = set([(entry["impactSubtype"],
              entry["impactValue"],
              entry["impactUnit"],
-             tuple(entry.get("location") or []),
-             tuple(entry.get("country") or []),
-             tuple(entry.get("hazards") or [])
+             #tuple(entry.get("location") or []),
+             #tuple(entry.get("country") or []),
+             #tuple(entry.get("hazards") or [])
              ) for entry in prev_responses])
 
     for new_entry in new_responses:
         entry_key = (new_entry["impactSubtype"],
                      new_entry["impactValue"],
                      new_entry["impactUnit"],
-                     tuple(new_entry.get("location") or []),
-                     tuple(new_entry.get("country") or []),
-                     tuple(new_entry.get("hazards") or []),
+                     #tuple(new_entry.get("location") or []),
+                     #tuple(new_entry.get("country") or []),
+                     #tuple(new_entry.get("hazards") or []),
                      )
         if entry_key not in seen:
             seen.add(entry_key)
