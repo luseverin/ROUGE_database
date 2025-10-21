@@ -1,3 +1,3 @@
 def print_match(matched_df):
     """Display function to better visualize match df"""
-    return matched_df[["impactSubtype", "impactSubtype_matched", "impactValue", "impactValue_matched", "impactUnit", "impactUnit_matched", "location", "location_matched", "geometry_sim", "match_sim","valueAnnotation", "annotation_matched"]]
+    return matched_df[["appealCode","impactSubtype", "impactSubtype_matched", "impactValue", "impactValue_matched", "impactUnit", "impactUnit_matched", "location", "location_matched", "impactSubtype_sim", "impactUnit_sim", "geometry_sim", "startYear_sim", "startMonth_sim", "startDay_sim","endYear_sim","endMonth_sim", "endDay_sim","hazards_sim","match_sim","valueAnnotation", "annotation_matched"]]
