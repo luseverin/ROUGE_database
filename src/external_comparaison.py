@@ -86,7 +86,7 @@ def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
-def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
+def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
     """
     Groups quantitative impacts at the country level.
 
@@ -122,11 +122,11 @@ def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
                 row["impactValue_final"] = df_admin_0["impactValue_final"].max()
                 df_admin = df_admin_0
 
-            elif not df_admin_1.empty :
+            elif (not df_admin_1.empty) and (ADM_min>=1):
                 row["impactValue_final"] = df_admin_1["impactValue_final"].sum()
                 df_admin = df_admin_1
 
-            elif not df_admin_2.empty :
+            elif (not df_admin_2.empty) and (ADM_min>=2) :
                 row["impactValue_final"] = df_admin_2["impactValue_final"].sum()
                 df_admin = df_admin_2
 
@@ -174,12 +174,12 @@ def group_quanti_country_level(df: pd.DataFrame) -> pd.DataFrame:
 
     return pd.DataFrame(df_output)
 
-def clean_group(df_impact) :
+def clean_group(df_impact, ADM_min=0) :
     df_output = df_impact.copy()
     df_output['startYear'] = df_output.apply(consolidate_startYear, axis=1)
     df_output = add_location_admin_num(df_output)
     df_output = consolidate_impact_value(df_output)
-    df_output = group_quanti_country_level(df_output)
+    df_output = group_quanti_country_level(df_output, ADM_min=0)
     return df_output
 
 ## IFRC_GO
@@ -246,6 +246,30 @@ def open_clean_ifrc_monty(df_ifrc_go) :
     return df_ifrc_monty
 
 ## EMDAT 
+
+def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
+    #Open EM-DAT
+    df_em_dat = pd.read_excel(DATA_EXTERNAL_SOURCE / file_name)
+    df_em_dat = df_em_dat.loc[df_em_dat["Disaster Type"].isin(hazard_mapping_emdat.keys())]
+
+    df_em_dat["Start Month"] = df_em_dat["Start Month"].fillna(1).astype(int)
+    df_em_dat["Start Day"] = df_em_dat["Start Day"].fillna(1).astype(int)
+    df_em_dat["Start Date"] = pd.to_datetime(
+        df_em_dat[["Start Year", "Start Month", "Start Day"]].rename(
+            columns={"Start Year": "year", "Start Month": "month", "Start Day": "day"}
+        ),
+        errors="coerce"
+    )
+
+    df_em_dat["End Month"] = df_em_dat["End Month"].fillna(1).astype(int)
+    df_em_dat["End Day"] = df_em_dat["End Day"].fillna(1).astype(int)
+    df_em_dat["End Date"] = pd.to_datetime(
+        df_em_dat[["End Year", "End Month", "End Day"]].rename(
+            columns={"End Year": "year", "End Month": "month", "End Day": "day"}
+        ),
+        errors="coerce"
+    )
+    return df_em_dat
 
 def choose_unique_disno(df_llm_em_dat, column_minimize):
     # Count number of impacts per DisNo
