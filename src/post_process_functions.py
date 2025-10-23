@@ -607,6 +607,28 @@ def replace_numbers_unit(x):
     x["flag_reformat_unit"] = flag_reformat_unit
     return x
 
+def label_quanti_quali(x):
+    """
+    Label a column "quanti" in a DataFrame x based on the existence of values in the "impactValue" column.
+
+    Parameters
+    ----------
+    x : DataFrame
+        The DataFrame to be labeled.
+
+    Returns
+    -------
+    DataFrame
+        The DataFrame with the added "quanti" column.
+
+    Notes
+    -----
+    The "quanti" column is labeled as "quanti" if the "impactValue" column has a value, and "quali" otherwise.
+    """
+    x["quanti"] = x["impactValue"].notnull()
+    x.loc[x["quanti"],"quanti"] = "quanti"
+    x.loc[x["quanti"]==False,"quanti"] = "quali"
+    return x
 def make_date(report_df):
     """
     Make start and end dates from the separate columns in the report DataFrame.
