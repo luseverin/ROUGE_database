@@ -334,3 +334,33 @@ IMPACT_KEYWORDS = Impacts.get_keywords()
 IMPACT_EXPECTED_UNITS = Impacts.get_expected_units()
 IMPACT_DEFAULT_UNITS = Impacts.get_default_units()
 
+IMPACT_SUBTYPE_MERGER = {
+    "Transportation Infrastructure and Access to Mobility" : r"(Road Infrastructure|Other Transportation Infrastructure|Mobility and Access to Transport)",
+    "Water, Sanitation, and Hygiene Infrastructure and Access to Water, Sanitation, and Hygiene" : r"(Water, Sanitation, and Hygiene Infrastructure|Access to Water, Sanitation, and Hygiene|Water Quality and Availability)",
+    "Healthcare Infrastructure and Access to Healthcare" : r"(Healthcare Infrastructure|Access to Healthcare)",
+    "IT and Communication Infrastructure and Access to IT and Communication" : r"(IT and Communication Infrastructure|Access to IT and Communication Infrastructure)",
+    "Education Infrastructure and Access to Education" : r"(Education Infrastructure|Access to Education)",
+    "Agriculture and Access to Food" : r"(Agricultural Infrastructure|Access to Food|Crop Production and Forestry|Affected Livestock and Animals|Other Agricultural Impacts)",
+    "Power and Energy Production Infrastructure and Access to Power and Energy" : r"(Power and Energy Production Infrastructure|Access to Power and Energy)",
+}
+IMPACT_SUBTYPES_MERGED = [el for el in IMPACT_SUBTYPES if el not in ["Road Infrastructure",
+                                                                     "Other Transportation Infrastructure",
+                                                                     "Mobility and Access to Transport",
+                                                                     "Water, Sanitation, and Hygiene Infrastructure",
+                                                                     "Access to Water, Sanitation, and Hygiene",
+                                                                     "Water Quality and Availability",
+                                                                     "Healthcare Infrastructure",
+                                                                     "Access to Healthcare",
+                                                                     "IT and Communication Infrastructure",
+                                                                     "Access to IT and Communication Infrastructure",
+                                                                     "Education Infrastructure",
+                                                                     "Access to Education",
+                                                                     "Agricultural Infrastructure",
+                                                                     "Access to Food",
+                                                                     "Crop Production and Forestry",
+                                                                     "Affected Livestock and Animals",
+                                                                     "Other Agricultural Impacts",
+                                                                     "Power and Energy Production Infrastructure",
+                                                                     "Access to Power and Energy"]]
+
+IMPACT_SUBTYPES_MERGED += [k for k, v in IMPACT_SUBTYPE_MERGER.items()]
