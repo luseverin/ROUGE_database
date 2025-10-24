@@ -1,7 +1,6 @@
 
 import datetime as dt
 
-from attr import validate
 from src.data import *
 from src.LLM_functions import *
 from src.labelling_helpers import filter_reports
@@ -19,20 +18,21 @@ keys = labelled_reports[['appealCode', 'reportDate']].drop_duplicates()
 labelled_reports_raw = ifrc_reports_df.merge(keys, on=['appealCode', 'reportDate'], how='inner')
 
 #eventually select by appeal code
-appeals_test = ["MDRYE011"]
+appeals_test = ["MDRPK026"]
 test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
 
 # select reports to process
 nreports = 1
 reports_in = labelled_reports_raw#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
 
 ## Parameters
-sim_name = "labelled_reports_turnoff_subtype_val"#name of simulation "labelled_reports"
+sim_name = "labelled_reports_remove_subtypes2"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}.csv" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
-max_rounds = 10 #max number of continuations
+max_rounds = 20 #max number of continuations
 
 #chose hazard and impact cats
 hazcat = list(hazard_main_types_emdat_desc.keys())
@@ -66,7 +66,8 @@ validate_hazards = True #deactivate hazards validation as cause issues
 #    base_prompt = add_examples_prompt(base_prompt, examples)
 
 #api parameters
-groq_kwargs = {"temperature": 0,
+groq_kwargs = {"temperature": 0.01,
+               "top_p":0.01,
                "seed": 42,
                #"response_format":{
                #    "type": "json_schema",
