@@ -44,28 +44,6 @@ impsubtype = IMPACT_SUBTYPES
 validate_impSubtypes = False
 validate_hazards = True #deactivate hazards validation as cause issues
 
-#impunit = impactUnit_list_prompting
-#impunittype = impactUnitType_list
-#descriptions_impact = format_desc(impact_subtypes_desc_dict)
-#descriptions_hazard = format_desc(hazard_main_types_emdat_desc)
-#validate_hazards = True #deactivate hazards validation as cause issues
-#constr_unit = False #constrain unit or not
-#examples = examples_range
-#json_scheme = impact_scehem_json_schema(impsubtype, hazcat)
-
-#chose prompt function
-#base_prompt = quantify_impacts_all_system_prompt(impsubtype, hazcat)#groq_system_prompt(impsubtype, hazcat)
-#text_pos = "above"
-#add_examples = True
-#add_descriptions = True
-#
-#if add_descriptions:
-#    base_prompt = add_subtype_descriptions_prompt(base_prompt, "impactSubtype", descriptions_impact)
-#    base_prompt = add_subtype_descriptions_prompt(base_prompt, "hazards", descriptions_hazard)
-#
-#if add_examples:
-#    base_prompt = add_examples_prompt(base_prompt, examples)
-
 #api parameters
 groq_kwargs = {"temperature": 0.01,
                "top_p":0.01,
@@ -80,7 +58,6 @@ groq_kwargs = {"temperature": 0.01,
                }
 
 ## Extraction
-#print(add_text_prompt(base_prompt, """\nTEST\nTEXT\n""", text_pos=text_pos))
 sys.stdout = open(DATA_OUT_LLMS / ("LOGS_"+res_savename + ".txt"), 'w')
 print(f"Processing {res_savename}")
 response, response_df = get_event_impacts_multiprompt(reports_in,
