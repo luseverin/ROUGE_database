@@ -5,9 +5,10 @@ import datetime as dt
 from src.data import *
 from src.LLM_functions import *
 from src.labelling_helpers import filter_reports
+from src.logger_setup import set_logger
 
 ## Open and read the JSON file
-file_path = DATA_IN_JSONS / "preproc_filtered_report_types_nat_hazards_bugfix_v240925.csv"#'all_ifrc_reports_info_processed_extended_format_nb_std_units.json' "nathaz_ifrc_reports_info_processed.json"
+file_path = DATA_IN_JSONS / "preproc_filtered_report_types_nat_hazards_bugfix_v250925.csv"#'all_ifrc_reports_info_processed_extended_format_nb_std_units.json' "nathaz_ifrc_reports_info_processed.json"
 ifrc_reports_df = pd.read_csv(file_path)
 
 # filter reports by report type and date
@@ -19,18 +20,17 @@ keys = labelled_reports[['appealCode', 'reportDate']].drop_duplicates()
 labelled_reports_raw = ifrc_reports_df.merge(keys, on=['appealCode', 'reportDate'], how='inner')
 
 #eventually select by appeal code
-appeals_test = ["MDRPK026"]
-test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
+appeals_test = ["MDRAR016"]
+test_reports = ifrc_reports_df_filtered[ifrc_reports_df_filtered.appealCode.isin(appeals_test)]
 
 # select reports to process
-nreports = 1
-reports_in = labelled_reports_raw#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+nreports = 222
+reports_in = test_reports#ifrc_reports_df_filtered.iloc[:nreports]#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 #labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
-
 ## Parameters
-sim_name = "test_logs"#name of simulation "labelled_reports"
+sim_name = "test_max_it"#all_appeals_unique_1-222"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
 max_rounds = 20 #max number of continuations
@@ -58,16 +58,19 @@ groq_kwargs = {"temperature": 0.01,
                }
 
 ## Extraction
-sys.stdout = open(DATA_OUT_LLMS / ("LOGS_"+res_savename + ".txt"), 'w')
-print(f"Processing {res_savename}")
-response, response_df = get_event_impacts_multiprompt(reports_in,
-                                                      impact_types_dict=impsubtype_dict,
-                                                      hazards_list=hazcat,
-                                                      validate_impSubtypes=validate_impSubtypes,
-                                                      validate_hazards=validate_hazards,
-                                                      chunk_size=chunk_size,
-                                                      max_rounds=max_rounds,
-                                                      res_savename=res_savename,
-                                                      **groq_kwargs)
-
-sys.stdout.close()
+log_file = DATA_OUT_LLMS / f"LOGS_{res_savename}.txt"
+LOGGER = set_logger(log_file, logger_name="impact_extraction")
+LOGGER.info(f"Processing {res_savename}")
+try:
+    response, response_df = get_event_impacts_multiprompt(reports_in,
+                                                          impact_types_dict=impsubtype_dict,
+                                                          hazards_list=hazcat,
+                                                          validate_impSubtypes=validate_impSubtypes,
+                                                          validate_hazards=validate_hazards,
+                                                          chunk_size=chunk_size,
+                                                          max_rounds=max_rounds,
+                                                          res_savename=res_savename,
+                                                          **groq_kwargs)
+    LOGGER.info("Extraction completed successfully.")
+except Exception as e:
+    LOGGER.exception(f"Error while processing {res_savename}: {e}")

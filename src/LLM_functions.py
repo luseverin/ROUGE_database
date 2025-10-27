@@ -8,6 +8,7 @@ import json_repair
 import random
 import json
 import re
+import logging
 #import instructor
 from pydantic import ValidationError
 from typing import get_type_hints, get_origin, get_args
@@ -22,6 +23,8 @@ from src.prompts_impacts import *
 from src.client import CLIENT, MODEL_NAME
 from src.classOutput import *
 
+# set up logger
+LOGGER = logging.getLogger("impact_extraction")
 def extract_outer_json(text):
     start_index = text.find('{')
     end_index = text.rfind('}')
@@ -65,10 +68,10 @@ def check_result_json(result_json, label=None):
         if label:
             answer = answer[label]
     except Exception as e:
-        print("An unexpected error occurred:", e)
+        LOGGER.error("An unexpected error occurred:", e)
         return None
     if not answer:
-        print("JSON is empty:", result_json)
+        LOGGER.info("JSON is empty:", result_json)
     return answer
 
 def build_messages(prompt, prompt_system=None, prompt_assistant=None):
@@ -103,7 +106,7 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
                 messages=messages,
                 **kwargs
             )
-            print(f"Total tokens used for request: {completion.usage.total_tokens}")
+            LOGGER.info(f"Total tokens used for request: {completion.usage.total_tokens}")
             return completion  # ✅ Success, return response immediately
 
         except Exception as e:
@@ -112,14 +115,14 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
             # Handle rate limit or token errors
             if "429" in error_message or "rate" in error_message.lower():
                 wait_time = initial_wait * (2 ** attempt) + random.uniform(0.1, 0.5)  # jitter to avoid thundering herd
-                print(f"[Rate Limit] 429 received. Retry {attempt+1}/{max_retries} in {wait_time:.1f} seconds...")
+                LOGGER.info(f"[Rate Limit] 429 received. Retry {attempt+1}/{max_retries} in {wait_time:.1f} seconds...")
                 time.sleep(wait_time)
                 continue
 
             # Other errors → stop immediately
-            print(f"[API Error - Not Retrying] {error_message}")
+            LOGGER.error(f"[API Error - Not Retrying] {error_message}")
             return None#{"error": "API call failed.", "details": error_message}
-    print("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
+    LOGGER.error("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
     return None#{"error": "Max retries exceeded due to rate limits."}
 
 def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0, trials_limit=2, **kwargs):
@@ -136,13 +139,13 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
     try:
         response_content = json_repair.loads(raw_text)
     except Exception as e:
-        print(f"[JSON_REPAIR ERROR] Falling back to raw content. Error: {e}")
+        LOGGER.error(f"[JSON_REPAIR ERROR] Falling back to raw content. Error: {e}")
         # Try a simpler parse: extract JSON substring or force minimal cleanup
         try:
             json_str = extract_json_block(raw_text)  # custom helper to extract {...} or [...]
             response_content = json.loads(json_str)
         except Exception as e2:
-            print(f"[SECONDARY JSON LOAD FAILURE] {e2}")
+            LOGGER.error(f"[SECONDARY JSON LOAD FAILURE] {e2}")
             return None, None, None
 
     #response_content = json_repair.loads(response.choices[0].message.content)
@@ -151,7 +154,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
         return response, structured_response.model_dump(), nb_valid_error  # Return as Python object
     except ValidationError as e:
         nb_valid_error += 1
-        print("Validation Error:", e)
+        LOGGER.info("Validation Error:", e)
         #allow one retry prompting the model with its error
         #Add context messages and build retry messages
         retry_prompt = f"""
@@ -192,9 +195,9 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         try:
             structured_response_non_dedup = structured_response
             structured_response = deduplicate_structured_responses(full_response_formatted, structured_response)
-            print(f"Deduplicated {len(structured_response_non_dedup)-len(structured_response)} impacts")
+            LOGGER.info(f"Deduplicated {len(structured_response_non_dedup)-len(structured_response)} impacts")
         except Exception as e:
-            print("deduplicate_structured_responses error:", e)
+            LOGGER.error("deduplicate_structured_responses error:", e)
 
         valid_error_count[i] = valid_error_count.get(i, 0)
         if len(structured_response):
@@ -216,7 +219,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                             "Do NOT return repeated impacts under any circumstances."
                      })
 
-    print(f"Nb. of iterations: {i}")
+    LOGGER.info(f"Nb. of iterations: {i}")
     #extend and flatten list
     valid_error_ext = []
     for it in nb_extracted_impacts.keys():
@@ -384,7 +387,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
         if isinstance(impact, list) and len(impact) == 1:
             impact = impact[0]
         elif (isinstance(impact, dict) and "impactValue" not in impact.keys()) or not isinstance(impact, dict):
-            print(f"discarding impact: {impact}")
+            LOGGER.info(f"discarding impact: {impact}")
             continue
         impact_value = extract_impact_value(pd.DataFrame(impact))
         impact_unit = impact["impactUnit"]
@@ -472,9 +475,9 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
                                                                         **groq_kwargs)
         #further clean-up
         answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
-        print(f"Impacts {len(answer_impacts)} impacts identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        LOGGER.info(f"Impacts {len(answer_impacts)} impacts identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
         now_extract_time = time.time()
-        print(f"Extraction time: {now_extract_time - last_extract_time} seconds")
+        LOGGER.info(f"Extraction time: {now_extract_time - last_extract_time} seconds")
         last_extract_time = now_extract_time
 
         if answer_impacts:
@@ -495,6 +498,6 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
     nreports = len(df_labelled)
     dtime = end_time - start_time
     n_extracted_fields = len(all_response_df) if answer_impacts else 0
-    print(f"{MODEL_NAME}; time taken: {dtime} seconds, , {n_extracted_fields} fields extracted in {dtime/nreports} seconds per report")
+    LOGGER.info(f"{MODEL_NAME}; time taken: {dtime} seconds, , {n_extracted_fields} fields extracted in {dtime/nreports} seconds per report")
 
     return (response, all_response_df)
