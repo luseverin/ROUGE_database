@@ -64,6 +64,7 @@ def pop_cntry_check(x, country_pop):
     year = str(pd.to_datetime(x["reportDate"]).year)
     population = 0
     countries = np.unique(x["country_iso3"])
+    flag_pop = False
     for country in countries:
         year_check = year if year in country_pop[country_pop["Country Code"] == country].columns else None
         if not year_check:
@@ -77,7 +78,6 @@ def pop_cntry_check(x, country_pop):
         else:
             pop_year = country_pop[country_pop["Country Code"] == country][year_check].values[0]
         population += pop_year
-    flag_pop = False
     for impval in x[["impactValue", "impactValueMax", "impactValueMin"]].values:
         if impval > population:
             flag_pop = True
@@ -137,3 +137,6 @@ def flag_hazard(extracted_data, hazard_list):
     extracted_data["unknown_haz"] = np.nan
     extracted_data["unknown_haz"] = extracted_data.apply(check_haz, axis=1)
     return extracted_data
+
+def flag_remove_cat(x, remove_cats=["DREF Allocation", "Targeted People", "Assisted People"]):
+    return x["impactSubtype"] in remove_cats

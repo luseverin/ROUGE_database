@@ -8,6 +8,7 @@ import json_repair
 import random
 import json
 import re
+import logging
 #import instructor
 from pydantic import ValidationError
 from typing import get_type_hints, get_origin, get_args
@@ -19,9 +20,11 @@ from src.impact_def import *
 from src.data import *
 from src.prompts_hazards import *
 from src.prompts_impacts import *
-from src.client import CLIENT, MODEL_NAME
+from src.client import CLIENT, CONTEXT_WINDOW, MODEL_NAME, MAX_COMPLETION_TOKENS
 from src.classOutput import *
 
+# set up logger
+LOGGER = logging.getLogger("impact_extraction")
 def extract_outer_json(text):
     start_index = text.find('{')
     end_index = text.rfind('}')
@@ -65,10 +68,10 @@ def check_result_json(result_json, label=None):
         if label:
             answer = answer[label]
     except Exception as e:
-        print("An unexpected error occurred:", e)
+        LOGGER.error("An unexpected error occurred: %s", e)
         return None
     if not answer:
-        print("JSON is empty:", result_json)
+        LOGGER.info("JSON is empty: %s", result_json)
     return answer
 
 def build_messages(prompt, prompt_system=None, prompt_assistant=None):
@@ -103,7 +106,14 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
                 messages=messages,
                 **kwargs
             )
-            print(f"Total tokens used for request: {completion.usage.total_tokens}")
+            used_tokens = completion.usage.total_tokens
+            completion_tokens = completion.usage.completion_tokens
+            if used_tokens > CONTEXT_WINDOW:
+                LOGGER.warning("Request exceeded max context window width: %i > %i",
+                               used_tokens, CONTEXT_WINDOW)
+            if completion_tokens > MAX_COMPLETION_TOKENS:
+                LOGGER.warning("Request exceeded max completion tokens: %i > %i",
+                               completion_tokens, MAX_COMPLETION_TOKENS)
             return completion  # ✅ Success, return response immediately
 
         except Exception as e:
@@ -112,14 +122,15 @@ def get_model_response(messages, max_retries=5, initial_wait=2, **kwargs):
             # Handle rate limit or token errors
             if "429" in error_message or "rate" in error_message.lower():
                 wait_time = initial_wait * (2 ** attempt) + random.uniform(0.1, 0.5)  # jitter to avoid thundering herd
-                print(f"[Rate Limit] 429 received. Retry {attempt+1}/{max_retries} in {wait_time:.1f} seconds...")
+                LOGGER.info("[Rate Limit] 429 received. Retry %i/%i in %.1f seconds...",
+                            attempt+1, max_retries, wait_time)
                 time.sleep(wait_time)
                 continue
 
             # Other errors → stop immediately
-            print(f"[API Error - Not Retrying] {error_message}")
+            LOGGER.error("[API Error - Not Retrying] %s", error_message)
             return None#{"error": "API call failed.", "details": error_message}
-    print("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
+    LOGGER.error("[API Error - Max Retries Exceeded] Max retries exceeded due to rate limits.")
     return None#{"error": "Max retries exceeded due to rate limits."}
 
 def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0, trials_limit=2, **kwargs):
@@ -127,7 +138,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
     from pydantic ValidationError"""
     #get model response
     response = get_model_response(messages, **kwargs)
-    if not response:
+    if response is None:
         return None, None, None
 
     # Parse the response content into a list of ImpactDetail objects
@@ -136,13 +147,13 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
     try:
         response_content = json_repair.loads(raw_text)
     except Exception as e:
-        print(f"[JSON_REPAIR ERROR] Falling back to raw content. Error: {e}")
+        LOGGER.error("[JSON_REPAIR ERROR] Falling back to raw content. Error: %s", e)
         # Try a simpler parse: extract JSON substring or force minimal cleanup
         try:
             json_str = extract_json_block(raw_text)  # custom helper to extract {...} or [...]
             response_content = json.loads(json_str)
         except Exception as e2:
-            print(f"[SECONDARY JSON LOAD FAILURE] {e2}")
+            LOGGER.error("[SECONDARY JSON LOAD FAILURE] %s", e2)
             return None, None, None
 
     #response_content = json_repair.loads(response.choices[0].message.content)
@@ -151,7 +162,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
         return response, structured_response.model_dump(), nb_valid_error  # Return as Python object
     except ValidationError as e:
         nb_valid_error += 1
-        print("Validation Error:", e)
+        LOGGER.info("Validation Error: %s", e)
         #allow one retry prompting the model with its error
         #Add context messages and build retry messages
         retry_prompt = f"""
@@ -179,22 +190,24 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
     valid_error_count = {i: 0 for i in range(max_rounds)}
     nb_extracted_impacts = {}
 
-    messages = build_messages(prompt_user, prompt_system=prompt_system, prompt_assistant=prompt_assistant)
+    init_messages = build_messages(prompt_user, prompt_system=prompt_system, prompt_assistant=prompt_assistant)
+    messages = init_messages
     #get model response
     for i in range(max_rounds):
         #get model response
         raw_response, structured_response, nb_valid_error = get_model_response_retry(messages, output_model, valid_error_count[i], **groq_kwargs)
         valid_error_count[i] += nb_valid_error
-        if not structured_response:
+        if structured_response is None:
             nb_extracted_impacts[i] = 0
             continue
         #deduplicate output
         try:
             structured_response_non_dedup = structured_response
             structured_response = deduplicate_structured_responses(full_response_formatted, structured_response)
-            print(f"Deduplicated {len(structured_response_non_dedup)-len(structured_response)} impacts")
+            LOGGER.info("Deduplicated %i impacts",
+                        len(structured_response_non_dedup)-len(structured_response))
         except Exception as e:
-            print("deduplicate_structured_responses error:", e)
+            LOGGER.error("deduplicate_structured_responses error: %s", e)
 
         valid_error_count[i] = valid_error_count.get(i, 0)
         if len(structured_response):
@@ -206,6 +219,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         full_response_formatted.extend(structured_response)
 
         # Add assistant message and user prompt for continuation
+        messages = deepcopy(init_messages)
         messages.append({"role": "assistant", "content": str(json.dumps(full_response_formatted))})
         messages.append({
                          "role": "user",
@@ -216,7 +230,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
                             "Do NOT return repeated impacts under any circumstances."
                      })
 
-    print(f"Nb. of iterations: {i}")
+    LOGGER.info("Nb. of iterations: %i", i+1)
     #extend and flatten list
     valid_error_ext = []
     for it in nb_extracted_impacts.keys():
@@ -384,7 +398,7 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
         if isinstance(impact, list) and len(impact) == 1:
             impact = impact[0]
         elif (isinstance(impact, dict) and "impactValue" not in impact.keys()) or not isinstance(impact, dict):
-            print(f"discarding impact: {impact}")
+            LOGGER.info("discarding impact: %s", impact)
             continue
         impact_value = extract_impact_value(pd.DataFrame(impact))
         impact_unit = impact["impactUnit"]
@@ -472,9 +486,11 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
                                                                         **groq_kwargs)
         #further clean-up
         answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
-        print(f"Impacts {len(answer_impacts)} impacts identified in {reference_info['appealCode']}, {reference_info['reportDate']}")
+        LOGGER.info("Impacts %s impacts identified in %s, %s",
+                    len(answer_impacts), reference_info['appealCode'], reference_info['reportDate'])
         now_extract_time = time.time()
-        print(f"Extraction time: {now_extract_time - last_extract_time} seconds")
+        LOGGER.info("Extraction time: %.2f seconds",
+                    now_extract_time - last_extract_time)
         last_extract_time = now_extract_time
 
         if answer_impacts:
@@ -489,12 +505,13 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
         response_df_list.append(new_dfs)
         all_response_df = pd.concat(response_df_list, ignore_index=True, axis=0)
         if res_savename:
-            all_response_df.to_csv(DATA_OUT_LLMS / res_savename, index=False)
+            all_response_df.to_csv(DATA_OUT_LLMS / (res_savename + ".csv"), index=False)
 
     end_time = time.time()
     nreports = len(df_labelled)
     dtime = end_time - start_time
     n_extracted_fields = len(all_response_df) if answer_impacts else 0
-    print(f"{MODEL_NAME}; time taken: {dtime} seconds, , {n_extracted_fields} fields extracted in {dtime/nreports} seconds per report")
+    LOGGER.info("%s; time taken: %.2f seconds, , %i fields extracted in %.2f seconds per report",
+                MODEL_NAME, dtime, n_extracted_fields, dtime/nreports)
 
     return (response, all_response_df)

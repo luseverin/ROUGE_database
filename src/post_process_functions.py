@@ -210,6 +210,7 @@ def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     x["flag_impactSubtype_reclass"] = True
     return x
 
+
 def reclassify_hazard(x, hazard_kw_reclass):
     """
     Reclassify a hazard type using a dictionary of regular expressions.
@@ -241,6 +242,17 @@ def reclassify_hazard(x, hazard_kw_reclass):
                     corr_haz[i] = "Unknown"
     x["hazards"] = corr_haz
     x["flag_hazards_reclass"] = flag
+    return x
+def merge_impact_subtypes(x, impact_kw_reclass=IMPACT_SUBTYPE_MERGER):
+    candidates = []
+    for key, value in impact_kw_reclass.items():
+        if re.search(value, x["impactSubtype"], re.IGNORECASE):
+            candidates.append(key)
+    if len(candidates) == 1:
+        x["impactSubtype"] = candidates[0]
+        x["flag_impactSubtype_merged"] = True
+    else:
+        x["flag_impactSubtype_merged"] = False
     return x
 
 def reverse_mapping(hazard_mapping_emdat) :
@@ -607,6 +619,30 @@ def replace_numbers_unit(x):
     x["flag_reformat_unit"] = flag_reformat_unit
     return x
 
+def label_quanti_quali(x):
+    """
+    Label a column "quanti" in a DataFrame x based on the existence of values in the "impactValue" column.
+
+    Parameters
+    ----------
+    x : DataFrame
+        The DataFrame to be labeled.
+
+    Returns
+    -------
+    DataFrame
+        The DataFrame with the added "quanti" column.
+
+    Notes
+    -----
+    The "quanti" column is labeled as "quanti" if the "impactValue" column has a value, and "quali" otherwise.
+    """
+    quanti = pd.notnull(x["impactValue"])
+    if quanti:
+        x["quanti"] = "quanti"
+    else:
+        x["quanti"] = "quali"
+    return x
 def make_date(report_df):
     """
     Make start and end dates from the separate columns in the report DataFrame.
