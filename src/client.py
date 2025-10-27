@@ -6,6 +6,8 @@ import getpass
 global CLIENT
 global MODEL_NAME
 MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"#"meta-llama/llama-4-scout-17b-16e-instruct"
+MAX_COMPLETION_TOKENS = 8192
+CONTEXT_WINDOW = 131072
 ## Examples of models with Groq :
 MODEL_NAME_LIST = [
     "openai/gpt-oss-20b",
