@@ -1,4 +1,5 @@
 
+import sys
 import datetime as dt
 
 from src.data import *
@@ -29,8 +30,8 @@ nreports = len(reports_in)
 
 
 ## Parameters
-sim_name = "labelled_reports_remove_subtypes2"#name of simulation "labelled_reports"
-res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}.csv" #model to be changed in src.client
+sim_name = "test_logs"#name of simulation "labelled_reports"
+res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
 max_rounds = 20 #max number of continuations
 
@@ -80,6 +81,7 @@ groq_kwargs = {"temperature": 0.01,
 
 ## Extraction
 #print(add_text_prompt(base_prompt, """\nTEST\nTEXT\n""", text_pos=text_pos))
+sys.stdout = open(DATA_OUT_LLMS / ("LOGS_"+res_savename + ".txt"), 'w')
 print(f"Processing {res_savename}")
 response, response_df = get_event_impacts_multiprompt(reports_in,
                                                       impact_types_dict=impsubtype_dict,
@@ -90,3 +92,5 @@ response, response_df = get_event_impacts_multiprompt(reports_in,
                                                       max_rounds=max_rounds,
                                                       res_savename=res_savename,
                                                       **groq_kwargs)
+
+sys.stdout.close()

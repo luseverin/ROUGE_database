@@ -489,7 +489,7 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
         response_df_list.append(new_dfs)
         all_response_df = pd.concat(response_df_list, ignore_index=True, axis=0)
         if res_savename:
-            all_response_df.to_csv(DATA_OUT_LLMS / res_savename, index=False)
+            all_response_df.to_csv(DATA_OUT_LLMS / (res_savename + ".csv"), index=False)
 
     end_time = time.time()
     nreports = len(df_labelled)
