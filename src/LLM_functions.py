@@ -197,7 +197,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         #get model response
         raw_response, structured_response, nb_valid_error = get_model_response_retry(messages, output_model, valid_error_count[i], **groq_kwargs)
         valid_error_count[i] += nb_valid_error
-        if structured_response is None:
+        if structured_response is None or not isinstance(structured_response, list):
             nb_extracted_impacts[i] = 0
             continue
         #deduplicate output
