@@ -1,7 +1,12 @@
 #sanity checks for llm extraction
 import pandas as pd
 import numpy as np
+import logging
 from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers, format_number
+
+# set up logger
+LOGGER = logging.getLogger("postprocessing")
+
 #value in original text
 def flag_value_in_text(row):
     """
@@ -70,10 +75,10 @@ def pop_cntry_check(x, country_pop):
         if not year_check:
             years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == country].columns if col.isnumeric()])
             year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
-            print(f"Warning: year {year} not in population data for {country}"
-                  f"\n Defaulting to year {year_check}")
+            LOGGER.warning("Year %s not in population data for %s"
+                           "\n Defaulting to year %s",year, country, year_check)
         if  country not in country_pop["Country Code"].unique():
-            print(f"Warning: country {country} not in population data")
+            LOGGER.warning("Country %s not in population data", country)
             pop_year = np.nan
         else:
             pop_year = country_pop[country_pop["Country Code"] == country][year_check].values[0]

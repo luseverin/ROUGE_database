@@ -12,12 +12,16 @@ from pint import UnitRegistry
 from price_parser import Price
 from currency_converter import CurrencyConverter, RateNotFoundError
 #from shapely import equals
+import logging
 
 from src import units
 from src.text_processing_functions import *
 from src.units import *
 from src.impact_def import *
 from src.hazard_def import *
+
+# set up logger
+LOGGER = logging.getLogger("postprocessing")
 
 def country_name_to_iso3(name):
     """
@@ -356,7 +360,7 @@ def convert_unit(x, unit_converter=UNIT_CONVERTER):
                     x[key] = conv_fact*x[key]
                     x["impactUnit"] = re.sub(old_unit_pattern, new_unit, unit) #replace unit with new_unit
                 except Exception as e:
-                    print(f"Skipping unit conversion for row due to error: {e}")
+                    LOGGER.error("Skipping unit conversion for row due to error: %s", e)
     return x
 
 ## assign_unit_type is redundant with standardize_metric_units, could simplified and removed
@@ -408,7 +412,7 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
         reclass_unit = unit_prefix+candidates[0]
     else:
         if len(candidates) > 1:
-            print(f"Multiple candidates found for {unit}: {candidates}")
+            LOGGER.warning("Multiple candidates found for %s: %s", unit, candidates)
         flag_unit_nonstd = True
         #no unit identified, infer unit from category
         if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
@@ -419,7 +423,7 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
         possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
         if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
             flag_reclass_subtype_from_unit = True
-            print(f"Reclassified subtype from {x['impactSubtype']} to {possible_subtypes[0]} with unit reclass {reclass_unit} and orig unit {unit}")
+            LOGGER.info("Reclassified subtype from %s to %s with unit reclass %s and orig unit %s", x['impactSubtype'], possible_subtypes[0], reclass_unit, unit)
             #print(x["valueAnnotation"])
             x["impactSubtype"] = possible_subtypes[0]
     x["impactUnit"] = reclass_unit
@@ -500,15 +504,15 @@ def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR")
         value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
         unit_parsed = DEF_CUR
     except RateNotFoundError as e:
-        print(str(e) + "; using default conversion rate")
+        LOGGER.warning("%s; using default conversion rate", e)
         try:
             value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR)
             unit_parsed = DEF_CUR
         except Exception as e:
-            print(f"Fallback failed: {e}")
+            LOGGER.error("Fallback default rate money_converter failed: %s", e)
             flag = True
     except Exception as e:
-        print(f"General conversion error: {e}")
+        LOGGER.error(f"General money_converter error: %s", e)
         flag = True
     return value_parsed, unit_parsed, flag
 
@@ -546,7 +550,7 @@ def convert_monetary_units(x):
             values_parsed[value_label] = value_raw
 
     if len(pd.unique(units_parsed)) > 1:#only do assignment if all units are the same
-        print(f"Multiple units parsed: {units_parsed}")
+        LOGGER.warning("Multiple units parsed: %s", units_parsed)
         flag_failed_conversion = True
     elif len(pd.unique(units_parsed)) == 1:
         for value_label in value_labels:
