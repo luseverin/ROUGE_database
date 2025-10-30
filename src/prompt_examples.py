@@ -30,7 +30,7 @@ examples_value_unit = """[{
        "valueAnnotation": ["At least 4 hospitals have been impacted by a hailstorm in River Nile State alone."]
        },
        {
-       "impactSubtype" : "Other Infrastructural Impacts",
+       "impactSubtype" : "Undefined Infrastructure",
        "impactValue": 4000000,
        "impactUnit": "CHF",
        "impactValuePrecision" : "approx",

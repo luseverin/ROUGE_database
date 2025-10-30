@@ -271,7 +271,6 @@ Impacts.register(
 #    expected_unit="unknown",
 #    default_unit="unknown"
 #)
-
 #Impacts.register(
 #    key="Other Infrastructural Impacts",
 #    main_type="Infrastructure",
@@ -280,7 +279,14 @@ Impacts.register(
 #    expected_unit="undefined structures",
 #    default_unit="unknown"
 #)
-
+Impacts.register(
+    key="Undefined Infrastructure",
+    main_type="Infrastructure",
+    description="Any identified impact on infrastructure where the type of infrastructure impacted is not clearly defined, e.g. critical infrastructure, public infrastructure, etc.",
+    keyword=r"\b(Undefined Infrastructure)\b",
+    expected_unit="undefined structures",
+    default_unit="unknown"
+)
 #Impacts.register(
 #    key="Other Service Access Impacts",
 #    main_type="Service access",
@@ -288,7 +294,14 @@ Impacts.register(
 #    keyword=r"\bOther Service Access(?: Impacts?)?\b",
 #    expected_unit="people",
 #    default_unit="people"
-#)
+Impacts.register(
+    key="Undefined Service Access",
+    main_type="Service access",
+    description="Any identified impact on service access where the type of service impacted is not clearly defined, e.g. access to basic services",
+    keyword=r"\bUndefined Service Access\b",
+    expected_unit="people",
+    default_unit="people"
+)
 
 #Impacts.register(
 #    key="Other Agricultural Impacts",

@@ -92,7 +92,7 @@ def split_nans(ext_df, lab_df, key, nan_policy="strict"):
 def IoU(geom1, geom2):
     """Compute intersection over union between two geometries."""
     intersection = geom1.intersection(geom2)
-    if not intersection.is_empty:
+    if intersection and not intersection.is_empty:
         inter_area = intersection.area
         union_area = geom1.area + geom2.area - inter_area
         return inter_area / union_area if union_area != 0 else 0

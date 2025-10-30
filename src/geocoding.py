@@ -25,8 +25,11 @@ import requests
 from collections import defaultdict
 import datetime as dt
 import gc
-
+import logging
 import multiprocessing as mp
+
+# set up logger
+LOGGER = logging.getLogger("postprocessing")
 
 #Countries
 import pycountry
@@ -117,7 +120,7 @@ def clean_geometry(geom):
         try:
             return geom.buffer(0)
         except Exception as e:
-            print(f"[clean_geometry] Failed to fix geometry: {e}")
+            LOGGER.error("[clean_geometry] Failed to fix geometry: %s", e)
             return None
     return geom
 
@@ -160,7 +163,7 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
             gpd_files["ADM_0"] = ne_0
 
         except Exception as e:
-            print(f"[open_admin_gpd][GAUL] Error loading GPD files: {e}")
+            LOGGER.error("[open_admin_gpd][GAUL] Error loading GPD files: %s", e)
             return None
     elif polygon_source == "geoBoundaries" :
         try :
@@ -196,7 +199,7 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
                 gpd_files["ADM_2"]["ADMIN_1"] = gpd_files["ADM_2"].parallel_apply(func, axis=1)
 
         except Exception as e:
-            print(f"[open_admin_gpd][geoBoundaries] Error loading GPD files: {e}")
+            LOGGER.error("[open_admin_gpd][geoBoundaries] Error loading GPD files: %s", e)
             return None
 
     for i in range(2):
@@ -258,7 +261,7 @@ def get_polygon(gdf_file, country_name, country_iso, level_name, target_name, ad
 
     except Exception as e:
         # print(f"level_name : {level_name}, target_name : {target_name}")
-        print(f"[get_polygon] Error: {e}")
+        LOGGER.error("[get_polygon] Error: %s", e)
     return None
 
 def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
@@ -361,7 +364,7 @@ def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
                 geometries.extend(matches["geometry"].tolist())
                 locations_names.extend(matches[f"ADMIN_{lowest_level}"].tolist())
         except Exception as e:
-            print(f"[gather admin fallback] Error: {e}")
+            LOGGER.error("[gather admin fallback] Error: %s", e)
 
     # Merge the polygons
     if not geometries:
@@ -400,16 +403,16 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
 
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             if attempt == max_retries - 1:  # Last attempt
-                print(f"[query_nominatim] Failed after {max_retries} attempts: {e}")
+                LOGGER.error("[query_nominatim] Failed after %i attempts: %s", max_retries, e)
                 return None
 
             # Exponential backoff
             sleep_time = initial_delay * (2 ** attempt)
-            print(f"[query_nominatim] Attempt {attempt + 1} failed. Retrying in {sleep_time}s...")
+            LOGGER.info("[query_nominatim] Attempt %i failed. Retrying in %.1f seconds...", attempt + 1, sleep_time)
             time.sleep(sleep_time)
 
         except Exception as e:
-            print(f"[query_nominatim] Unexpected error: {e}")
+            LOGGER.error("[query_nominatim] Unexpected error: %s", e)
             return None
     return None
 
@@ -427,16 +430,16 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
 
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             if attempt == max_retries - 1:  # Last attempt
-                print(f"[query_nominatim] Failed after {max_retries} attempts: {e}")
+                LOGGER.error("[query_nominatim] Failed after %i attempts: %s", max_retries, e)
                 return None
 
             # Exponential backoff
             sleep_time = initial_delay * (2 ** attempt)
-            print(f"[query_nominatim] Attempt {attempt + 1} failed. Retrying in {sleep_time}s...")
+            LOGGER.info("[query_nominatim] Attempt %i failed. Retrying in %.1fs...", attempt + 1, sleep_time)
             time.sleep(sleep_time)
 
         except Exception as e:
-            print(f"[query_nominatim] Unexpected error: {e}")
+            LOGGER.error("[query_nominatim] Unexpected error: %s", e)
             return None
     return None
 
@@ -459,7 +462,7 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
                     val_clean = remove_admin_words(str(val))
                     sim = rotated_levenshtein_similarity(loc_clean, val_clean)
                     if print_info:
-                        print(f"Found geocoding at resolution {admin_level}, Initial: {loc_clean}, Geocoded: {val}, Similarity: {sim:.2f}")
+                        LOGGER.info("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
 
                     if sim == 1 :
                         best_sim = sim
@@ -493,7 +496,7 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
             val_clean = remove_admin_words(str(val))
             sim = rotated_levenshtein_similarity(loc_clean, val_clean)
             if print_info:
-                print(f"Found geocoding at resolution {admin_level}, Initial: {loc_clean}, Geocoded: {val}, Similarity: {sim:.2f}")
+                LOGGER.info("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
 
             #If exact match, return it directly
             if sim == 1 :
@@ -536,7 +539,7 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
         shutil.move(temp_path, target_path)
         return True
     except Exception as e:
-        print(f"[Atomic save] failed: {str(e)}")
+        LOGGER.error("[Atomic save] failed: %s", e)
         return False
     finally:
         try:
@@ -562,7 +565,7 @@ def save_df_geo(df_geo, save_path, res_savename, split_lowest_levels) :
             if not atomic_gpkg_save(save_gdf, gpkg_path):
                 raise Exception(f"[GeoPackage Save Error] Failed to save GeoPackage to {gpkg_path}")
         except Exception as e:
-            print(f"[GeoPackage Save Error] {e}")
+            LOGGER.error("[GeoPackage Save Error] %s", e)
 
 #### Optimize geocoding and work per unique location found
 
@@ -653,7 +656,7 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
         # If loop finishes without returning anything
         return None
     except Exception as e:
-        print(f"[geocode_from_nomin_output_optimized] {e}. Falling back to country level.")
+        LOGGER.warning("[geocode_from_nomin_output_optimized] %s. Falling back to country level.", e)
         return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
 
 def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
@@ -682,7 +685,7 @@ def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
                         if df_gpd is not None:
                             return df_gpd
     except Exception as e :
-        print(f"[try_fallback_strategies] {e}. Falling back to country level.")
+        LOGGER.warning("[try_fallback_strategies] %s. Falling back to country level.", e)
         return None
 
 def try_geojson_fallback(gdf_file, best_nomin, best_result, location):
@@ -709,7 +712,7 @@ def try_geojson_fallback(gdf_file, best_nomin, best_result, location):
             return df_gpd
 
     except Exception as e:
-        print(f"[Geojson fallback] : {e}")
+        LOGGER.error("[Geojson fallback] : %s", e)
         return None
 
 def prepare_result_df(df_gpd, best_result, location, country_flag=0, osm_flag=0):
@@ -752,7 +755,7 @@ def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locati
                 if df is not None:
                     results.append(df)
             except Exception as e:
-                print(f"Error processing {futures[future]}: {e}")
+                LOGGER.error("Error processing %s: %s", futures[future], e)
 
     # combine into single DataFrame
     if results:
@@ -867,7 +870,7 @@ def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowes
                 if df is not None and not df.empty:
                     results.append(df)
             except Exception as e:
-                print(f"Error processing row {i}: {e}")
+                LOGGER.error("Error processing row %i: %s", i, e)
 
     if results:
         return pd.concat(results, ignore_index=True)
@@ -987,8 +990,8 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     end = time.time()
     time_open = (end - start) / 60
     if print_info :
-        print(f"Numer of unique locations : {len(unique_locations_countries)}")
-        print(f"Time to identify all locations {time_open}mins")
+        LOGGER.info("Numer of unique locations : %s", len(unique_locations_countries))
+        LOGGER.info("Time to identify all locations %.2fmins", time_open)
 
     # Run nominatim for each loc
     start = time.time()
@@ -1001,7 +1004,7 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     end = time.time()
     time_open = (end - start) / 60
     if print_info :
-        print(f"Time to nominatim all locations {time_open}mins")
+        LOGGER.info("Time to nominatim all locations %.2fmins", time_open)
 
     # Convert nominatim output to polygons
     start = time.time()
@@ -1009,8 +1012,8 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gpd_files, print_info=False, max_workers=max_workers)
     end = time.time()
     time_open = (end - start) / 60
-    if print_info :
-        print(f"Time to geocode all locations {time_open}mins")
+    if print_info:
+        LOGGER.info("Time to geocode all locations %.2fmins", time_open)
 
     # Gather the polygons to df_row for 2 split options
     for split_lowest_levels in [True, False] :
@@ -1020,7 +1023,7 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
         end = time.time()
         time_open = (end - start) / 60
         if print_info :
-            print(f"Time to gather locations per rows {time_open}mins")
+            LOGGER.info("Time to gather all locations per rows %.2fmins", time_open)
 
         # Save the final df
         save_df_geo(df_geo_output, save_path, res_savename, split_lowest_levels)
