@@ -1,3 +1,4 @@
+from tracemalloc import start
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -6,6 +7,7 @@ import time
 import itertools
 import regex as re
 from matplotlib import pyplot as plt
+from src.logger_setup import set_logger
 
 # import sys
 # import os
@@ -29,7 +31,7 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in =  "labelled_reports_remove_subtypes_meta-llama_llama-4-scout-17b-16e-instruct_v231025"
+filename_in = "all_appeals_unique_1-333_meta-llama_llama-4-scout-17b-16e-instruct_v281025"
 #"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
 #"labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
 #"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
@@ -42,9 +44,9 @@ data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
-force_no_unit_quali = False #whether or not we want to force unit to default unit of subtype when unknown unit
+force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
-filter_unknown_subtype = True #whether or not we want to filter out unknown impact subtype
+filter_unknown_subtype = False #whether or not we want to filter out unknown impact subtype
 merge_subtypes = False #whether or not we want to merge impact subtypes
 remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other Human Impacts", "Other Infrastructural Impacts", "Other Agricultural Impacts", "Other Service Access Impacts"] #list of impactSubtypes to remove
 
@@ -56,12 +58,17 @@ similarity_polygon = 0.6
 print_info=False
 polygon_source="geoBoundaries"
 
+log_file = DATA_OUT_LLMS / f"LOGS_{filename_out}.txt"
+LOGGER = set_logger(log_file, logger_name="postprocessing")
+start_time = time.time()
 ## Load data
 if not post_proc: #try directly loading the postprocess data
+    LOGGER.info("Reading %s", filename_out)
     response_df_proc = pd.read_csv(DATA_OUT_PROC / (filename_out + ".csv"))
     # response_df_proc = pd.read_csv(os.path.join(DATA_OUT_PROC, filename_out+'.csv'))
 
 else:
+    LOGGER.info("Processing %s...", filename_in)
     response_df = pd.read_csv(data_path / (filename_in + ".csv"))
     # response_df = pd.read_csv(os.path.join(data_path, filename_in+'.csv'))
 
@@ -93,8 +100,6 @@ else:
 
     ## Reclassify impacType
     response_df_proc = response_df_proc.apply(reclassify_impact_subtype, axis=1)
-    if filter_unknown_subtype:
-        response_df_proc = response_df_proc[response_df_proc["impactSubtype"] != "Unknown"]
 
     ## Reclassify hazard
     response_df_proc = response_df_proc.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
@@ -116,6 +121,8 @@ else:
     response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
     #normalize people units
     response_df_proc = response_df_proc.apply(normalize_people_unit, axis=1)
+    if filter_unknown_subtype:
+        response_df_proc = response_df_proc[response_df_proc["impactSubtype"] != "Unknown"]
     if force_no_unit_quali:
         response_df_proc.loc[response_df_proc["quanti"] == "quali", "impactUnit"] = "null"
     if merge_subtypes:
@@ -137,8 +144,12 @@ else:
 
 ## Geocoding
 if geocode:
+    LOGGER.info("Geodecoding %s...", filename_in)
     df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
 elif geocode_load:
     #load geocoded data
     df_geo_output_split = gpd.read_file(DATA_OUT_PROC / (geocode_load.replace("GEOCODE", "geo_split_lowest")+".gpkg"))
     df_geo_output =  gpd.read_file(DATA_OUT_PROC / (geocode_load.replace("GEOCODE", "geo")+".gpkg"))
+end_time = time.time()
+
+LOGGER.info("Total postprocessing time %.2f seconds", end_time - start_time)

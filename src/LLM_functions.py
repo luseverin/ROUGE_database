@@ -484,22 +484,23 @@ def get_event_impacts_multiprompt(df_labelled, impact_types_dict, hazards_list, 
                                                                         validate_impSubtypes=validate_impSubtypes,
                                                                         validate_hazards=validate_hazards,
                                                                         **groq_kwargs)
-        #further clean-up
-        answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
-        LOGGER.info("Impacts %s impacts identified in %s, %s",
-                    len(answer_impacts), reference_info['appealCode'], reference_info['reportDate'])
-        now_extract_time = time.time()
-        LOGGER.info("Extraction time: %.2f seconds",
-                    now_extract_time - last_extract_time)
-        last_extract_time = now_extract_time
 
         if answer_impacts:
+            #further clean-up
+            answer_impacts = [el for el in answer_impacts if isinstance(el, dict)] #filter out anything that is not dict or list
+            LOGGER.info("Extracted %s impacts identified in %s, %s",
+                        len(answer_impacts), reference_info['appealCode'], reference_info['reportDate'])
+            now_extract_time = time.time()
+            LOGGER.info("Extraction time: %.2f seconds",
+                        now_extract_time - last_extract_time)
+            last_extract_time = now_extract_time
             data = deepcopy(add_key_value_pairs(answer_impacts, data))
             response.append(data)
             #construct df
             new_dfs = pd.concat([pd.DataFrame.from_dict(impdict, orient="index").T for impdict in data],axis=0)
         else:
             #if extraction fail, write empty row with reference info
+            LOGGER.info("No impacts identified in %s, %s", reference_info['appealCode'], reference_info['reportDate'])
             new_dfs = pd.DataFrame(columns=columns, data=[reference_info])
 
         response_df_list.append(new_dfs)

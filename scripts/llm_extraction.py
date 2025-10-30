@@ -24,18 +24,18 @@ appeals_test = ["MDRAR016"]
 test_reports = ifrc_reports_df_filtered[ifrc_reports_df_filtered.appealCode.isin(appeals_test)]
 
 # select reports to process
-nreports = 222
-reports_in = test_reports#ifrc_reports_df_filtered.iloc[:nreports]#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+nreports = 333
+reports_in = ifrc_reports_df_filtered.iloc[116:nreports]#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 #labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
 ## Parameters
-sim_name = "test_max_it"#all_appeals_unique_1-222"#name of simulation "labelled_reports"
+sim_name = "all_appeals_unique_116-333"#all_appeals_unique_1-222"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
 max_rounds = 20 #max number of continuations
 
-#chose hazard and impact cats
+#choose hazard and impact cats
 hazcat = list(hazard_main_types_emdat_desc.keys())
 impmaintype = IMPACT_TYPES
 impsubtype_dict = IMPACT_DESCRIPTIONS
@@ -45,7 +45,7 @@ validate_impSubtypes = False
 validate_hazards = True #deactivate hazards validation as cause issues
 
 #api parameters
-groq_kwargs = {"temperature": 0.01,
+groq_kwargs = {"temperature": 0.0,
                "top_p":0.01,
                "seed": 42,
                #"response_format":{
@@ -60,7 +60,7 @@ groq_kwargs = {"temperature": 0.01,
 ## Extraction
 log_file = DATA_OUT_LLMS / f"LOGS_{res_savename}.txt"
 LOGGER = set_logger(log_file, logger_name="impact_extraction")
-LOGGER.info(f"Processing {res_savename}")
+LOGGER.info(f"Processing {res_savename} from {file_path}...")
 try:
     response, response_df = get_event_impacts_multiprompt(reports_in,
                                                           impact_types_dict=impsubtype_dict,
