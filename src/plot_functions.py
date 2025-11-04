@@ -173,6 +173,17 @@ def map_nb_hazards(nb_compound_country, hazards_list,
 
     return(fig)
 
+def add_avg_line(val_df, ax, hue_col, yvar, value_col, hue_vars, palette):
+    for j, var in enumerate(hue_vars):
+        mean_val = val_df[val_df[hue_col] == var].groupby(yvar)[value_col].mean().mean()
+        #mean_val = df[(df[yvar] == "Overall average") & (df[hue_col] == var) & (df[subplot_col] == val)][value_col].values[0]
+        ax.axvline(mean_val, color=palette[j], linestyle="--", linewidth=2)
+        ax.text(
+            mean_val, 2+2*j, f"Average {var}: {mean_val:.2f}"
+            , color=palette[j], ha="left", va="center", backgroundcolor="white"
+        )
+    return ax
+
 def format_plot(ax, crs):
     """formatting for all plots"""
     cx.add_basemap(ax, crs=crs)
