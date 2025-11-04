@@ -1,4 +1,10 @@
 import pandas as pd
+
+MODEL_NAMES_MAP = {#short names for model
+    "meta-llama_llama-4-scout-17b-16e-instruct": "instruct",
+    "llama-3.1-8b-instant": "instant",
+    "llama-3.3-70b-versatile": "versatile"
+}
 def print_match(matched_df):
     """Display function to better visualize match df"""
     return matched_df[["appealCode","impactSubtype", "impactSubtype_matched", "impactValue", "impactValue_matched", "impactUnit", "impactUnit_matched", "location", "location_matched", "impactSubtype_sim", "impactUnit_sim", "geometry_sim", "startYear_sim", "startMonth_sim", "startDay_sim","endYear_sim","endMonth_sim", "endDay_sim","hazards_sim","match_sim","valueAnnotation", "annotation_matched"]]
