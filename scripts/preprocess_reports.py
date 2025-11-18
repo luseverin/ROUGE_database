@@ -24,6 +24,7 @@ from src.text_processing_functions import *
 from src.post_process_functions import country_name_to_iso3
 
 ## Parameters
+filter_types = ['Emergency Appeal','Emergency Appeal Revision', 'Operations Update', 'Final Report','DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']
 id_language = True #identify language and get rid of reports not in english
 format_numbers = False
 std_units = False
@@ -32,9 +33,9 @@ format_report_date = True #incompatible with json
 outformat = 'csv' #csv json
 
 ## Select data
-fname_in = 'filtered_report_types_nat_hazards_bugfix'
+fname_in = "all_ifrc_reports_info_unnested_with_text"#'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'preproc_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_EA_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -50,9 +51,10 @@ id_lang = 0
 filtered_reports = []
 filtered_reports_hazonly = []
 for report in all_ifrc_reports_info_unnested:
-    #Filter unwanted report types
-    dref_or_mdr = re.search(r"MDR|DREF", report["origType"], re.IGNORECASE)
-    if dref_or_mdr:#report['appealType'] in ['Operations Update', 'DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']:
+    #Filter unwanted report
+    filter_kw =r"|".join(["MDR", "DREF"]+filter_types)
+    allowed_orig_type = re.search(filter_kw, report["origType"], re.IGNORECASE)#avoid undesired reports to be processed
+    if allowed_orig_type and report['appealType'] in filter_types:
         if id_language and "language" not in report.keys():
             report['language'] = detect_language(report['text'])
             id_lang=1
