@@ -2,13 +2,57 @@
 import pandas as pd
 import requests
 
-def sort_appeal_type(x):
-    pref_order = ["DREF Operation Final Report", "DREF Operation Update", "DREF Operation", "Operations Update"]
+def sort_appeal_type(x, pref_order = ["DREF Operation Final Report", "Final Report","DREF Operation Update", "DREF Operation", "Operations Update"]):
     for appealtype in pref_order:
         if appealtype in list(x['appealType']):
             return x[x['appealType'] == appealtype]
 
-def filter_reports(df, take_latest=True):
+def take_latest_report(df, date_field="reportDate"):
+    """
+    Select the most recent report for each appeal code.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing the reports to be filtered.
+    date_field : str, optional
+        Field in the DataFrame containing the dates of the reports.
+        Default is "reportDate".
+
+    Returns
+    -------
+    filtered_df : pandas.DataFrame
+        DataFrame containing the most recent reports for each appeal code.
+    """
+    df_out = (
+            df.groupby("appealCode", as_index=False)
+            .apply(lambda x: x.sort_values(date_field, ascending=False).head(1))
+            .reset_index(drop=True)
+        )
+    return df_out
+
+def take_longest_report(df):
+    """
+    Select the report with the longest nathaz_text for each appeal code.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing the reports to be filtered.
+
+    Returns
+    -------
+    filtered_df : pandas.DataFrame
+        DataFrame containing the filtered reports.
+    """
+    df_out = (
+            df.groupby("appealCode", as_index=False)
+            .apply(lambda x: x.loc[x.nathaz_text.str.len().idxmax()])
+            .reset_index(drop=True)
+        )
+    return df_out
+
+def filter_reports(df, take_latest=True, date_field="reportDate"):
     """
     Filter reports based on the appeal type and date.
 
@@ -35,11 +79,7 @@ def filter_reports(df, take_latest=True):
 
     # select most recent reports
     if take_latest:
-        df_out = (
-            df_out.groupby("appealCode", as_index=False)
-            .apply(lambda x: x.sort_values("reportDate", ascending=False).head(1))
-            .reset_index(drop=True)
-        )
+        df_out = take_latest_report(df_out, date_field)
 
     return df_out
 
