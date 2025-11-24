@@ -355,7 +355,7 @@ IMPACT_SUBTYPE_MERGER = {
     "Education Infrastructure and Access to Education" : r"(Education Infrastructure|Access to Education)",
     "Agriculture and Access to Food" : r"(Agricultural Infrastructure|Access to Food|Crop Production and Forestry|Affected Livestock and Animals|Other Agricultural Impacts)",
     "Power and Energy Production Infrastructure and Access to Power and Energy" : r"(Power and Energy Production Infrastructure|Access to Power and Energy)",
-    "Undefined Infrastructure and Service Access" : r"(Undefined Infrastructure|Undefined Service Access)",
+    "Undefined Infrastructure and Service Access" : r"(Undefined Infrastructure|Undefined Service Access|Other Service Access|Other Infrastructural Impacts)",
 }
 IMPACT_SUBTYPES_MERGED = [el for el in IMPACT_SUBTYPES if el not in ["Road Infrastructure",
                                                                      "Other Transportation Infrastructure",
