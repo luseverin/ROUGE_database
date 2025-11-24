@@ -14,14 +14,15 @@ import pandas as pd
 import seaborn as sns
 import copy as cp
 import regex as re
+import time
 import datetime as dt
 from pathlib import Path
 from collections import Counter
-from src.text_processing_functions import *
 from src.data import *
 from src.hazard_def import hazard_kw_reclass
 from src.text_processing_functions import *
 from src.post_process_functions import country_name_to_iso3
+from src.logger_setup import set_logger
 
 ## Parameters
 filter_types = ['Emergency Appeal','Emergency Appeal Revision', 'Operations Update', 'Final Report','DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']
@@ -33,28 +34,40 @@ format_report_date = True #incompatible with json
 outformat = 'csv' #csv json
 
 ## Select data
-fname_in = "all_ifrc_reports_info_unnested_with_text"#'filtered_report_types_nat_hazards_bugfix'
+fname_in = "all_ifrc_reports_info_unnested_with_text_v181125"#'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'preproc_EA_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_extended_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
 if std_units:
     fname_out = fname_out + '_std_units'
 
+#set up logger
+log_file = DATA_OUT_LLMS / f"LOGS_{fname_out}.txt"
+LOGGER = set_logger(log_file, logger_name="preprocessing")
+
+## Preprocessing
+start_time = time.time()
+LOGGER.info("Preprocessing %s...", fname_out)
+LOGGER.info("Filtering types %s", ", ".join(filter_types) if len(filter_types) > 1 else filter_types)
+
 # Open and read the JSON file
 with open(DATA_IN_JSONS / (fname_in + '.json'), 'r') as json_file:
-    all_ifrc_reports_info_unnested = json.load(json_file)
+    reports_in_json = json.load(json_file)
 
 not_eng = []
 id_lang = 0
 filtered_reports = []
 filtered_reports_hazonly = []
-for report in all_ifrc_reports_info_unnested:
+for report in reports_in_json:
     #Filter unwanted report
     filter_kw =r"|".join(["MDR", "DREF"]+filter_types)
     allowed_orig_type = re.search(filter_kw, report["origType"], re.IGNORECASE)#avoid undesired reports to be processed
-    if allowed_orig_type and report['appealType'] in filter_types:
+    #filter out unwanted disaster types
+    report = reclass_disaster_type(report)
+
+    if allowed_orig_type and report['appealType'] in filter_types and report['naturalHazard'] == 1:
         if id_language and "language" not in report.keys():
             report['language'] = detect_language(report['text'])
             id_lang=1
@@ -74,7 +87,7 @@ for report in all_ifrc_reports_info_unnested:
             if std_units:
                 report['text_processed'] = text_standardize_metric_units(report['text_processed'])
             report['sentences'] = sent_tokenize(report['text_processed'])
-            report['nathaz_text'] = select_impact_description(report['sentences'])
+            report['nathaz_text'] = select_impact_description(report)
             report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)
             filtered_reports.append(report)
             if (len(report['hazards_found_kw']) > 0):# and (report['disasterTypeReclassified'] not in disasterType_nathaz)):
@@ -82,14 +95,13 @@ for report in all_ifrc_reports_info_unnested:
         else:
             not_eng.append(report)
 
-print(f"Reports not in English: {[report['appealCode'] for report in not_eng]}")
-print(f"Number of reports: {len(filtered_reports)}")
-print(f"Number of reports with hazards id with kw search: {len(filtered_reports_hazonly)}")
+end_time = time.time()
+LOGGER.info("Total preprocessing time %.2f seconds", end_time - start_time)
+LOGGER.info("Reports not in English: %s", [report['appealCode'] for report in not_eng])
+LOGGER.info("Number of reports: %i", len(filtered_reports))
+LOGGER.info("Number of reports with hazards id with kw search: %i", len(filtered_reports_hazonly))
 
 ## Save data
-if id_lang:#save file with language info as takes time to process
-    with open(DATA_IN_JSONS / (fname_in + '.json'), 'w') as f:
-        json.dump(filtered_reports, f, indent=4)
 if outformat == 'csv':
     filtered_reports = pd.DataFrame(filtered_reports)
     filtered_reports_hazonly = pd.DataFrame(filtered_reports_hazonly)
@@ -105,4 +117,4 @@ elif outformat == 'json':
         json.dump(filtered_reports_hazonly, f, indent=4)
 
 else:
-    raise ValueError("outformat must be 'csv' or 'json'")
+    LOGGER.error("outformat must be 'csv' or 'json'")

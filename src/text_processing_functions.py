@@ -1,8 +1,8 @@
 import regex as re
 import numpy as np
+import logging
 #import pandas as pd
 #import ast
-from scipy.fftpack import ifft2
 import spacy
 import spacy_fastlang
 import unicodedata
@@ -15,6 +15,9 @@ from pint import UnitRegistry
 import nltk
 from nltk.tokenize import sent_tokenize
 from nltk.corpus import stopwords
+
+# set up logger
+LOGGER = logging.getLogger("preprocessing")
 
 from src.units import *
 
@@ -317,7 +320,75 @@ def select_hazard_description(text, match_above=True):
     id_end = len(text) if id_end == None else id_end
     return text[id_top:id_end+1]
 
-def select_impact_description(text, buffer=1):
+#function from tais
+def check_disaster_type_keyword(text):
+    text = text.lower()
+    hazards = []
+
+    hazard_patterns = {
+        'Drought': r"\b(drought|dry spell)s?\b",
+        'Flood': r"\b(flood|inundation)s?\b",
+        'Glacial lake outburst': r"\b(glacial lake outburst)s?\b",
+        'Cyclone': r"\b(cyclone|tropical cyclone)s?\b",
+        'Hurricane': r"\b(hurricane)s?\b",
+        'Typhoon': r"\b(typhoon)s?\b",
+        'Storm': r"\b(superstorm|windstorm|snowstorm|snowfall|blizzard|derecho|winterstorm|hail|extra tropical storm|thunderstorm|storm surge|storm|strong wind)s?\b",
+        'Tornado': r"\b(tornado(es)?)\b",
+        'Heatwave': r"\b(heat wave|heatwave|heat episode|heat stress|extreme heat|(hot|heat) spell)s?\b",
+        'Coldwave': r"\b(cold wave|coldwave|cold spell|severe winter conditions?|extreme winter conditions?|severe winter|extreme winter)\b",
+        'Mass movement': r"\b(landslide|land slide|rockfall|mudslide|mass movement)s?\b",
+        'Earthquake': r"\bearthquake(s)?\b",
+        'Volcano': r"\bvolcan\w*\b",  # matches volcano, volcanic, etc.
+        'Tidal Wave': r"\btidal wave(s)?\b",
+        'Wildfire': r"\b(forest ?fire|wild ?fire|land ?fire|bush ?fire)s?\b",
+    }
+
+    for hazard, pattern in hazard_patterns.items():
+        if re.search(pattern, text, re.IGNORECASE):
+            hazards.append(hazard)
+
+    if not hazards:
+        return 'None'
+    return hazards[0] if len(hazards) == 1 else hazards
+
+#function from tais
+def reclass_disaster_type(element):
+    initial_disaster_type = element['disasterType']
+    disaster_type_reclassified = check_disaster_type_keyword(element['disasterType'] + ' ' + element['reportName'])
+    disaster_type = disaster_type_reclassified
+    element['disasterTypeReclassified'] = disaster_type_reclassified
+
+    disaster_type_text = ''
+
+    # If there is no hazard detected in the original classification or in the title, check part of the report text
+    if disaster_type == 'None':
+        if ('text' in element) and (element.get('text') is not None):
+            disaster_type_text = check_disaster_type_keyword(element.get('text')[:200])
+            if disaster_type_text != 'None':
+                disaster_type = disaster_type_text
+                element['secondaryDisasterType'] = disaster_type
+
+    # Turn list into single string
+    if isinstance(disaster_type, list):
+        disaster_type = ', '.join(disaster_type)
+        element['disasterTypeReclassified'] = disaster_type
+
+    final_disaster_type = check_disaster_type_keyword(disaster_type)
+    if final_disaster_type != 'None':
+        element['naturalHazard'] = 1
+    else:
+        element['naturalHazard'] = 0
+
+    if initial_disaster_type != final_disaster_type:
+        LOGGER.info("Initial disaster type: %s", initial_disaster_type)
+        LOGGER.info("Title: %s", element['reportName'])
+        LOGGER.info("Hazards in the original classification + title:%s", disaster_type_reclassified)
+        #print("Text: ", element['text'][:200])
+        LOGGER.info("Hazards in the text:%s", disaster_type_text)
+        LOGGER.info("Final disaster type:%s ", final_disaster_type)
+        LOGGER.info("----")
+    return element
+def select_impact_description(report, buffer=1):
     """
     Selects a subset of text that describes the impacts of the hazard event, given a list of sentences.
 
@@ -346,7 +417,7 @@ def select_impact_description(text, buffer=1):
         "detailed operation plan", "summary of the current response",
         "Overview of Operating National Society Response Action"
     ]
-
+    text = report[["sentences"]]
     # Precompile regex patterns
     keep_pattern = re.compile("|".join(re.escape(h) for h in headers_keep), re.IGNORECASE)
     drop_pattern = re.compile("|".join(re.escape(h) for h in headers_drop), re.IGNORECASE)
@@ -357,6 +428,7 @@ def select_impact_description(text, buffer=1):
     # Default: whole text or to first drop occurence
     if not ids_keep:
         if not ids_drop:
+            LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
             return text
         else:
             return text[0:ids_drop[0]]
