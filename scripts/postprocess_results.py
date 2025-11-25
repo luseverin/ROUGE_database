@@ -1,4 +1,5 @@
 from tracemalloc import start
+from venv import logger
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -58,8 +59,10 @@ similarity_polygon = 0.6
 print_info=False
 polygon_source="geoBoundaries"
 
-log_file = DATA_LOGS / f"LOGS_{filename_out}.txt"
-LOGGER = set_logger(log_file, logger_name="postprocessing")
+#set up logger
+logger_name = "postprocessing"
+log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
+LOGGER = set_logger(log_file, logger_name=logger_name)
 start_time = time.time()
 ## Load data
 if not post_proc: #try directly loading the postprocess data

@@ -1,3 +1,4 @@
+from venv import logger
 import pandas as pd
 import geopandas as gpd
 import logging
@@ -18,8 +19,9 @@ filename_out = "merged_subtypes_" + res_savename
 filename_out_geo = "merged_subtypes_" + res_savename_geo
 
 #set up logger
-log_file = DATA_LOGS / f"LOGS_{filename_out}.txt"
-LOGGER = set_logger(log_file, logger_name="subtypes_merger")
+logger_name = "subtypes_merger"
+log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
+LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ##mark quanti vs quali and normalize units
 if "quanti" not in response_df_geo.columns:

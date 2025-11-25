@@ -6,6 +6,7 @@
 #5. Add hazard category for each report (use Laura's reclassifying)
 #6. Add division according to header
 
+from venv import logger
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
@@ -44,8 +45,9 @@ if std_units:
     fname_out = fname_out + '_std_units'
 
 #set up logger
-log_file = DATA_LOGS / f"LOGS_{fname_out}.txt"
-LOGGER = set_logger(log_file, logger_name="preprocessing")
+logger_name = "preprocessing"
+log_file = DATA_LOGS / f"LOGS_{logger_name}_{fname_out}.txt"
+LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ## Preprocessing
 start_time = time.time()

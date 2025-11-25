@@ -1,6 +1,7 @@
 
 import sys
 import datetime as dt
+from venv import logger
 
 from src.data import *
 from src.LLM_functions import *
@@ -58,8 +59,9 @@ groq_kwargs = {"temperature": 0.0,
                }
 
 ## Extraction
-log_file = DATA_LOGS / f"LOGS_{res_savename}.txt"
-LOGGER = set_logger(log_file, logger_name="impact_extraction")
+logger_name = "impact_extraction"
+log_file = DATA_LOGS / f"LOGS_{logger_name}_{res_savename}.txt"
+LOGGER = set_logger(log_file, logger_name=logger_name)
 LOGGER.info(f"Processing {res_savename} from {file_path}...")
 try:
     response, response_df = get_event_impacts_multiprompt(reports_in,
