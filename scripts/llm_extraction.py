@@ -58,7 +58,7 @@ groq_kwargs = {"temperature": 0.0,
                }
 
 ## Extraction
-log_file = DATA_OUT_LLMS / f"LOGS_{res_savename}.txt"
+log_file = DATA_LOGS / f"LOGS_{res_savename}.txt"
 LOGGER = set_logger(log_file, logger_name="impact_extraction")
 LOGGER.info(f"Processing {res_savename} from {file_path}...")
 try:

@@ -44,7 +44,7 @@ if std_units:
     fname_out = fname_out + '_std_units'
 
 #set up logger
-log_file = DATA_OUT_LLMS / f"LOGS_{fname_out}.txt"
+log_file = DATA_LOGS / f"LOGS_{fname_out}.txt"
 LOGGER = set_logger(log_file, logger_name="preprocessing")
 
 ## Preprocessing

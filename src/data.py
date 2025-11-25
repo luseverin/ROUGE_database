@@ -22,3 +22,4 @@ DATA_FIGURE = DATA_PATH / 'figure/'
 DATA_OUT_PROC = DATA_PATH / 'results_proc/'
 DATA_EXTERNAL_SOURCE = DATA_PATH / 'external_impact/'
 ADMIN_PATH = DATA_PATH / "admin_files/"
+DATA_LOGS = DATA_PATH / "logs/"

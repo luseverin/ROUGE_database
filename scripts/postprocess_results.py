@@ -58,7 +58,7 @@ similarity_polygon = 0.6
 print_info=False
 polygon_source="geoBoundaries"
 
-log_file = DATA_OUT_LLMS / f"LOGS_{filename_out}.txt"
+log_file = DATA_LOGS / f"LOGS_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name="postprocessing")
 start_time = time.time()
 ## Load data
