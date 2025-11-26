@@ -251,6 +251,135 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
 
     return reid_match_ext, reid_match_lab, accuracy_matrix
 
+## Analysis functions
+def filter_matches(matched_df, value_error_th=0.05, sim_th=0.6, match_cat=["impactSubtype"]):
+    """Filter matches based on value error threshold for quantitative and similarity threshold for qualitative"""
+    #filter matches
+    matched_df_filter_qt = matched_df.copy()
+    matched_df_filter_qt = matched_df_filter_qt[(matched_df_filter_qt["match_sim"] >= sim_th) & (matched_df_filter_qt["impactValue_error"] <= value_error_th) & (matched_df_filter_qt["quanti"]=="quanti")]
+    matched_df_filter_ql = matched_df.copy()
+    matched_df_filter_ql = matched_df_filter_ql[(matched_df_filter_ql["match_sim"] >= sim_th) & (matched_df_filter_ql["quanti"]=="quali")]
+    if match_cat:
+        matched_df_filter_ql = pd.concat([matched_df_filter_ql.query(f"{cat} == {cat}_matched").dropna(how="all",axis=0) for cat in match_cat]).sort_index()
+    return pd.concat([matched_df_filter_qt, matched_df_filter_ql], axis=0)
+
+
+def true_positives(matched_df):
+    """Tru positives"""
+    return matched_df["lab_match_id_sim"].nunique()
+
+def false_negatives(n_lab, n_matches):
+    """False negatives"""
+    return n_lab - n_matches
+
+def false_positives(n_ext, n_matches):
+    """False positives"""
+    return max(0, n_ext - n_matches)
+
+def precision(n_matches, n_ext):
+    return n_matches/n_ext if n_ext > 0 else np.nan
+
+def recall(n_matches, n_lab):
+    return n_matches/n_lab if n_lab > 0 else np.nan
+
+def f1(precision, recall):
+    return 2*precision*recall/(precision+recall) if (precision + recall) > 0 else np.nan
+
+def coverage(n_ext, n_lab):
+    return 100*n_ext/n_lab if n_lab > 0 else np.nan
+
+def make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key):
+    metrics_by_key["nb labelled"] = n_lab
+    metrics_by_key["nb extracted"] = n_ext
+    metrics_by_key["coverage"] = coverage(n_ext, n_lab)
+    metrics_by_key["true_positives"] = true_pos
+    metrics_by_key["false_negatives"] = false_negatives(n_lab, true_pos)
+    metrics_by_key["false_positives"] = false_positives(n_ext, true_pos)
+    metrics_by_key["precision"] = precision(true_pos, n_ext)
+    metrics_by_key["recall"] = recall(true_pos, n_lab)
+    metrics_by_key["f1"] = f1(metrics_by_key["precision"], metrics_by_key["recall"])
+    metrics_by_key["quanti"] = qq
+    return metrics_by_key
+
+def make_coverage_accuracy_df(extracted_df, labelled_df, matched_df_filter, group_key, group_keys=None, keep_vars=[]):
+    """Make coverage df filtering matches by accuracy and grouped by group_key"""
+
+    df_list = []
+    for qq in ["quanti", "quali"]:
+        labelled_dfq = labelled_df[labelled_df["quanti"]==qq]
+        extracted_dfq = extracted_df[extracted_df["quanti"]==qq]
+        matched_df_filterq = matched_df_filter[matched_df_filter["quanti"]==qq]
+        n_lab = len(labelled_dfq); n_ext = len(extracted_dfq); true_pos = true_positives(matched_df_filterq)
+        metrics_by_key = {}
+        if group_key is None:
+            metrics_by_key = make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key)
+            df_list.append(pd.DataFrame(metrics_by_key, index=[0]))
+        else:
+            if group_keys is None:
+                group_keys = labelled_df[group_key].unique()
+            for group_id in group_keys:
+                group_lab = labelled_dfq[labelled_dfq[group_key] == group_id]
+                group_ext = extracted_dfq[extracted_dfq[group_key] == group_id]
+                group_ext_match = matched_df_filterq[matched_df_filterq[group_key] == group_id]
+                n_lab = len(group_lab); n_ext = len(group_ext); true_pos = true_positives(group_ext_match)
+                metrics_by_key = make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key)
+                if len(keep_vars):
+                    for keep_var in keep_vars:
+                        if keep_var != group_key and len(group_ext):
+                            metrics_by_key[keep_var] = group_ext[keep_var].head(1).values[0]
+                df_list.append(pd.DataFrame(metrics_by_key, index=[group_id]))
+    return pd.concat(df_list)
+
+def f1_bt(tp, fp, fn):
+    if (tp + fp + fn) == 0:
+        return 0
+    else:
+        return 2 * tp / (2 * tp + fp + fn)
+
+def recall_bt(tp, fn):
+    if (tp + fn) == 0:
+        return 0
+    else:
+        return tp / (tp + fn)
+
+def precision_bt(tp, fp):
+    if (tp + fp) == 0:
+        return 0
+    else:
+        return tp / (tp + fp)
+
+def bootstrap_f1(tp, fp, fn, n_boot=5000):
+    #artificially add tps, fps, fns if sample size too small
+    if tp < 1:
+        tp = 1
+    if fp < 1:
+        fp = 1
+    if fn < 1:
+        fn = 1
+
+    data = np.concatenate([
+        2 * np.ones(tp),             # true positives
+        np.ones(fp),        # false positives
+        np.zeros(fn)        # false negatives
+    ])
+    bootrap_metrics = {
+        "precision": [],
+        "recall": [],
+        "f1_score": [],
+    }
+    for _ in range(n_boot):
+        sample = np.random.choice(data, size=len(data), replace=True)
+        tp_b = np.sum(sample == 2)
+        fp_b = np.sum(sample == 1)
+        fn_b = np.sum(sample == 0)
+        precision_b = precision_bt(tp_b, fp_b)
+        recall_b = recall_bt(tp_b, fn_b)
+        f1_score_b = f1_bt(tp_b, fp_b, fn_b)
+        bootrap_metrics["precision"].append(precision_b)
+        bootrap_metrics["recall"].append(recall_b)
+        bootrap_metrics["f1_score"].append(f1_score_b)
+    bootrap_metrics = {k : np.percentile(v, [2.5, 97.5]) for k,v in bootrap_metrics.items()}
+    return bootrap_metrics
 ## deprecated?
 #unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
 #unique_country_names = [country.name for country in pycountry.countries]
