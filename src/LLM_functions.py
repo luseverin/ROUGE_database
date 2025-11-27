@@ -360,7 +360,8 @@ def extract_impact_value(impact):
     """
     Extracts the impact value from the impact dictionary.
     """
-    return impact[["impactValue","impactValueMin", "impactValueMax"]].max()
+    impact_cols = [col for col in impact if col in ["impactValue", "impactValueMin", "impactValueMax"]]
+    return impact[impact_cols].max()
 
 def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes=True, validate_hazards=True, max_rounds=5, **groq_kwargs):
     """
@@ -394,13 +395,25 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
         #track errors in impact extraction
         impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
 
-        #retrieve impact Value
-        if isinstance(impact, list) and len(impact) == 1:
-            impact = impact[0]
-        elif (isinstance(impact, dict) and "impactValue" not in impact.keys()) or not isinstance(impact, dict):
-            LOGGER.info("discarding impact: %s", impact)
+        # normalize list structure
+        if isinstance(impact, list):
+            if len(impact) == 1:
+                impact = impact[0]
+            else:
+                LOGGER.info("discarding impact (list with >1 items): %s", impact)
+                continue
+
+        # validate that impact is a dict with the required key
+        if not isinstance(impact, dict):
+            LOGGER.info("discarding impact (not a dict): %s", impact)
             continue
-        impact_value = extract_impact_value(pd.DataFrame(impact))
+
+        if "impactValue" not in impact:
+            LOGGER.info("discarding impact (missing 'impactValue'): %s", impact)
+            continue
+
+        # extract impact value
+        impact_value = extract_impact_value(pd.DataFrame([impact]))
         impact_unit = impact["impactUnit"]
         impact_desc = make_impact_description(impact, impact_value, impact_unit)
 
