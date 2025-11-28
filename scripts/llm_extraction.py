@@ -1,15 +1,12 @@
 
-import sys
 import datetime as dt
-from venv import logger
-
 from src.data import *
 from src.LLM_functions import *
 from src.labelling_helpers import filter_reports
 from src.logger_setup import set_logger
 
 ## Open and read the JSON file
-file_path = DATA_IN_JSONS / "preproc_filtered_report_types_nat_hazards_bugfix_v250925.csv"#'all_ifrc_reports_info_processed_extended_format_nb_std_units.json' "nathaz_ifrc_reports_info_processed.json"
+file_path = DATA_IN_JSONS / "preproc_extended_all_ifrc_reports_info_unnested_with_text_v181125_v181125.csv"#"preproc_filtered_report_types_nat_hazards_bugfix_v250925.csv"
 ifrc_reports_df = pd.read_csv(file_path)
 
 # filter reports by report type and date
@@ -22,16 +19,16 @@ labelled_reports_raw = ifrc_reports_df.merge(keys, on=['appealCode', 'reportDate
 
 #eventually select by appeal code
 appeals_test = ["MDRAR016"]
-test_reports = ifrc_reports_df_filtered[ifrc_reports_df_filtered.appealCode.isin(appeals_test)]
+test_reports = labelled_reports_raw#ifrc_reports_df_filtered[ifrc_reports_df_filtered.appealCode.isin(appeals_test)]
 
 # select reports to process
 nreports = 333
-reports_in = ifrc_reports_df_filtered.iloc[116:nreports]#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+reports_in = test_reports#labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 #labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
 ## Parameters
-sim_name = "all_appeals_unique_116-333"#all_appeals_unique_1-222"#name of simulation "labelled_reports"
+sim_name = "labelled_reports"#all_appeals_unique_1-222"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}" #model to be changed in src.client
 chunk_size = None #chunk size of input. None to disable
 max_rounds = 20 #max number of continuations
