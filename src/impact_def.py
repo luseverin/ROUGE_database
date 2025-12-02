@@ -381,3 +381,11 @@ IMPACT_SUBTYPES_MERGED = [el for el in IMPACT_SUBTYPES if el not in ["Road Infra
                                                                      ]]
 
 IMPACT_SUBTYPES_MERGED += [k for k in IMPACT_SUBTYPE_MERGER.keys()]
+
+# Update impact main type 
+IMPACT_TYPES_MERGED = {subtype: Impacts.get_main_type(subtype) for subtype in IMPACT_SUBTYPES_MERGED}
+
+# Update main type for relevant subtypes
+for subtype, main_type in IMPACT_TYPES_MERGED.items():
+    if main_type in ["Infrastructure", "Service access"]:
+        IMPACT_TYPES_MERGED[subtype] = "Infrastructure and Service access"
