@@ -192,7 +192,7 @@ Impacts.register(
 )
 
 Impacts.register(
-    key="Other Economic Activity & Livelihood Production",
+    key="Economic & Livelihood",
     main_type="Economic Activity & Livelihood Production",
     description="Any identified impact on the economy which cannot be associated with the previous impactSubtypes.",
     keyword=r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
@@ -348,11 +348,11 @@ IMPACT_EXPECTED_UNITS = Impacts.get_expected_units()
 IMPACT_DEFAULT_UNITS = Impacts.get_default_units()
 
 IMPACT_SUBTYPE_MERGER = {
-    "Transportation Infrastructure and Access to Mobility" : r"(Road Infrastructure|Other Transportation Infrastructure|Mobility and Access to Transport)",
-    "Water, Sanitation, and Hygiene Infrastructure and Access to Water, Sanitation, and Hygiene" : r"(Water, Sanitation, and Hygiene Infrastructure|Access to Water, Sanitation, and Hygiene|Water Quality and Availability)",
-    "Healthcare Infrastructure and Access to Healthcare" : r"(Healthcare Infrastructure|Access to Healthcare)",
-    "IT and Communication Infrastructure and Access to IT and Communication" : r"(IT and Communication Infrastructure|Access to IT and Communication Infrastructure)",
-    "Education Infrastructure and Access to Education" : r"(Education Infrastructure|Access to Education)",
+    "Transportation" : r"(Road Infrastructure|Other Transportation Infrastructure|Mobility and Access to Transport)",
+    "Water, Sanitation, and Hygiene" : r"(Water, Sanitation, and Hygiene Infrastructure|Access to Water, Sanitation, and Hygiene|Water Quality and Availability)",
+    "Healthcare" : r"(Healthcare Infrastructure|Access to Healthcare)",
+    "IT and Communication" : r"(IT and Communication Infrastructure|Access to IT and Communication Infrastructure)",
+    "Education" : r"(Education Infrastructure|Access to Education)",
     "Agriculture and Access to Food" : r"(Agricultural Infrastructure|Access to Food|Crop Production and Forestry|Affected Livestock and Animals|Other Agricultural Impacts)",
     "Power and Energy Production Infrastructure and Access to Power and Energy" : r"(Power and Energy Production Infrastructure|Access to Power and Energy)",
     "Undefined Infrastructure and Service Access" : r"(Undefined Infrastructure|Undefined Service Access|Other Service Access (Impacts)?|Other Infrastructural Impacts)",
