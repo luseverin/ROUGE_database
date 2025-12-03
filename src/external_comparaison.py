@@ -216,6 +216,9 @@ def open_clean_ifrc_go() :
     #Select only DREF reports 
     df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"]=="DREF"]
 
+    #Select only natural disaster events 
+    df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["dtype_name"].isin(hazard_ifrc_go)]
+
     return df_ifrc_go
 
 ## IFRC_MONTY
