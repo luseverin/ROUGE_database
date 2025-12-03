@@ -32,6 +32,10 @@ hazard_kw_reclass = {
     'Conflict': r"\b(conflict|war|terrorism|unrest)s?\b.*"
 }
 
+hazard_ifrc_go = ['Flood', 'Fire', 'Cold Wave', 'Earthquake', 
+                 'Pluvial/Flash Flood', 'Other', 'Cyclone', 'Drought', 
+                 'Heat Wave', 'Landslide', 'Storm Surge', 'Volcanic Eruption', 'Tsunami']
+
 hazard_main_types_emdat_desc = {
     "Drought": "Prolonged lack of precipitation",
     "Wildfire": "Uncontrolled natural fires",
