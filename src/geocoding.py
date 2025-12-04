@@ -13,7 +13,7 @@ from functools import partial
 import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from tqdm import tqdm
-from shapely.geometry import Point, Polygon, MultiPolygon
+from shapely.geometry import Point, Polygon, MultiPolygon, GeometryCollection
 from shapely.ops import unary_union
 from src.post_process_functions import *
 from src.data import *
@@ -27,6 +27,7 @@ import datetime as dt
 import gc
 import logging
 import multiprocessing as mp
+import pandarallel
 
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
@@ -34,95 +35,12 @@ LOGGER = logging.getLogger("postprocessing")
 #Countries
 import pycountry
 import re
-unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
-unique_country_names = [country.name for country in pycountry.countries]
-pattern_country = '|'.join(map(re.escape, unique_country_names))
 
 # Add Geolocation and spatial information (region from cities)
 from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
 from src.client import NOMINATIM_USER_AGENT
-
-LOCATION_LEVEL_MAPPING = {
-    'admin2': {'admin_level': 2, 'nominatim_keys': ['city', 'town', 'village', 'municipality',
-                                                    'city_district', 'district', 'borough', 'suburb', 'subdivision',
-                                                    'hamlet', 'croft', 'isolated_dwelling']},
-    'admin1': {'admin_level': 1, 'nominatim_keys': ['state', 'province', 'region', 'county', 'territory', 'department', 'governorate', 'autonomous_region', 'state_district', 'district', 'metropolitan_area', 'subregion', 'zone']},
-    'admin0': {'admin_level': 0, 'nominatim_keys': ['country']}
-}
-
-list_admin_words = [
-    "Regency", "Province", "State", "Department", "Region", "River",
-    "Territory", "County", "District", "Municipality", "Prefecture",
-    "Canton", "Commune", "Borough", "Parish", "Metropolitan Area",
-    "Subregion", "Zone", "Subdivision", "Ward", "Township", "City",
-    "Village", "Hamlet", "Municipality", "Governorate", "Autonomous Region",
-    "County Borough", "Council Area", "Federal District", "Locality"
-]
-
-def get_country_languages_dict():
-    """Build a dictionary mapping each country name to its primary language code."""
-    country_languages = {}
-    for country in pycountry.countries:
-        try:
-            lang_code = langcodes.get(country.alpha_2).language
-            if lang_code:
-                country_languages[country.name] = lang_code
-        except:
-            continue
-    return country_languages
-
-LANGUAGES = get_country_languages_dict()
-
-#### Helpers functions
-
-def rotated_levenshtein_similarity(str1, str2):
-    """Compute the best Levenshtein similarity considering all rotations of words."""
-    words1, words2 = str1.split(), str2.split()
-
-    if len(words1) > 6 or len(words2) > 6:
-        # Fallback: use simple similarity without permutations
-        return Levenshtein.normalized_similarity(str1, str2)
-
-    # Generate all possible word orderings (rotations) for comparison
-    permutations1 = [" ".join(p) for p in itertools.permutations(words1)]
-    permutations2 = [" ".join(p) for p in itertools.permutations(words2)]
-
-    # Compute the max similarity considering all orderings
-    max_similarity = max(Levenshtein.normalized_similarity(p1, p2) for p1 in permutations1 for p2 in permutations2)
-
-    return max_similarity
-
-def remove_admin_words(location_str) :
-    """Remove predefined administrative words from a location string."""
-    for word in list_admin_words:
-        location_str = location_str.replace(word, "").strip()
-    location_str = ' '.join(location_str.split())
-    return location_str
-
-def get_country_languages_dict():
-    """Build a dictionary mapping each country name to its primary language code."""
-    country_languages = {}
-    for country in pycountry.countries:
-        try:
-            lang_code = langcodes.get(country.alpha_2).language
-            if lang_code:
-                country_languages[country.name] = lang_code
-        except:
-            continue
-    return country_languages
-
-def clean_geometry(geom):
-    """Fix invalid geometries using buffer(0)."""
-    if geom is None or geom.is_empty:
-        return None
-    if not geom.is_valid:
-        try:
-            return geom.buffer(0)
-        except Exception as e:
-            LOGGER.error("[clean_geometry] Failed to fix geometry: %s", e)
-            return None
-    return geom
+from geocoding_utils import *
 
 #### Function to Geocode one location
 def match_admin1_for_row(row, gpd_files):
@@ -202,6 +120,7 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
             LOGGER.error("[open_admin_gpd][geoBoundaries] Error loading GPD files: %s", e)
             return None
 
+    #Correct potential invalid mask 
     for i in range(2):
         invalid_mask = ~gpd_files[f"ADM_{i}"]["geometry"].is_valid
         gpd_files[f"ADM_{i}"].loc[invalid_mask, "geometry"] = gpd_files[f"ADM_{i}"].loc[invalid_mask, "geometry"].buffer(0)
@@ -232,7 +151,7 @@ def find_closest_country(curr_country, gpd_files, threshold=0.5):
         return None
 
 def get_polygon(gdf_file, country_name, country_iso, level_name, target_name, admin_level):
-    """ Get polygon for a target_name at a specific level within a country from the full admin GPKG."""
+    """ Get polygon for a target_name at a specific level within a country_name from the full admin GDF."""
     try:
         #Verify that the country exist otherwise take the country with the highest similarity
         if country_name not in gdf_file["ADMIN_0"].unique() :
@@ -277,8 +196,6 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
     Returns:
     - GeoDataFrame with matching polygon(s) at requested level, or None if not found
     """
-    # assert level in [1, 2], "level must be '1' or '2'"
-
     adm0_gdf = gpd_files["ADM_0"]
     adm1_gdf = gpd_files["ADM_1"]
     adm2_gdf = gpd_files["ADM_2"]
@@ -327,13 +244,15 @@ def fallback_country_union(gdf_file, countries, iso_countries):
             df_gpd["finest_level"] = 0
             df_gpd["locationOsm"] = country
             df_gpd["locationPolygon"] = country
-            df_gpd["geocoding_osm_flag"] = 0
-            df_gpd["geocoding_country_flag"] = 1
+            df_gpd["flag_geocoding_osm"] = 0
+            df_gpd["flag_geocoding_country"] = 1
             country_polygons.append(df_gpd)
 
     if country_polygons:
         combined = pd.concat(country_polygons)
-        combined["geometry"] = unary_union(combined["geometry"])
+        # combined["geometry"] = unary_union(combined["geometry"])
+        combined["geometry"] = MultiPolygon(combined["geometry"])
+        # combined["geometry"] = GeometryCollection(combined["geometry"].tolist())
         combined = combined.iloc[[0]]
         return combined
     return None
@@ -370,7 +289,10 @@ def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
     if not geometries:
         return None, []
 
-    merged_geometry = unary_union(geometries)
+    # merged_geometry = unary_union(geometries)
+    # merged_geometry = MultiPolygon(geometries)
+    merged_geometry = GeometryCollection(geometries)
+
     if not merged_geometry or merged_geometry.is_empty:
         return None, locations_names
 
@@ -381,6 +303,7 @@ def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
 def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=10):
     """
     Make nominatim query with robust error handling
+    From location and country, return a OSM object 
     """
     # Initialize geolocator with longer timeout
     geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
@@ -418,7 +341,8 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
 
 def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=10):
     """
-    Make nominatim query with robust error handling
+    Make reverse nominatim query with robust error handling
+    From coordinates, return an OSM location object 
     """
     # Initialize geolocator with longer timeout
     geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
@@ -452,19 +376,20 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
 
     for address_key in address.keys() :
         found = False
-        for loc_level, admin_info in LOCATION_LEVEL_MAPPING.items():
+        for _, admin_info in LOCATION_LEVEL_MAPPING.items():
             admin_level = admin_info['admin_level']
             admin_field = f"ADMIN_{admin_level}"
             for key in admin_info['nominatim_keys']:
                 if key==address_key:
-                    found = True
                     val = address[key]
                     val_clean = remove_admin_words(str(val))
                     sim = rotated_levenshtein_similarity(loc_clean, val_clean)
+
                     if print_info:
                         LOGGER.info("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
 
                     if sim == 1 :
+                        found = True
                         best_sim = sim
                         best_info = {
                             "sim": sim,
@@ -474,8 +399,9 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
                             "key": key
                         }
                         return best_info, best_sim
-
+                    
                     if sim >= similarity_th and sim > best_sim : #and admin_level>=best_info["admin_level"]:
+                        found = True
                         best_sim = sim
                         best_info = {
                             "sim": sim,
@@ -721,8 +647,8 @@ def prepare_result_df(df_gpd, best_result, location, country_flag=0, osm_flag=0)
         finest_level=best_result["admin_level"],
         locationOsm=best_result["name"],
         locationPolygon=df_gpd[best_result["admin_field"]],
-        geocoding_country_flag=country_flag,
-        geocoding_osm_flag=osm_flag,
+        flag_geocoding_country=country_flag,
+        flag_geocoding_osm=osm_flag,
         location=location
     )
 
@@ -804,8 +730,8 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_row_append = pd.DataFrame([row])
         df_row_append["geometry"] = merged_geometry
         df_row_append["locationLowestAdmin"] = layer_name
-        df_row_append["geocoding_country_flag"] = df_location_subset['geocoding_country_flag'].sum()#count_geocoding_country_flag
-        df_row_append["geocoding_osm_flag"] = df_location_subset['geocoding_osm_flag'].sum()#count_geocoding_osm_flag
+        df_row_append["flag_geocoding_country"] = df_location_subset['flag_geocoding_country'].sum()#count_flag_geocoding_country
+        df_row_append["flag_geocoding_osm"] = df_location_subset['flag_geocoding_osm'].sum()#count_flag_geocoding_osm
         df_row_append["locationOsm"] = [df_location_subset["locationOsm"].unique().tolist()]
         df_row_append["locationPolygon"] = [location_names]#[df_location_subset["locationPolygon"].unique().tolist()]
 
@@ -862,8 +788,8 @@ def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowes
             for i, row in enumerate(rows)
         }
 
-        for future in futures:
-        # for future in tqdm(futures, desc="Merging locations"): ### VERSION WITH TRACKING PRINT INFORMATIONS
+        # for future in futures:
+        for future in tqdm(futures, desc="Merging locations"): ### VERSION WITH TRACKING PRINT INFORMATIONS
             i = futures[future]
             try:
                 df = future.result()
@@ -877,7 +803,7 @@ def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowes
     else:
         return pd.DataFrame()
 
-def run_parallel_in_batches(df_geo, df_geo_individual_locs, gdf_file, batch_size=1000, **kwargs):
+def run_parallel_in_batches(df_geo, df_geo_individual_locs, gdf_file, batch_size=500, **kwargs):
     """
     Process `df_geo` in batches, running `run_parallel_associate` in parallel for each batch.
 
@@ -990,7 +916,7 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     end = time.time()
     time_open = (end - start) / 60
     if print_info :
-        LOGGER.info("Numer of unique locations : %s", len(unique_locations_countries))
+        LOGGER.info("Number of unique locations : %s", len(unique_locations_countries))
         LOGGER.info("Time to identify all locations %.2fmins", time_open)
 
     # Run nominatim for each loc
