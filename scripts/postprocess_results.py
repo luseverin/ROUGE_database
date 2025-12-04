@@ -20,6 +20,7 @@ from src.data import *
 from src.text_processing_functions import *
 from src.plot_functions import *
 from src.post_process_functions import *
+from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
 from src.sanity_checks import *
@@ -98,8 +99,8 @@ else:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
 
     #add iso3
-    response_df_proc["country_iso3"] = response_df_proc["country"].apply(list_country_name_to_iso3)
-    response_df_proc["country_iso3_kw"] = response_df_proc["country_kw"].apply(list_country_name_to_iso3) if "country_kw" in response_df_proc.columns else None
+    response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
+    response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None )
 
     ## Reclassify impacType
     response_df_proc = response_df_proc.apply(reclassify_impact_subtype, axis=1)
