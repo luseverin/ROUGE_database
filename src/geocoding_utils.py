@@ -15,7 +15,9 @@ import itertools
 import time
 import datetime as dt
 from rapidfuzz.distance import Levenshtein
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point, MultiPolygon, GeometryCollection
+from shapely.ops import unary_union
+import shapely
 from rapidfuzz import fuzz, process
 
 import geopandas as gpd
@@ -233,10 +235,13 @@ def rotated_levenshtein_similarity(str1, str2):
 
     return max_similarity
 
-def remove_admin_words(location_str) :
-    """Remove predefined administrative words from a location string."""
-    for word in LIST_ADMIN_WORDS:
-        location_str = location_str.replace(word, "").strip()
+def remove_admin_words(location_str):
+    """Remove predefined administrative words from a location string without affecting substrings."""
+    # Create a regex pattern that matches whole words only, case-insensitive
+    pattern = r'\b(?:' + '|'.join(re.escape(word) for word in LIST_ADMIN_WORDS) + r')\b'
+    # Substitute matches with empty string
+    location_str = re.sub(pattern, '', location_str, flags=re.IGNORECASE)
+    # Remove extra spaces
     location_str = ' '.join(location_str.split())
     return location_str
 
@@ -279,3 +284,63 @@ def to_flat_multipolygon(geometries):
             raise ValueError(f"Unsupported geometry type: {type(geom)}")
 
     return MultiPolygon(flat_polys)
+
+def sanitize_and_merge_geometries(geometries):
+    """
+    Takes a list of geometries and returns a clean, valid merged geometry.
+    Uses the existing clean_geometry() function. No inner functions.
+    """
+
+    # 1. Drop None / empty
+    cleaned = []
+    for g in geometries:
+        if g is None:
+            continue
+        if g.is_empty:
+            continue
+
+        # ensure polygon validity using your existing function
+        g2 = clean_geometry(g)
+        if g2 is None or g2.is_empty:
+            continue
+
+        cleaned.append(g2)
+
+    if not cleaned:
+        return None
+
+    # 2. Unary union merge (most efficient)
+    try:
+        merged = unary_union(cleaned)
+    except Exception as e:
+        LOGGER.error("[sanitize merge] unary_union failed: %s", e)
+        # fallback: MultiPolygon collection
+        merged = MultiPolygon([g for g in cleaned if isinstance(g, Polygon)])
+
+    # 3. If merge returns GeometryCollection → flatten polygons only
+    if isinstance(merged, GeometryCollection):
+        polys = [g for g in merged.geoms if isinstance(g, (Polygon, MultiPolygon))]
+        if len(polys) == 0:
+            return None
+        try:
+            merged = unary_union(polys)
+        except:
+            merged = MultiPolygon([g for g in polys if isinstance(g, Polygon)])
+
+    # 4. Final cleanup pass
+    if merged is None or merged.is_empty:
+        return None
+
+    if not merged.is_valid:
+        try:
+            merged = merged.buffer(0)
+        except:
+            pass
+
+    if not merged.is_valid:
+        try:
+            merged = shapely.make_valid(merged)
+        except:
+            pass
+
+    return merged
