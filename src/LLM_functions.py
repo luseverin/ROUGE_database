@@ -139,7 +139,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
     #get model response
     response = get_model_response(messages, **kwargs)
     if response is None:
-        return None, None, None
+        return None, None, 1
 
     # Parse the response content into a list of ImpactDetail objects
     raw_text = response.choices[0].message.content
@@ -154,7 +154,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
             response_content = json.loads(json_str)
         except Exception as e2:
             LOGGER.error("[SECONDARY JSON LOAD FAILURE] %s", e2)
-            return None, None, None
+            return None, None, 1
 
     #response_content = json_repair.loads(response.choices[0].message.content)
     try:
