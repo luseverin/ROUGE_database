@@ -392,8 +392,6 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
 
     ## Localize, date and find hazards of each impact value
     for i, impact in enumerate(answer_impact_values):
-        #track errors in impact extraction
-        impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
 
         # normalize list structure
         if isinstance(impact, list):
@@ -411,6 +409,9 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
         if "impactValue" not in impact:
             LOGGER.info("discarding impact (missing 'impactValue'): %s", impact)
             continue
+
+        #track errors in impact extraction
+        impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
 
         # extract impact value
         impact_value = extract_impact_value(pd.DataFrame([impact]))
