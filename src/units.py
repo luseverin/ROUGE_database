@@ -1,4 +1,5 @@
 # Define unit conversion mapping
+
 METRIC_UNIT_MAPPING = {
     'km': 'km',
     'km**2': 'km**2',
@@ -43,6 +44,7 @@ METRIC_UNIT_KW_RECLASS = {
                     "liter": [r"\b(liters?|litres?|l)\b"],
                     "miles": [r"(?<!\b(squared?|cube|cubic)\s*)\b(miles?|mi)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
                     "gallon": [r"\b(gallons|gal)\b"],
+                    '%' : [r"(%|perc\.?|percent)"],
 }
 
 #reclassify units
@@ -73,7 +75,7 @@ HARMONIZE_UNITS_KW = {
 
 }
 UNIT_KW_RECLASS = {
-    'people': r"\b(^people$|of people)\b",
+    'people': r"\b(people|of people)\b",
     'deaths' : r"\b(fatalities?|deaths?|lives|loss(es)? of life|deceased|dead)\b",
     'displaced' : r"\b(displaced|evacuees?|evacuated|idps?$)\b",
     'homelesses' : r"\b(homeless(es)?|homeless people)\b",
@@ -98,6 +100,8 @@ UNIT_KW_RECLASS = {
     'null' : r"\b(null|none|nan|np.nan)\b",
 }
 
+ALL_POSSIBLE_UNITS = {} #dictionary of all possible units
+[ALL_POSSIBLE_UNITS.update(d) for d in [METRIC_UNIT_KW_RECLASS, HARMONIZE_UNITS_KW, UNIT_KW_RECLASS]]
 
 #expected_unit_subtype = {
 #    "Affected People": "people",
