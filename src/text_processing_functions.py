@@ -109,8 +109,8 @@ def replace_numbers(text_in):
         if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
             number = float(text2num(token.text, "en"))
             #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
-            next_tokens = take_n_neighb_tokens(token, 2)
-            next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
+            #next_tokens = take_n_neighb_tokens(token, 2)
+            #next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
             if last_token_modified or (prev_token and is_float_digit(prev_token.text)):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
@@ -175,50 +175,50 @@ def could_be_unit(text):
     Return True if any of the regex patterns in std_unit_kw_reclass
     match the given string, else False.
     """
-    pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
+    pot_units = [target_unit for target_unit, unit_patterns in ALL_POSSIBLE_UNITS.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
     return len(pot_units) > 0
 
-def text_standardize_metric_units(text):
-    """Standardize units to a common baseline in text"""
-
-    ureg = UnitRegistry()
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    new_text = text
-
-    for token in doc:
-        # Check if token is a number followed by a unit
-        if token.like_num:
-            #if token can be converted to float, proceed to conversion else continue
-            try :
-                num = float(token.text)
-            except ValueError:
-                continue
-            next_tokens = take_n_neighb_tokens(token, 2) # take next 2 tokens
-
-            if next_tokens:
-                next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
-                pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
-                if len(pot_units) == 0:
-                    continue
-                elif len(pot_units) > 1:
-                    raise ValueError(f"Multiple potential units found for token: {token.text} {next_tokens}")
-
-                unit = pot_units[0]
-                si_unit = unit_mapping[unit]
-
-                # Perform conversion
-                quantity = num * ureg(unit)
-                converted_quantity = quantity.to(si_unit)
-                converted_value = converted_quantity.magnitude
-                converted_unit = converted_quantity.units
-
-                # Replace in the text
-                replacement = f"{converted_value:.8g} {converted_unit}"
-                old = f"{token.text} {next_tokens}"
-                new_text = new_text.replace(old, replacement)
-
-    return new_text
+#def text_standardize_metric_units(text):
+#    """Standardize units to a common baseline in text"""
+#
+#    ureg = UnitRegistry()
+#    nlp = spacy.load("en_core_web_sm")
+#    doc = nlp(text)
+#    new_text = text
+#
+#    for token in doc:
+#        # Check if token is a number followed by a unit
+#        if token.like_num:
+#            #if token can be converted to float, proceed to conversion else continue
+#            try :
+#                num = float(token.text)
+#            except ValueError:
+#                continue
+#            next_tokens = take_n_neighb_tokens(token, 2) # take next 2 tokens
+#
+#            if next_tokens:
+#                next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
+#                pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
+#                if len(pot_units) == 0:
+#                    continue
+#                elif len(pot_units) > 1:
+#                    raise ValueError(f"Multiple potential units found for token: {token.text} {next_tokens}")
+#
+#                unit = pot_units[0]
+#                si_unit = METRIC_UNIT_MAPPING[unit]
+#
+#                # Perform conversion
+#                quantity = num * ureg(unit)
+#                converted_quantity = quantity.to(si_unit)
+#                converted_value = converted_quantity.magnitude
+#                converted_unit = converted_quantity.units
+#
+#                # Replace in the text
+#                replacement = f"{converted_value:.8g} {converted_unit}"
+#                old = f"{token.text} {next_tokens}"
+#                new_text = new_text.replace(old, replacement)
+#
+#    return new_text
 
 
 def clean_text(text, remove_numbers=False, remove_stopwords=False):
