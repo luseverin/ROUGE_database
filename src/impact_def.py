@@ -192,7 +192,7 @@ Impacts.register(
 )
 
 Impacts.register(
-    key="Economic and Livelihood",
+    key="Economy and Livelihood",
     main_type="Economic Activity and Livelihood Production",
     description="Any identified impact on the economy which cannot be associated with the previous impactSubtypes.",
     keyword=r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
@@ -382,14 +382,14 @@ IMPACT_SUBTYPES_MERGED = [el for el in IMPACT_SUBTYPES if el not in ["Road Infra
 
 IMPACT_SUBTYPES_MERGED += [k for k in IMPACT_SUBTYPE_MERGER.keys()]
 
-# Update impact main type 
-IMPACT_TYPES_MERGER = {"Transportation" : "Infrastructure and Service access", 
-                       "TranspoWater, Sanitation, and Hygienertation" : "Infrastructure and Service access", 
-                       "Healthcare" : "Infrastructure and Service access", 
-                       "IT and Communication" : "Infrastructure and Service access", 
-                       "Education" : "Infrastructure and Service access", 
-                       "Agriculture and Access to Food" : "Infrastructure and Service access", 
-                       "Power and Energy" : "Infrastructure and Service access", 
+# Update impact main type
+IMPACT_TYPES_MERGER = {"Transportation" : "Infrastructure and Service access",
+                       "TranspoWater, Sanitation, and Hygienertation" : "Infrastructure and Service access",
+                       "Healthcare" : "Infrastructure and Service access",
+                       "IT and Communication" : "Infrastructure and Service access",
+                       "Education" : "Infrastructure and Service access",
+                       "Agriculture and Access to Food" : "Infrastructure and Service access",
+                       "Power and Energy" : "Infrastructure and Service access",
                        "Undefined Infrastructure and Service Access" : "Infrastructure and Service access"}
 
 IMPACT_TYPES_MERGED = {}
@@ -397,6 +397,6 @@ for subtype in IMPACT_SUBTYPES_MERGED:
     main_type = IMPACT_TYPES.get(subtype, None)  # get main type only for this subtype
     if main_type in ["Infrastructure", "Service access"]:
         main_type = "Infrastructure and Service access"
-    elif subtype in IMPACT_TYPES_MERGER.keys() : 
+    elif subtype in IMPACT_TYPES_MERGER.keys() :
         main_type = IMPACT_TYPES_MERGER[subtype]
     IMPACT_TYPES_MERGED[subtype] = main_type
