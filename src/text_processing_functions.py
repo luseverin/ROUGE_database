@@ -170,13 +170,37 @@ def take_n_neighb_tokens(token, n):
 
 def could_be_unit(text):
     """
-    Check if a given string could be a unit.
+    Check if a given text string could potentially be a unit.
 
-    Return True if any of the regex patterns in std_unit_kw_reclass
-    match the given string, else False.
+    Args:
+        text (str): The text to check.
+
+    Returns:
+        bool: True if the text could be a unit, False otherwise.
+
+    This function checks if the given text string contains any of the known unit patterns.
+    If a match is found, the function returns True. Otherwise, it returns False.
     """
-    pot_units = [target_unit for target_unit, unit_patterns in ALL_POSSIBLE_UNITS.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
-    return len(pot_units) > 0
+    if not text or not isinstance(text, str):
+        return False
+    pot_units = []
+    for target_unit, unit_patterns in ALL_POSSIBLE_UNITS.items():
+        if not isinstance(unit_patterns, list):
+            unit_patterns = [unit_patterns]
+        for pattern in unit_patterns:
+            try:
+                if re.search(pattern, text, re.IGNORECASE):
+                    pot_units.append(target_unit)
+                    break
+            except re.error:
+                # If the pattern is an invalid regex, treat it as a literal string
+                if re.search(re.escape(pattern), text, re.IGNORECASE):
+                    pot_units.append(target_unit)
+                    break
+    print(pot_units)
+    if pot_units:
+        return True
+    return False
 
 #def text_standardize_metric_units(text):
 #    """Standardize units to a common baseline in text"""
@@ -417,11 +441,13 @@ def select_impact_description(report, buffer=1):
         "detailed operation plan", "summary of the current response",
         "Overview of Operating National Society Response Action"
     ]
-    text = report[["sentences"]]
+    text = report["sentences"]
     # Precompile regex patterns
     keep_pattern = re.compile("|".join(re.escape(h) for h in headers_keep), re.IGNORECASE)
     drop_pattern = re.compile("|".join(re.escape(h) for h in headers_drop), re.IGNORECASE)
 
+    for i, s in enumerate(text):
+        print(s)
     ids_keep = [i for i, s in enumerate(text) if keep_pattern.search(s)]
     ids_drop = [i for i, s in enumerate(text) if drop_pattern.search(s)]
 
@@ -500,72 +526,72 @@ def check_hazard_type_keyword(text, hazard_patterns):
 
     return hazards
 
-def extract_entities(text):
-    # Process the text with spaCy
-    """
-    Extract named entities from a text.
+#def extract_entities(text):
+#    # Process the text with spaCy
+#    """
+#    Extract named entities from a text.
+#
+#    The function takes a text as input and processes it with spaCy to extract named entities.
+#    The function returns a list of tuples, where each tuple contains the text of the entity and its label.
+#
+#    Parameters
+#    ----------
+#    text : str
+#        The text to be processed.
+#
+#    Returns
+#    -------
+#    entities : list of tuples
+#        The list of extracted entities, where each tuple contains the text of the entity and its label.
+#    """
+#    nlp = spacy.load("en_core_web_sm")
+#    doc = nlp(text)
+#    entities = [(ent.text, ent.label_) for ent in doc.ents]
+#    return entities
 
-    The function takes a text as input and processes it with spaCy to extract named entities.
-    The function returns a list of tuples, where each tuple contains the text of the entity and its label.
-
-    Parameters
-    ----------
-    text : str
-        The text to be processed.
-
-    Returns
-    -------
-    entities : list of tuples
-        The list of extracted entities, where each tuple contains the text of the entity and its label.
-    """
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
-    return entities
-
-def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
-    """
-    Extract causal relationships from a sentence.
-
-    The function takes a sentence as input and processes it with spaCy to extract causal relationships.
-    The function returns a list of tuples, where each tuple contains the cause, the relationship, and the effect.
-
-    Parameters
-    ----------
-    sentence : str
-        The sentence to be processed.
-    relationship_list : list of str
-        The list of causal verbs to be considered.
-    hazard_patterns : dict
-        A dictionary of patterns to be used to check if a word is a hazard type.
-
-    Returns
-    -------
-    causes : list of tuples
-        The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
-    """
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(sentence)
-    causes = []
-
-    # Iterate over the tokens in the sentence
-    for token in doc:
-        #prev_token = doc[token.i - 1]
-        #next_token = doc[token.i + 1]
-        # Check if the token is a verb and in the list of causal verbs
-        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
-            # Find the subject (nsubj) and object (dobj) of the verb
-            subject = None
-            effect = None
-
-            for child in token.children:
-                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
-                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
-                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-            # If both subject and object (effect) are found, return the relationship
-            if subject and effect:
-                causes.append((subject, token.lemma_, effect))
-
-    return causes
+#def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
+#    """
+#    Extract causal relationships from a sentence.
+#
+#    The function takes a sentence as input and processes it with spaCy to extract causal relationships.
+#    The function returns a list of tuples, where each tuple contains the cause, the relationship, and the effect.
+#
+#    Parameters
+#    ----------
+#    sentence : str
+#        The sentence to be processed.
+#    relationship_list : list of str
+#        The list of causal verbs to be considered.
+#    hazard_patterns : dict
+#        A dictionary of patterns to be used to check if a word is a hazard type.
+#
+#    Returns
+#    -------
+#    causes : list of tuples
+#        The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
+#    """
+#    nlp = spacy.load("en_core_web_sm")
+#    doc = nlp(sentence)
+#    causes = []
+#
+#    # Iterate over the tokens in the sentence
+#    for token in doc:
+#        #prev_token = doc[token.i - 1]
+#        #next_token = doc[token.i + 1]
+#        # Check if the token is a verb and in the list of causal verbs
+#        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
+#            # Find the subject (nsubj) and object (dobj) of the verb
+#            subject = None
+#            effect = None
+#
+#            for child in token.children:
+#                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
+#                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+#                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
+#                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+#            # If both subject and object (effect) are found, return the relationship
+#            if subject and effect:
+#                causes.append((subject, token.lemma_, effect))
+#
+#    return causes
 
