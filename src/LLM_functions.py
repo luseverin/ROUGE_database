@@ -361,7 +361,7 @@ def extract_impact_value(impact):
     Extracts the impact value from the impact dictionary.
     """
     impact_cols = [col for col in impact if col in ["impactValue", "impactValueMin", "impactValueMax"]]
-    return impact[impact_cols].max()
+    return impact[impact_cols].max().max()
 
 def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes=True, validate_hazards=True, max_rounds=5, **groq_kwargs):
     """
