@@ -50,8 +50,7 @@ METRIC_UNIT_KW_RECLASS = {
 #reclassify units
 UNIT_CONVERTER = {
     r"\b(families)\b" : (3, "people"),
-    r"\b(households)\b": (3, "people"),
-    r"\b(village)\b": (1000, "people"),
+    r"\b(villages)\b": (1000, "people"),
     r"\b(communities)\b": (100, "people"),
     }
 
