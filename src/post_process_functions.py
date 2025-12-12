@@ -1,3 +1,4 @@
+from matplotlib.pyplot import flag
 import pycountry
 import pandas as pd
 #import json
@@ -215,7 +216,7 @@ def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     return x
 
 
-def reclassify_hazard(x, hazard_kw_reclass):
+def reclassify_hazard(x, hazard_kw_reclass=hazard_kw_reclass):
     """
     Reclassify a hazard type using a dictionary of regular expressions.
 
@@ -516,7 +517,7 @@ def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR")
         flag = True
     return value_parsed, unit_parsed, flag
 
-def convert_monetary_units(x):
+def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS):
     """
     Convert units that are currencies to a common baseline (EUR) by parsing the string
     and using a currency converter.
@@ -534,6 +535,14 @@ def convert_monetary_units(x):
     DEF_CUR = "EUR"
     value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     unit_raw = x["impactUnit"]
+    flag_conversion = False
+    flag_failed_conversion = False
+    if unit_raw in all_possible_units.keys():
+        #price parser is a bit too loose (e.g. "INVALID" -> "VAL")
+        #at least avoid converting units that are "known" non-monetary units
+        x["flag_currency_conversion"] = flag_conversion
+        x["flag_failed_currency_conversion"] = flag_failed_conversion
+        return x
     report_date = pd.to_datetime(x["reportDate"])
     values_parsed = {}
     units_parsed = []
@@ -544,6 +553,7 @@ def convert_monetary_units(x):
         unit_parsed = parsed_price.currency
         value_parsed = parsed_price.amount_float
         if unit_parsed and value_parsed:#if monetary unit is identified, try to convert it to default currency
+            flag_conversion = True
             values_parsed[value_label], unit_parsed, flag_failed_conversion = money_converter(value_parsed, unit_parsed, report_date, flag_failed_conversion, DEF_CUR)
             units_parsed.append(unit_parsed)
         else:
@@ -557,7 +567,8 @@ def convert_monetary_units(x):
             x[value_label] = values_parsed[value_label]
         x["impactUnit"] = units_parsed[0]
 
-    x["flag_currency_conversion"] = flag_failed_conversion
+    x["flag_currency_conversion"] = flag_conversion
+    x["flag_failed_currency_conversion"] = flag_failed_conversion
     return x
 
 def replace_numbers_unit(x):
@@ -585,8 +596,11 @@ def replace_numbers_unit(x):
     last_token_modified = False
     for token in doc:
         #first replace written-out numbers
-        if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
-            id_number = float(text2num(token.text, "en"))
+        if written_num(token.text) or token.pos_ == "NUM" and token.pos_ != "PROPN": #must not be part of a proper noun
+            if written_num(token.text):
+                id_number = float(text2num(token.text, "en"))
+            else:
+                id_number = float(token.text)
             #if the previous token is a number replace by the multiple of the two numbers
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
@@ -611,7 +625,7 @@ def replace_numbers_unit(x):
     #keep id_number first if there was no impactValue at first else keep impactValue if no id_number
     impact_values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
     if id_number:
-        new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else id_number for impact_value in impact_values]
+        new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else impact_value for impact_value in impact_values]
         flag_reformat_unit = True
     else: #keep impactValue if no id_number
         new_imp_values = impact_values
