@@ -26,14 +26,14 @@ hazard_kw_reclass = {
     'Extreme cold temperature': r"\b(extreme\s+cold\s+temperature|cold\s+wave|coldwave|cold\s+spell|severe\s+winter\s+conditions)s?\b.*",
     'Extreme warm temperature': r"\b(extreme\s+warm\s+temperature|heat\s+wave|heatwave|heat\s+episode|(?:heat|hot)\s+spell|heat\s+stress)s?\b.*",
     'Tropical storm': r"\b(tropical\s+storm|typhoon|hurricane|cyclonic\s+storm)s?\b.*",
-    'Convective storm': r"\b(convective\s+storm|derecho|hail|lightning|tornado|superstorm|thunderstorm)s?\b.*",
+    'Convective storm': r"\b(convective\s+storm|derecho|hail|lightning|tornadoe?|superstorm|thunderstorm)s?\b.*",
     'Other storm': r"\b(extra-?tropical\s+storm|winter\s*storm|storm\s+surge|windstorm|snowstorm|blizzard)s?\b.*",
     'Epidemic': r"\b(cholera|dengue|outbreak|epidemic)s?\b.*",
     'Conflict': r"\b(conflict|war|terrorism|unrest)s?\b.*"
 }
 
-hazard_ifrc_go = ['Flood', 'Fire', 'Cold Wave', 'Earthquake', 
-                 'Pluvial/Flash Flood', 'Other', 'Cyclone', 'Drought', 
+hazard_ifrc_go = ['Flood', 'Fire', 'Cold Wave', 'Earthquake',
+                 'Pluvial/Flash Flood', 'Other', 'Cyclone', 'Drought',
                  'Heat Wave', 'Landslide', 'Storm Surge', 'Volcanic Eruption', 'Tsunami']
 
 hazard_main_types_emdat_desc = {
