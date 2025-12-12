@@ -106,8 +106,11 @@ def replace_numbers(text_in):
     for token in doc:
 
         #first replace written-out numbers
-        if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
-            number = float(text2num(token.text, "en"))
+        if written_num(token.text) or token.pos_ == "NUM" and token.pos_ != "PROPN": #must not be part of a proper noun
+            if written_num(token.text):
+                number = float(text2num(token.text, "en"))
+            else:
+                number = float(token.text)
             #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
             #next_tokens = take_n_neighb_tokens(token, 2)
             #next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
