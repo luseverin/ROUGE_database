@@ -74,6 +74,11 @@ def is_float_digit(text):
         return True
     except ValueError:
         return False
+def looks_like_proper_name(token):
+    # Protect capitalized number-words inside noun chunks
+    if token.text[0].isupper() and any(token in chunk for chunk in token.doc.noun_chunks):
+        return True
+    return False
 
 #format numbers
 def format_number(num):
@@ -106,7 +111,7 @@ def replace_numbers(text_in):
     for token in doc:
 
         #first replace written-out numbers
-        if written_num(token.text) or token.like_num and token.pos_ != "PROPN": #must not be part of a proper noun
+        if (written_num(token.text) or token.is_digit) and not looks_like_proper_name(token): #must not be part of a proper noun
             try:
                 number = float(text2num(token.text, "en"))
             except ValueError:

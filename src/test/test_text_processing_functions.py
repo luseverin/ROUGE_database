@@ -50,6 +50,7 @@ class TestTextProcessing(unittest.TestCase):
         self.assertEqual(format_number("NaNword"), "NaNword")
 
     def test_replace_numbers_simple(self):
+        self.assertEqual(replace_numbers("3 cats"), "3.0 cats")
         self.assertIn("3", replace_numbers("three cats"))
 
     def test_replace_numbers_double(self):
@@ -59,6 +60,11 @@ class TestTextProcessing(unittest.TestCase):
         # Should not replace "May" (PROPN)
         result = replace_numbers("The Five Lakes dam is long.")
         self.assertIn("Five", result)
+
+    def test_replace_numbers_like_num(self):
+        self.assertEqual(replace_numbers("12/10/2024"), "12/10/2024")
+        self.assertEqual(replace_numbers("3.3.3.3"), "3.3.3.3")
+        self.assertEqual(replace_numbers("first class"), "first class")
 
     def test_replace_commas_in_numbers(self):
         self.assertEqual(replace_commas_in_numbers("1,000"), "1000")

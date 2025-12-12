@@ -597,7 +597,7 @@ def replace_numbers_unit(x):
     last_token_modified = False
     for token in doc:
         #first replace written-out numbers
-        if written_num(token.text) or token.like_num and token.pos_ != "PROPN": #must not be part of a proper noun
+        if (written_num(token.text) or token.is_digit) and not looks_like_proper_name(token): #must not be part of a proper noun
             try:
                 id_number = float(text2num(token.text, "en"))
             except ValueError:
