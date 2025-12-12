@@ -21,6 +21,8 @@ from src.units import *
 from src.impact_def import *
 from src.hazard_def import *
 
+#load spacy nlp
+nlp = spacy.load("en_core_web_sm")
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
@@ -581,7 +583,6 @@ def replace_numbers_unit(x):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.load("en_core_web_sm")
     unit = x["impactUnit"]
     if (pd.isna(unit) or unit is None):
         x["flag_reformat_unit"] = False
@@ -596,11 +597,19 @@ def replace_numbers_unit(x):
     last_token_modified = False
     for token in doc:
         #first replace written-out numbers
-        if written_num(token.text) or token.pos_ == "NUM" and token.pos_ != "PROPN": #must not be part of a proper noun
-            if written_num(token.text):
+        if written_num(token.text) or token.like_num and token.pos_ != "PROPN": #must not be part of a proper noun
+            try:
                 id_number = float(text2num(token.text, "en"))
-            else:
-                id_number = float(token.text)
+            except ValueError:
+                try:
+                    id_number = float(token.text)
+                except ValueError:
+                    LOGGER.warning("Failed to convert %s to number.", token.text)
+                    modified_tokens.append(token.text)
+                    last_token_modified = False
+                    if token.whitespace_:#keep whitespace
+                        modified_tokens.append(token.whitespace_)
+                    continue
             #if the previous token is a number replace by the multiple of the two numbers
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
@@ -620,6 +629,7 @@ def replace_numbers_unit(x):
 
     #join tokens back to unit
     cleaned_unit = "".join(modified_tokens)
+    cleaned_unit = cleaned_unit.strip()
 
     # try to parse new value
     #keep id_number first if there was no impactValue at first else keep impactValue if no id_number

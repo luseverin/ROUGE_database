@@ -305,9 +305,25 @@ class TestImpactFunctions(unittest.TestCase):
         # Test with digits in unit
         x = pd.Series({"impactValue": 5, "impactUnit": "2 houses", "impactValueMin": 2, "impactValueMax": np.nan})
         out = replace_numbers_unit(x)
-        self.assertIn("houses", out["impactUnit"])
+        self.assertEqual("houses", out["impactUnit"])
         self.assertEqual(out["impactValue"], 10)
         self.assertEqual(out["impactValueMin"], 4)
+        self.assertTrue(pd.isna(out["impactValueMax"]))
+        self.assertTrue(out["flag_reformat_unit"])
+
+        x = pd.Series({"impactValue": 5, "impactUnit": "two houses", "impactValueMin": 2, "impactValueMax": np.nan})
+        out = replace_numbers_unit(x)
+        self.assertEqual("houses", out["impactUnit"])
+        self.assertEqual(out["impactValue"], 10)
+        self.assertEqual(out["impactValueMin"], 4)
+        self.assertTrue(pd.isna(out["impactValueMax"]))
+        self.assertTrue(out["flag_reformat_unit"])
+
+        x = pd.Series({"impactValue": 5, "impactUnit": "thousands people", "impactValueMin": 2, "impactValueMax": np.nan})
+        out = replace_numbers_unit(x)
+        self.assertEqual("people", out["impactUnit"])
+        self.assertEqual(out["impactValue"], 5000)
+        self.assertEqual(out["impactValueMin"], 2000)
         self.assertTrue(pd.isna(out["impactValueMax"]))
         self.assertTrue(out["flag_reformat_unit"])
 

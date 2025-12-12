@@ -26,8 +26,8 @@ nltk.download('punkt')  # Download sentence tokenizer
 nltk.download('stopwords') # Download stopwords
 
 ## load spacy nlp
-#nlp = spacy.load("en_core_web_sm")#en_core_web_sm
-#nlp.add_pipe("language_detector")
+nlp = spacy.load("en_core_web_sm")#en_core_web_sm
+nlp.add_pipe("language_detector")
 #nlp.add_pipe('find_numbers')
 
 ## Detect language
@@ -42,8 +42,8 @@ def detect_language(text):
     Returns:
         str: Detected language.
     """
-    nlp = spacy.load("en_core_web_sm")
-    nlp.add_pipe("language_detector")
+    #nlp = spacy.load("en_core_web_sm")
+    #nlp.add_pipe("language_detector")
     doc = nlp(text)
     return doc._.language  # Check if detected language is English
 
@@ -96,7 +96,7 @@ def replace_numbers(text_in):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.load("en_core_web_sm")
+    #nlp = spacy.load("en_core_web_sm")
     # Process the text
     doc = nlp(text_in)
 
@@ -106,11 +106,19 @@ def replace_numbers(text_in):
     for token in doc:
 
         #first replace written-out numbers
-        if written_num(token.text) or token.pos_ == "NUM" and token.pos_ != "PROPN": #must not be part of a proper noun
-            if written_num(token.text):
+        if written_num(token.text) or token.like_num and token.pos_ != "PROPN": #must not be part of a proper noun
+            try:
                 number = float(text2num(token.text, "en"))
-            else:
-                number = float(token.text)
+            except ValueError:
+                try:
+                    number = float(token.text)
+                except ValueError:
+                    LOGGER.warning("Failed to convert %s to number.", token.text)
+                    modified_tokens.append(token.text)
+                    last_token_modified = False
+                    if token.whitespace_:#keep whitespace
+                        modified_tokens.append(token.whitespace_)
+                    continue
             #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
             #next_tokens = take_n_neighb_tokens(token, 2)
             #next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
