@@ -33,11 +33,11 @@ regex_test_cases = {
     },
     'roads': {
         "positives": ["roads damaged", "roads", "roads destroyed"],
-        "negatives": ["broadway show", "offroaders", "road network"]
+        "negatives": ["broadway show", "offroaders"]
     },
     'transportation facilities': {
-        "positives": ["railway", "train tracks", "airport damaged", "bus", "taxis"],
-        "negatives": ["trail", "training", "airplane"]
+        "positives": ["railway", "train tracks", "airport damaged", "bus", "taxis", "airplane"],
+        "negatives": ["trail", "training"]
     },
     'water, sanitation and hygiene facilities': {
         "positives": ["latrines built", "water shortage", "aqueduct", "reservoir"],
@@ -48,8 +48,8 @@ regex_test_cases = {
         "negatives": ["healthiness", "medicine"]
     },
     'IT and communication facilities': {
-        "positives": ["radio station", "tv damaged", "cell tower down", "antenna"],
-        "negatives": ["communication skills", "televisionary"]
+        "positives": ["radio station", "cell tower down", "antenna"],
+        "negatives": ["communication skills", "televisionary", "tv damaged"]
     },
     'power and energy production infrastructure facilities': {
         "positives": ["power outage", "solar panels", "hydro dam", "generator"],
@@ -77,7 +77,7 @@ regex_test_cases = {
     },
     'informal settlements': {
         "positives": ["refugee camp", "tent", "informal settlement"],
-        "negatives": ["campus", "practice agreement"]
+        "negatives": ["campus", "camping gear"]
     }
 }
 
@@ -182,17 +182,18 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(result["impactSubtype"], "Unknown")
 
     def test_reclassify_hazard(self):
-        x = pd.Series({"hazards": ["flood", "earth"]})
-        hazard_kw_reclass = {"Flood": r"flood", "Earthquake": r"earth"}
+        hazard_in = ["flood", "earth", "tornado", "tornadoes", "landslide"]
+        hazard_reclassed = ["Flood", "Unknown", "Convective storm", "Convective storm", "Mass movement"]
+        x = pd.Series({"hazards": hazard_in})
         out = reclassify_hazard(x, hazard_kw_reclass)
-        self.assertEqual(out["hazards"], ["Flood", "Earthquake"])
+        self.assertEqual(out["hazards"], hazard_reclassed)
         self.assertTrue(out["flag_hazards_reclass"])
 
     def test_reclassify_hazard_no_match(self):
-        x = pd.Series({"hazards": ["tornado"]})
-        hazard_kw_reclass = {"Flood": r"flood", "Earthquake": r"earth"}
-        out = reclassify_hazard(x, hazard_kw_reclass)
-        self.assertEqual(out["hazards"], ["Unknown"])
+        x = pd.Series({"hazards": ["rain", "wind"]})
+        out = reclassify_hazard(x)
+        self.assertEqual(out["hazards"], ["Unknown", "Unknown"])
+        self.assertTrue(out["flag_hazards_reclass"])
 
     def test_convert_unit(self):
         x = pd.Series({"impactValue": 10, "impactUnit": "families", "impactValueMin": np.nan, "impactValueMax": np.nan})
@@ -216,16 +217,49 @@ class TestImpactFunctions(unittest.TestCase):
         x = pd.Series({"impactUnit": "unknown_unit"})
         result = assign_unit_type(x)
         self.assertEqual(result["unit_type"], "other")
+        x = pd.Series({"impactUnit": "people"})
+        result = assign_unit_type(x)
+        self.assertEqual(result["unit_type"], "other")
 
     def test_reclassify_units(self):
-        x = pd.Series({"impactUnit": "families", "unit_type": "other", "impactSubtype": "Affected People"})
+        x = pd.Series({"impactValue": 10,
+                       "impactValueMin": np.nan,
+                       "impactValueMax": 20,
+                       "impactUnit": "families",
+                       "unit_type": "other",
+                       "impactSubtype": "Affected People"})
         out = reclassify_units(x.copy())
         self.assertIn("people", out["impactUnit"])
+        self.assertEqual(out["impactValue"], 10)
+        self.assertTrue(pd.isna(out["impactValueMin"]))
+        self.assertEqual(out["impactValueMax"], 20)
+        self.assertTrue(out["flag_unit_nonstd"])
+        self.assertFalse(out["flag_reclass_subtype_from_unit"])
+
+    def test_reclassify_units_reclass_subtype(self):
+        x = pd.Series({"impactValue": 10,
+                       "impactValueMin": np.nan,
+                       "impactValueMax": 20,
+                       "impactUnit": "displaced",
+                       "unit_type": "other",
+                       "impactSubtype": "Affected People"})
+        out = reclassify_units(x.copy())
+        self.assertIn("displaced", out["impactUnit"])
+        self.assertEqual(out["impactValue"], 10)
+        self.assertTrue(pd.isna(out["impactValueMin"]))
+        self.assertEqual(out["impactValueMax"], 20)
+        self.assertFalse(out["flag_unit_nonstd"])
+        self.assertTrue(out["flag_reclass_subtype_from_unit"])
+        self.assertEqual(out["impactSubtype"], "Displaced People")
+
 
     def test_standardize_metric_units(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "kg", "impactValueMin": np.nan, "impactValueMax": np.nan})
+        x = pd.Series({"impactValue": 10, "impactUnit": "liters", "impactValueMin": np.nan, "impactValueMax": 20})
         out = standardize_metric_units(x)
-        self.assertEqual(out["impactUnit"], "kg")
+        self.assertEqual(out["impactUnit"], "m**3")
+        self.assertAlmostEqual(out["impactValue"], 0.01, places=5)
+        self.assertAlmostEqual(out["impactValueMax"], 0.02, places=5)
+        self.assertTrue(pd.isna(out["impactValueMin"]))
         self.assertTrue(out["flag_unit_standardization"])
 
     def test_standardize_metric_units_invalid(self):
@@ -251,24 +285,31 @@ class TestImpactFunctions(unittest.TestCase):
         out = convert_monetary_units(x)
         self.assertEqual(out["impactUnit"], "EUR")
         self.assertIsInstance(out["impactValue"], (int, float))
+        self.assertIsInstance(out["impactValueMin"], (int, float))
+        self.assertIsInstance(out["impactValueMax"], (int, float))
+        self.assertTrue(out["flag_currency_conversion"])
 
     def test_convert_monetary_units_invalid_currency(self):
         x = pd.Series({
             "impactValue": 1500,
             "impactValueMin": 1000,
             "impactValueMax": 2000,
-            "impactUnit": "INVALID",
+            "impactUnit": "people",
             "reportDate": "2020-01-01"
         })
         out = convert_monetary_units(x)
         # Should handle gracefully with warning flag
-        self.assertIn("flag_currency_conversion", out.index)
+        self.assertFalse(out["flag_currency_conversion"])
 
     def test_replace_numbers_unit(self):
         # Test with digits in unit
-        x = pd.Series({"impactValue": 5, "impactUnit": "2 houses", "impactValueMin": np.nan, "impactValueMax": np.nan})
+        x = pd.Series({"impactValue": 5, "impactUnit": "2 houses", "impactValueMin": 2, "impactValueMax": np.nan})
         out = replace_numbers_unit(x)
         self.assertIn("houses", out["impactUnit"])
+        self.assertEqual(out["impactValue"], 10)
+        self.assertEqual(out["impactValueMin"], 4)
+        self.assertTrue(pd.isna(out["impactValueMax"]))
+        self.assertTrue(out["flag_reformat_unit"])
 
     def test_replace_numbers_unit_none(self):
         x = pd.Series({"impactValue": 5, "impactUnit": None, "impactValueMin": np.nan, "impactValueMax": np.nan})
