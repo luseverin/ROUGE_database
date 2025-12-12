@@ -18,12 +18,15 @@ from rapidfuzz.distance import Levenshtein
 from shapely.geometry import Polygon, Point, MultiPolygon, GeometryCollection
 from shapely.ops import unary_union
 import shapely
+import logging
 from rapidfuzz import fuzz, process
 
 import geopandas as gpd
 
 import sys
 import os
+
+LOGGER = logging.getLogger("postprocessing")
 
 unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
 unique_country_names = [country.name for country in pycountry.countries]
@@ -261,12 +264,14 @@ def clean_geometry(geom):
     """Fix invalid geometries using buffer(0)."""
     if geom is None or geom.is_empty:
         return None
-    if not geom.is_valid:
-        try:
-            return geom.buffer(0)
-        except Exception as e:
-            LOGGER.error("[clean_geometry] Failed to fix geometry: %s", e)
-            return None
+    try:
+        # buffer(0) fixes many geometric issues AND implicitly checks validity
+        cleaned = geom.buffer(0)
+        return cleaned
+
+    except Exception as e:
+        LOGGER.error("[clean_geometry] Failed to buffer geometry: %s", e)
+        return None
     return geom
 
 def to_flat_multipolygon(geometries):
@@ -312,8 +317,9 @@ def sanitize_and_merge_geometries(geometries):
     # 2. Unary union merge (most efficient)
     try:
         merged = unary_union(cleaned)
+
     except Exception as e:
-        LOGGER.error("[sanitize merge] unary_union failed: %s", e)
+        # LOGGER.error("[sanitize merge] unary_union failed: %s", e)
         # fallback: MultiPolygon collection
         merged = MultiPolygon([g for g in cleaned if isinstance(g, Polygon)])
 
