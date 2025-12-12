@@ -33,7 +33,7 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "all_appeals_unique_1-333_meta-llama_llama-4-scout-17b-16e-instruct_v281025"
+filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
 #"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
 #"labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
 #"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
@@ -53,7 +53,7 @@ merge_subtypes = False #whether or not we want to merge impact subtypes
 remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other Human Impacts", "Other Infrastructural Impacts", "Other Agricultural Impacts", "Other Service Access Impacts"] #list of impactSubtypes to remove
 
 #geocoding params
-geocode = True #whether or not we want to geocode
+geocode = False #whether or not we want to geocode
 geocode_load = False #f"post_processed_{filename_in}_GEOCODE_v141025" #geocoded file to load or false
 similarity_th=0.2
 similarity_polygon = 0.6
@@ -111,8 +111,6 @@ else:
     ## Units reclassification
     #replace numbers in units
     response_df_proc = response_df_proc.apply(replace_numbers_unit, axis=1)
-    #convert money
-    response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
     #standardize metric units
     response_df_proc = response_df_proc.apply(standardize_metric_units, axis=1)
     #assign unit type (e.g. surface, volume, mass)
@@ -125,6 +123,8 @@ else:
     response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
     #normalize people units
     response_df_proc = response_df_proc.apply(normalize_people_unit, axis=1)
+    #convert money
+    response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
     if filter_unknown_subtype:
         response_df_proc = response_df_proc[response_df_proc["impactSubtype"] != "Unknown"]
     if force_no_unit_quali:
