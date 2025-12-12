@@ -62,17 +62,17 @@ def add_key_value_pairs(data, new_pairs):
 
     return data
 
-def check_result_json(result_json, label=None):
-    try:
-        answer = json.loads(result_json.replace("\n", ""))
-        if label:
-            answer = answer[label]
-    except Exception as e:
-        LOGGER.error("An unexpected error occurred: %s", e)
-        return None
-    if not answer:
-        LOGGER.info("JSON is empty: %s", result_json)
-    return answer
+#def check_result_json(result_json, label=None):
+#    try:
+#        answer = json.loads(result_json.replace("\n", ""))
+#        if label:
+#            answer = answer[label]
+#    except Exception as e:
+#        LOGGER.error("An unexpected error occurred: %s", e)
+#        return None
+#    if not answer:
+#        LOGGER.info("JSON is empty: %s", result_json)
+#    return answer
 
 def build_messages(prompt, prompt_system=None, prompt_assistant=None):
     """Build messages for OpenAI API based on (user) prompt, system prompt and assistant prompt"""
