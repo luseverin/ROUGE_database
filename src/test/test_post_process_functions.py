@@ -275,31 +275,32 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(split_value_units(y), ["5", "kg"])
 
     def test_convert_monetary_units(self):
-        x = pd.Series({
-            "impactValue": 1500,
-            "impactValueMin": 1000,
-            "impactValueMax": 2000,
-            "impactUnit": "USD",
-            "reportDate": "2020-01-01"
+        x = pd.DataFrame({
+            "impactValue": [1500, 1500, 10],
+            "impactValueMin": [1000, 1000, 10],
+            "impactValueMax": [2000, 2000, 10],
+            "impactUnit": ["USD", "chf", "euro"],
+            "reportDate": ["2020-01-01", "", "2019-06-15"]
         })
-        out = convert_monetary_units(x)
-        self.assertEqual(out["impactUnit"], "EUR")
-        self.assertIsInstance(out["impactValue"], (int, float))
-        self.assertIsInstance(out["impactValueMin"], (int, float))
-        self.assertIsInstance(out["impactValueMax"], (int, float))
-        self.assertTrue(out["flag_currency_conversion"])
+        for i in range(len(x)):
+            out = convert_monetary_units(x.iloc[i])
+            self.assertEqual(out["impactUnit"], "EUR")
+            self.assertIsInstance(out["impactValue"], (int, float))
+            self.assertIsInstance(out["impactValueMin"], (int, float))
+            self.assertIsInstance(out["impactValueMax"], (int, float))
+            self.assertTrue(out["flag_currency_conversion"])
 
     def test_convert_monetary_units_invalid_currency(self):
-        x = pd.Series({
-            "impactValue": 1500,
-            "impactValueMin": 1000,
-            "impactValueMax": 2000,
-            "impactUnit": "people",
-            "reportDate": "2020-01-01"
+        x = pd.DataFrame({
+            "impactValue": [1500, 1500],
+            "impactValueMin": [1000, 1000],
+            "impactValueMax": [2000, 2000],
+            "impactUnit": ["people", "swiss francs"],
+            "reportDate": ["2020-01-01", "2019-06-15"]
         })
-        out = convert_monetary_units(x)
-        # Should handle gracefully with warning flag
-        self.assertFalse(out["flag_currency_conversion"])
+        for i in range(len(x)):
+            out = convert_monetary_units(x.iloc[i])
+            self.assertFalse(out["flag_currency_conversion"])
 
     def test_replace_numbers_unit(self):
         # Test with digits in unit
