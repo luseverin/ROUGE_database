@@ -254,13 +254,18 @@ class TestImpactFunctions(unittest.TestCase):
 
 
     def test_standardize_metric_units(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "liters", "impactValueMin": np.nan, "impactValueMax": 20})
-        out = standardize_metric_units(x)
-        self.assertEqual(out["impactUnit"], "m**3")
-        self.assertAlmostEqual(out["impactValue"], 0.01, places=5)
-        self.assertAlmostEqual(out["impactValueMax"], 0.02, places=5)
-        self.assertTrue(pd.isna(out["impactValueMin"]))
-        self.assertTrue(out["flag_unit_standardization"])
+        xin = pd.DataFrame({"impactValue": [10, 20, 20], "impactUnit": ["liters", "square meter", "meter square"], "impactValueMin": [np.nan, 20, 20], "impactValueMax": [20, 20, 20]})
+        xexp = pd.DataFrame({"impactValue": [0.01, 0.00002, 0.00002], "impactUnit": ["m**3", "km**2", "km**2"], "impactValueMin": [np.nan, 0.00002, 0.00002], "impactValueMax": [0.02, 0.00002, 0.00002]})
+        for i in range(len(xin)):
+            out = standardize_metric_units(xin.iloc[i])
+            self.assertEqual(out["impactUnit"], xexp["impactUnit"].iloc[i])
+            self.assertAlmostEqual(out["impactValue"], xexp["impactValue"].iloc[i], places=5)
+            if pd.isna(xexp["impactValueMin"].iloc[i]):
+                self.assertTrue(pd.isna(out["impactValueMin"]))
+            else:
+                self.assertAlmostEqual(out["impactValueMin"], xexp["impactValueMin"].iloc[i], places=5)
+            self.assertAlmostEqual(out["impactValueMax"], xexp["impactValueMax"].iloc[i], places=5)
+            self.assertTrue(out["flag_unit_standardization"])
 
     def test_standardize_metric_units_invalid(self):
         x = pd.Series({"impactValue": 10, "impactUnit": "unknown", "impactValueMin": np.nan, "impactValueMax": np.nan})
