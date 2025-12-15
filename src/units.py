@@ -23,13 +23,13 @@ METRIC_UNIT_MAPPING = {
 }
 METRIC_UNIT_KW_RECLASS = {
                     'km' : [r"(?<!\b(squared?)\b)\s\b(kilometers?|kilometres?|kms?)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2)\b)"],
-                    'km**2' : [r"\b(?<=(squared?))\s*(kilometers?|kilometres?|kms?)\b",
+                    'km**2' : [r"\b(squared?)\s+(kilometers?|kilometres?|kms?)\b",
                             r"\b(kilometers?|kilometres?|kms?)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
-                    'm**2' : [r"\b(?<=(squared?)\b)\s*\b(meters?|metres?|m)\b",
+                    'm**2' : [r"\b(squared?)\s+(meters?|metres?|m)\b",
                             r"\b(meters?|metres?|m)\s?\b\b(\*\*\s*2|\*\*2|\^2|²|square|squared|2)\b(?<!\.\d)"],
-                    'mi**2' : [r"\b(?<=(squared?))\s*(mile|miles|mi)\b",
+                    'mi**2' : [r"\b(squared?)\s+(mile|miles|mi)\b",
                             r"\b(mile|miles|mi)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
-                    'ft**2' : [r"\b(?<=(squared?))\s*(feet|foot|ft)\b",
+                    'ft**2' : [r"\b(squared?)\s+(feet|foot|ft)\b",
                             r"\b(feet|foot|ft)\s?(\*\*\s*2|\*\*2|\^2|²|squared?|2)\b(?<!\.\d)"],
                     'kg' : [r"\b(kgs?|kilograms?)\b"],
                     'm**3' : [r"\b(?<=(cube|cubic))\s*(meters?|metres?|m)\b",
@@ -46,6 +46,8 @@ METRIC_UNIT_KW_RECLASS = {
                     "gallon": [r"\b(gallons|gal)\b"],
 }
 
+
+
 #reclassify units
 UNIT_CONVERTER = {
     r"\b(families)\b" : (3, "people"),
@@ -55,11 +57,11 @@ UNIT_CONVERTER = {
 
 PEOPLE_NORMALIZER = r"\b^(people|deaths|cases|injuries|displaced|missings|homelesses)$\b"
 UNIT_TYPE_KW_RECLASS = {
-                        'km' : r"\b(kilometer|kilometre|km)s?(?!\s*(\*\*\s*2|\^2|²|square|squared|2))",
-                        'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
+                        'km' : r"\b(?:kilometer|kilometre|km)s?(?!\s*(?:\*\*\s*2|\*\*2|\^2|²|square|squared|2))\b",
+                        'km**2' : r"\b(?:kilometer|kilometre|km)s?\s*(?:\*\*\s*2|\*\*2|\^2|²|square|squared|2)\b",
                         'kg' : r"\b(kg|kilograms?)\b",
-                        'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
-                        '%' : r"\b(%|perc\.?|per.?cent(s)?)\b",
+                        'm**3' : r"\b(?:meter|metre|m)s?\s?(?:\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)\b",
+                        '%' : r"\b(%|perc\.?|per(\s)?cent(s)?)\b",
 }
 HARMONIZE_UNITS_KW = {
     'people': r"\b(people|persons?|individuals?|residents?)\b",
@@ -70,7 +72,7 @@ HARMONIZE_UNITS_KW = {
     'vehicles' : r"\b(vehicles?|motor vehicles?|cars?|trucks?|vessels?|boats?)\b",
     'structures' : r"\b(facilities|facility|buildings?|(infra)?structures?|buildings?|utilities?)\b",
     'homes' : r"\b(residences?|houses?|homes?)\b",
-    '%' : r"\b(%|perc\.?|per.?cent(s)?)\b",
+    '%' : r"\b(%|perc\.?|per(\s)?cent(s)?)\b",
 
 }
 UNIT_KW_RECLASS = {
