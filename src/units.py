@@ -44,7 +44,6 @@ METRIC_UNIT_KW_RECLASS = {
                     "liter": [r"\b(liters?|litres?|l)\b"],
                     "miles": [r"(?<!\b(squared?|cube|cubic)\s*)\b(miles?|mi)\b(?!\s*(\*\*\s*2|\^2|²|squared?|2|\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3))\b(?!\s+\d+(\.\d+)?)"],
                     "gallon": [r"\b(gallons|gal)\b"],
-                    '%' : [r"(%|perc\.?|percent)"],
 }
 
 #reclassify units
@@ -58,9 +57,9 @@ PEOPLE_NORMALIZER = r"\b^(people|deaths|cases|injuries|displaced|missings|homele
 UNIT_TYPE_KW_RECLASS = {
                         'km' : r"\b(kilometer|kilometre|km)s?(?!\s*(\*\*\s*2|\^2|²|square|squared|2))",
                         'km**2' : r"\b(kilometer|kilometre|km)s?\s?(\*\*\s*2|\*\*2|\^2|²|square|squared|2)",
-                        'kg' : r"(kg.*|.*kilogram.*)",
+                        'kg' : r"\b(kg|kilograms?)\b",
                         'm**3' : r"\b(meter|metre|m)s?\s?(\*\*\*\s*3|\*\*3|\^3|³|cube|cubic|3)",
-                        '%' : r"(%|perc\.?|percent)",
+                        '%' : r"\b(%|perc\.?|per.?cent(s)?)\b",
 }
 HARMONIZE_UNITS_KW = {
     'people': r"\b(people|persons?|individuals?|residents?)\b",
@@ -71,10 +70,11 @@ HARMONIZE_UNITS_KW = {
     'vehicles' : r"\b(vehicles?|motor vehicles?|cars?|trucks?|vessels?|boats?)\b",
     'structures' : r"\b(facilities|facility|buildings?|(infra)?structures?|buildings?|utilities?)\b",
     'homes' : r"\b(residences?|houses?|homes?)\b",
+    '%' : r"\b(%|perc\.?|per.?cent(s)?)\b",
 
 }
 UNIT_KW_RECLASS = {
-    'people': r"\b(people|of people)\b",
+    'people': r"\b(people)\b",
     'deaths' : r"\b(fatalities?|deaths?|lives|loss(es)? of life|deceased|dead)\b",
     'displaced' : r"\b(displaced|evacuees?|evacuated|idps?$)\b",
     'homelesses' : r"\b(homeless(es)?|homeless people)\b",
