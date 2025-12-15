@@ -1225,7 +1225,8 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
             LOGGER.info("Time to gather all locations per rows %.2fmins", time_open)
 
         # Save the final df
-        save_df_geo(df_geo_output, save_path, res_savename, split_lowest_levels)
+        if save_path : 
+            save_df_geo(df_geo_output, save_path, res_savename, split_lowest_levels)
         if split_lowest_levels :
             df_geo_output_split = df_geo_output.copy()
 
