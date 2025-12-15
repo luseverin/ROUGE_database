@@ -14,18 +14,26 @@ To reproduce the analysis, run the scripts in the following order:
 ## Content
 ### src
 Source code. Contains:
-- data.py : path definitions
-- client.py : OpenAI and Groq API client set-up
+- accuracy.py : Accuracy calculation functions
+- classOutput.py : Validation classes for LLM extraction
+- client.py : OpenAI, Groq API and OpenStreetMap client set-up
+- data.py : Path definitions
+- external_comparaison.py : Text processing and aggregation functions (for comparaison with EMDAT, IFRCGo and IFRCMonty external data)
+- geocoding.py : Pipeline of geocoding functions
+- geocoding_utils.py : Geocoding utils functions 
+- hazard_def.py : Definition of hazard classes and categories
+- impact_def.py : Definition of impact classes and categories
+- labelling_helpers.py : Helpers functions for manual labelling
+- logger_setup.py : Logger setup to track potential errors 
+- post_processing_functions.py : Impact post-processing functions
+- prompt_examples.py : Examples of prompts for the LLM
+- prompt_hazards.py : 
+- prompt_impact.py : Prompt function to extract impacts
+- sanity_checks.py : Postprocessing check of extracted impact
 - text_processing_functions.py : text processing and pre-processing functions
-- LLM_functions.py : functions related to LLM extraction
-- prompts_impacts.py : prompt definition to extract impacts
-- impact_def.py : definition of impact classes and categories
-- hazard_def.py : definition of hazard classes and categories
-- units.py : impact units definition
-- classOutput.py : validation classes for LLM extraction
-- post_processing_functions.py : post-processing functions
-- geocoding.py : geocoding functions
-- accuracy.py : accuracy calculation functions
+- units.py : Definition of units per impact classes and categories
+- utils.py : Usefull functions for navigation the data
+
 ### scripts
 - preproces_reports.py : script to pre-process raw reports (formating, text selection)
 - llm_extraction.py : script to extract data using LLMs
