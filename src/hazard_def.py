@@ -10,11 +10,6 @@ hazard_all_subtype_emdat = ["drought", "wildfire", "forest fire", "land fire",
                             "derecho", "hail", "lightning", "winterstorm", "storm surge",
                             "tornado", "extra-tropical storm", "tropical storm" ]
 
-#hazard_main_types_emdat_extended = ["Drought", "Wildfire", "Earthquake", "Mass movement",
-#                                    "Volcanic activity", "Flood", "Wave action", "Extreme warm temperature",
-#                                    "Extreme cold temperature", "Other storm",
-#                                    "Tropical storm", "Epidemic", "Conflict"]
-
 hazard_kw_reclass = {
     'Drought': r"\bdrought.*|\bdry\s+spell.*",
     'Wildfire': r"\b(forest\s*fire|wild\s*fire|land\s*fire|bush\s*fire|wildfire|landfire|bushfire|fire)s?\b.*",
@@ -69,156 +64,53 @@ hazard_mapping_emdat = {'Drought': ['Drought'],
                                   "Windstorm", "Electric storm", "Snowstorm", "Hail storm", "Cyclone", "Surge", "Cond.Atmosph.", "Atmospheric cond.",
                                   "Sandstorm", "Tropical depression", "Atmosphcondition", "Strong wind"]}
 
-emdat_undrr_to_name = {
-    # Cold wave
-    "nat-met-ext-col": "Cold wave",
-    "MH0040": "Cold wave",
-
-    # Drought
-    "nat-cli-dro-dro": "Drought",
-    "MH0035": "Drought",
-
-    # Earthquake & subtypes
-    "nat-geo-ear-gro": "Earthquake",
-    "GH0001": "Earthquake",
-    "GH0002": "Earthquake",#"Ground shaking",
-    "GH0003": "Earthquake",#"Liquefaction",
-    "GH0004": "Earthquake",#"Surface rupture",
-    "GH0005": "Earthquake",#"Subsidence and uplift",
-
-    # Epidemics
-    "nat-bio-epi-vir": "Disease", #"Viral diseases",
-    "nat-bio-epi-bac": "Disease",#"Bacterial diseases",
-    "nat-bio-epi-par": "Disease",#"Parasitic diseases",
-    "nat-bio-epi-fun": "Disease",#"Fungal diseases",
-    "nat-bio-epi-pri": "Disease",#"Prion diseases",
-    "nat-bio-epi-dis": "Disease",#"General infectious disease",
-    "BI0016": "Disease",#"General infectious disease",
-
-    # Extra-tropical cyclone/storm
-    "nat-met-sto-ext": "Extra-tropical cyclone",
-    "MH0031": "Extra-tropical cyclone",
-    "MH0099": "Extra-tropical cyclone",#"Extra-tropical storm",
-
-    # Floods
-    "nat-hyd-flo-fla": "Flash flood",
-    "MH0006": "Flash flood",
-    "nat-hyd-flo-riv": "Riverine flood",
-    "MH0007": "Riverine flood",
-    "nat-hyd-flo-coa": "Coastal flood",
-    "MH0004": "Coastal flood",
-    "nat-hyd-flo-flo": "Flood",
-    "MH0012": "Flood",#"General flood",
-    "MH0008": "Flood",#"Groundwater flood",
-    "MH0010": "Flood",#"Ponding flood",
-    "MH0011": "Flood",#"Snowmelt flood",
-    "nat-hyd-flo-ice": "Ice jam flood",
-    "MH0009": "Ice jam flood",
-    "nat-cli-glo-glo": "Glacial lake outburst flood",
-    "MH0013": "Glacial lake outburst flood",
-    "tec-mis-col-col": "Flood",#"Dam/levee break flood",
-    "TL0009": "Flood",#"Dam/levee break flood",
-
-    # Heat wave
-    "nat-met-ext-hea": "Heat wave",
-    "MH0047": "Heat wave",
-
-    # Insect infestations
-    "nat-bio-inf-loc": "Infection",#Insect pest / Locust infestation",
-    "nat-bio-inf-gra": "Infection",#"Grasshopper infestation",
-    "nat-bio-inf-wor": "Infection",#"Worms infestation",
-    "nat-bio-inf-inf": "Infection",#"General infestation",
-    "BI0002": "Infection",#"General insect infestation",
-    "BI0003": "Infection",#"Locust infestation",
-
-    # Landslides
-    "nat-geo-mmd-lan": "Landslide",
-    "nat-hyd-mmw-lan": "Landslide",
-    "GH0007": "Landslide",
-    "GH0014": "Landslide",#"Volcanic triggered landslide",
-
-    # Mudflow
-    "nat-hyd-mmw-mud": "Mud flow/slide",
-    "MH0051": "Mud flow/slide",
-
-    # Severe local storms
-    "nat-met-sto-sto": "Severe local storm",
-    "MH0003": "Severe local storm",
-    "MH0060": "Violent wind",
-    "nat-met-sto-lig": "Lightning",
-    "MH0002": "Lightning",
-    "nat-met-sto-hai": "Hail",
-    "MH0036": "Hail",
-
-    # Avalanches
-    "nat-geo-mmd-ava": "Avalanche", #"Avalanche (dry)",
-    "nat-hyd-mmw-ava": "Avalanche", #"Avalanche (wet)",
-    "MH0050": "Avalanche",
-
-    # Storm surge/tides
-    "nat-met-sto-sur": "Storm surge",
-    "MH0027": "Storm surge",
-    "nat-hyd-wav-rog": "Storm tides",
-    "MH0028": "Storm tides",
-
-    # Tornado & tropical cyclones
-    "nat-met-sto-tor": "Tornado",
-    "MH0059": "Tornado",
-    "nat-met-sto-tro": "Tropical cyclone",
-    "MH0057": "Tropical cyclone",
-    "MH0058": "Tropical cyclone",#"Tropical storm",
-    "MH0030": "Tropical cyclone",#"Depression or cyclone",
-    "MH0032": "Tropical cyclone",#"Sub-tropical cyclone",
-
-    # Tsunami
-    "nat-geo-ear-tsu": "Tsunami",
-    "MH0029": "Tsunami",#"Tsunami (general)",
-    "GH0006": "Tsunami",#"Tsunami (earthquake)",
-    "GH0017": "Tsunami",#"Tsunami (volcanic)",
-    "GH0035": "Tsunami",#"Tsunami (submarine landslide)",
-
-    # Volcano
-    "nat-geo-vol-lav": 'Volcanic activity',#"Lava flows",
-    "GH0009": 'Volcanic activity',#"Lava flows / Volcanic activity",
-    "nat-geo-vol-ash": 'Volcanic activity',#"Ash/tephra fall",
-    "GH0010": 'Volcanic activity',#"Ash/tephra fall",
-    "nat-geo-vol-vol": 'Volcanic activity',#"Volcanic activity / Volcanic gases",
-    "GH0016": 'Volcanic activity',#"Volcanic gases",
-    "nat-geo-vol-pyr": 'Volcanic activity',#"Pyroclastic flow",
-    "GH0012": 'Volcanic activity',#"Pyroclastic flow",
-    "nat-geo-vol-lah": 'Volcanic activity',#"Lahar",
-    "GH0013": 'Volcanic activity',#"Lahar",
-
-    # Wildfires
-    "nat-cli-wil-for": "Forest fire",
-    "nat-cli-wil-lan": "Land fire",
-    "nat-cli-wil-wil": "Wildfire",
-    "EN0013": "Wildfire",
-
-    # Conflict
-    "Multiple codes": "Conflict",#"Conflict / Civil unrest / Armed conflict",
-    "SO0001": "Conflict",#"International armed conflict",
-    "SO0002": "Conflict",#"Non-international armed conflict",
-    "SO0003": "Conflict",#"Civil unrest",
-    "SO0004": "Conflict",#"Explosive remnants of war",
-    "SO0005": "Conflict",#"Environmental degradation from conflict",
-
-    # Other
-    "nat-met-fog-fog": "Fog",
-    "MH0016": "Fog",
-    "nat-met-ext-sev": "Severe winter conditions",
-    "MH0041": "Severe winter conditions",
-    "MH0042": "Severe winter conditions",#"Freeze",
-    "MH0043": "Severe winter conditions",#"Frost",
-    "MH0044": "Severe winter conditions",#"Freezing rain",
-    "MH0045": "Severe winter conditions",#"Glaze",
-    "MH0046": "Severe winter conditions",#"Ground frost",
-    "MH0048": "Severe winter conditions",#"Icing",
-    "MH0049": "Severe winter conditions",#"Thaw",
-    "nat-met-sto-bli": "Blizzard",
-    "MH0034": "Blizzard",
+hazard_to_emdat_undrr = {
+    "Cold wave": ["nat-met-ext-col", "MH0040"],
+    "Drought": ["nat-cli-dro-dro", "MH0035"],
+    "Earthquake": ["nat-geo-ear-gro", "GH0001", "GH0002", "GH0003", "GH0004", "GH0005"],
+    "Disease": ["nat-bio-epi-vir", "nat-bio-epi-bac", "nat-bio-epi-par",
+                "nat-bio-epi-fun", "nat-bio-epi-pri", "nat-bio-epi-dis", "BI0016"],
+    "Extra-tropical cyclone": ["nat-met-sto-ext", "MH0031", "MH0099"],
+    "Flash flood": ["nat-hyd-flo-fla", "MH0006"],
+    "Riverine flood": ["nat-hyd-flo-riv", "MH0007"],
+    "Coastal flood": ["nat-hyd-flo-coa", "MH0004"],
+    "Flood": ["nat-hyd-flo-flo", "MH0012", "MH0008", "MH0010", "MH0011",
+              "tec-mis-col-col", "TL0009"],
+    "Ice jam flood": ["nat-hyd-flo-ice", "MH0009"],
+    "Glacial lake outburst flood": ["nat-cli-glo-glo", "MH0013"],
+    "Heat wave": ["nat-met-ext-hea", "MH0047"],
+    "Infection": ["nat-bio-inf-loc", "nat-bio-inf-gra", "nat-bio-inf-wor",
+                  "nat-bio-inf-inf", "BI0002", "BI0003"],
+    "Landslide": ["nat-geo-mmd-lan", "nat-hyd-mmw-lan", "GH0007", "GH0014"],
+    "Mud flow/slide": ["nat-hyd-mmw-mud", "MH0051"],
+    "Severe local storm": ["nat-met-sto-sto", "MH0003"],
+    "Violent wind": ["MH0060"],
+    "Lightning": ["nat-met-sto-lig", "MH0002"],
+    "Hail": ["nat-met-sto-hai", "MH0036"],
+    "Avalanche": ["nat-geo-mmd-ava", "nat-hyd-mmw-ava", "MH0050"],
+    "Storm surge": ["nat-met-sto-sur", "MH0027"],
+    "Storm tides": ["nat-hyd-wav-rog", "MH0028"],
+    "Tornado": ["nat-met-sto-tor", "MH0059"],
+    "Tropical cyclone": ["nat-met-sto-tro", "MH0057", "MH0058", "MH0030", "MH0032"],
+    "Tsunami": ["nat-geo-ear-tsu", "MH0029", "GH0006", "GH0017", "GH0035"],
+    "Volcanic activity": ["nat-geo-vol-lav", "GH0009", "nat-geo-vol-ash", "GH0010",
+                          "nat-geo-vol-vol", "GH0016", "nat-geo-vol-pyr", "GH0012",
+                          "nat-geo-vol-lah", "GH0013"],
+    "Forest fire": ["nat-cli-wil-for"],
+    "Land fire": ["nat-cli-wil-lan"],
+    "Wildfire": ["nat-cli-wil-wil", "EN0013"],
+    "Conflict": ["Multiple codes", "SO0001", "SO0002", "SO0003", "SO0004", "SO0005"],
+    "Fog": ["nat-met-fog-fog", "MH0016"],
+    "Severe winter conditions": ["nat-met-ext-sev", "MH0041", "MH0042", "MH0043", "MH0044",
+                                 "MH0045", "MH0046", "MH0048", "MH0049"],
+    "Blizzard": ["nat-met-sto-bli", "MH0034"],
 }
 
+emdat_undrr_to_name = {
+    code: hazard
+    for hazard, codes in hazard_to_emdat_undrr.items()
+    for code in codes
+}
 
 #dict to match emdat maintypes to there subtypes
 maintype_to_subytpe_emdat = {'Drought': ['drought'],
@@ -245,14 +137,3 @@ maintype_to_subytpe_emdat = {'Drought': ['drought'],
   'winter storm',
   'extra-tropical storm',
   'tropical storm']}
-
-#hazard_subtype_kw_searc ={
-#                        'Drought': r"drought.*|dry spell.*",
-#                        'Wildfire': r"fire.*|forestfire.*|wildfire.*|landfire.*|bushfire.*|forest fire.*|wild fire.*|land fire.*|bush fire.*" ,
-#                        'Earthquake' : r"ground movement.|tsunami.",
-#                        'Mass movement': r"avalanche.|land slide.*|landslide.*|rockfall.*|sudden subsidence.|mudslide.|mass movement.*",
-#                        'Volcanic activity' : r"ash fall.|lava flow.|pyroclastic flow.|lahar",
-#                        'Flood': r"flood.*|inundation.*|coastal flood.|flash flood.|riverine flood.|ice jam flood.",
-#                        'Wave action' : r"rogue wave.|seiche",
-#                        'Extreme temperature' : r"cold wave.*|coldwave.*|cold spell.*|heat wave.*|heatwave.*|heat episode.*|((heat|hot) spell).*|heat stress.*|severe winter conditions.",
-#                        'Storm' : r"derecho.|hail.|lightning.|winterstorm.|storm surge.|tornado.|winter storm.|extra-tropical storm.|tropical storm.|typhoon.|hurricane.|storm.*|superstorm.*|windstorm.*|snowstorm.*|blizzard.*|thunderstorm.*" }
