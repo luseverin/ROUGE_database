@@ -12,6 +12,26 @@ To reproduce the analysis, run the scripts in the following order:
 3. postprocess_results.py
 
 ## Content
+
+### Notebooks 
+List of the following notebooks, for data validation, pre-processing, post-processing, results analysis : 
+- data_flag_checks.ipynb : Inspect the type and amount of flags raised
+- data_post_process.ipynb : Inspect post-processing of impact
+- download_external_sources.ipynb : Download IFRC Monty and IFRCGo data from API
+- gather_label_reports.ipynb : Gather manually labelled reports from several sources
+- gather_quanti_impact.ipynb : Inspect the gathering of quantitative impact
+- geocoding.ipynb : Inspect succesive steps of the geocoding
+- impact_postprocess.ipynb : Postprocess extracted impact
+- inspect_flags.ipynb : Inspect the type and amount of flags raised
+- inspect_header.ipynb : Inspect selection of header (impact text)
+- labelled_extracted_row_matching.ipynb : Matching of labelled and extracted impact data
+- preprocess_IFRC_reports.ipynb : Preprocess raw IFRC reports
+- result_data_overview.ipynb : Plots and overview of extracted impact
+- validation_accuracy.ipynb : Accuracy scores for validation
+- validation_coverage.ipynb : Coverage scores for validation
+- validation_external_sources.ipynb : Comparaison with external sources
+- validation_sensitivity_analysis.ipynb : Sensitivity analysis with other LLM models 
+
 ### src
 Source code. Contains:
 - accuracy.py : Accuracy calculation functions
