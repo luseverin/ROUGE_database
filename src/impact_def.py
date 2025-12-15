@@ -317,7 +317,7 @@ Impacts.register(
     main_type="Economic Activity and Livelihood Production",
     description="The DREF allocation for the event in CHF or other currency.",
     keyword=r"\bDREF Allocation\b",
-    expected_unit="CHF",
+    expected_unit=None,#"CHF", ! None to avoid automatic conversion
     default_unit="CHF"
 )
 
