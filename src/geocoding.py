@@ -127,66 +127,6 @@ def identify_robust_country(df_geo) :
     unique_loc_with_country = list(unique_loc_with_country.keys())
     return unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso
 
-# def sanitize_and_merge_geometries(geometries):
-#     """
-#     Takes a list of geometries and returns a clean, valid merged geometry.
-#     Uses the existing clean_geometry() function. No inner functions.
-#     """
-
-#     # 1. Drop None / empty
-#     cleaned = []
-#     for g in geometries:
-#         if g is None:
-#             continue
-#         if g.is_empty:
-#             continue
-
-#         # ensure polygon validity using your existing function
-#         g2 = clean_geometry(g)
-#         if g2 is None or g2.is_empty:
-#             continue
-
-#         cleaned.append(g2)
-
-#     if not cleaned:
-#         return None
-
-#     # 2. Unary union merge (most efficient)
-#     try:
-#         merged = unary_union(cleaned)
-#     except Exception as e:
-#         LOGGER.error("[sanitize merge] unary_union failed: %s", e)
-#         # fallback: MultiPolygon collection
-#         merged = MultiPolygon([g for g in cleaned if isinstance(g, Polygon)])
-
-#     # 3. If merge returns GeometryCollection → flatten polygons only
-#     if isinstance(merged, GeometryCollection):
-#         polys = [g for g in merged.geoms if isinstance(g, (Polygon, MultiPolygon))]
-#         if len(polys) == 0:
-#             return None
-#         try:
-#             merged = unary_union(polys)
-#         except:
-#             merged = MultiPolygon([g for g in polys if isinstance(g, Polygon)])
-
-#     # 4. Final cleanup pass
-#     if merged is None or merged.is_empty:
-#         return None
-
-#     if not merged.is_valid:
-#         try:
-#             merged = merged.buffer(0)
-#         except:
-#             pass
-
-#     if not merged.is_valid:
-#         try:
-#             merged = shapely.make_valid(merged)
-#         except:
-#             pass
-
-#     return merged
-
 #### Function to Geocode one location
 def match_admin1_for_row(row, gpd_files):
     """ Given a row of df_geo and gpd_files, find the ADM1 boundary that contains/intersects the geometry."""
@@ -520,34 +460,6 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
             LOGGER.error("[query_nominatim] Unexpected error: %s", e)
             return None
     return None
-
-# def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=10):
-#     """
-#     Make reverse nominatim query with robust error handling
-#     From coordinates, return an OSM location object 
-#     """
-#     # Initialize geolocator with longer timeout
-#     geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
-
-#     for attempt in range(max_retries):
-#         try:
-#             reverse_result = geolocator.reverse(coords, exactly_one=True, addressdetails=True, language=lang, zoom=13)
-#             return reverse_result
-
-#         except (GeocoderTimedOut, GeocoderServiceError) as e:
-#             if attempt == max_retries - 1:  # Last attempt
-#                 LOGGER.error("[query_nominatim] Failed after %i attempts: %s", max_retries, e)
-#                 return None
-
-#             # Exponential backoff
-#             sleep_time = initial_delay * (2 ** attempt)
-#             LOGGER.info("[query_nominatim] Attempt %i failed. Retrying in %.1fs...", attempt + 1, sleep_time)
-#             time.sleep(sleep_time)
-
-#         except Exception as e:
-#             LOGGER.error("[query_nominatim] Unexpected error: %s", e)
-#             return None
-#     return None
 
 def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=10, zoom=13):
     """
