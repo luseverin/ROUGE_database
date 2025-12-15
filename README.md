@@ -23,7 +23,9 @@ Source code. Contains:
 - geocoding_utils.py : Geocoding utils functions 
 - hazard_def.py : Definition of hazard classes and categories
 - impact_def.py : Definition of impact classes and categories
+- ImpactRegistry.py : Class for impact types
 - labelling_helpers.py : Helpers functions for manual labelling
+- LLM_functions : Prompt and LLM query functions 
 - logger_setup.py : Logger setup to track potential errors 
 - post_processing_functions.py : Impact post-processing functions
 - prompt_examples.py : Examples of prompts for the LLM
