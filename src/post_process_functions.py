@@ -1,4 +1,3 @@
-from matplotlib.pyplot import flag
 import pycountry
 import pandas as pd
 #import json
@@ -455,7 +454,10 @@ def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit
         x["flag_unit_standardization"] = False
         return x
     elif len(identified_units) > 1:
-        raise ValueError(f"Multiple potential units found for token: {unit}")
+        LOGGER.warning("Multiple potential units found for token %s, identified units %s. Not standardizing", unit, identified_units)
+        x["flag_unit_standardization"] = False
+        return x
+
     identified_unit = identified_units[0]
     identified_pattern = identified_patterns[0]
     si_unit = unit_mapping[identified_unit]
@@ -519,7 +521,7 @@ def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR")
         flag = True
     return value_parsed, unit_parsed, flag
 
-def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS):
+def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS, DEF_CUR="EUR"):
     """
     Convert units that are currencies to a common baseline (EUR) by parsing the string
     and using a currency converter.
@@ -534,9 +536,9 @@ def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS):
     pd.Series
         modified row with converted value and unit
     """
-    DEF_CUR = "EUR"
     value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     unit_raw = x["impactUnit"]
+    unit_raw = unit_raw.upper() if len(unit_raw) == 3 else unit_raw #price parser requires  capital 3-letter currency codes
     flag_conversion = False
     flag_failed_conversion = False
     if unit_raw in all_possible_units.keys():
@@ -556,7 +558,7 @@ def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS):
         value_parsed = parsed_price.amount_float
         if unit_parsed and value_parsed:#if monetary unit is identified, try to convert it to default currency
             flag_conversion = True
-            values_parsed[value_label], unit_parsed, flag_failed_conversion = money_converter(value_parsed, unit_parsed, report_date, flag_failed_conversion, DEF_CUR)
+            values_parsed[value_label], unit_parsed, flag_failed_conversion = money_converter(value_parsed, unit_parsed, report_date, flag_failed_conversion, DEF_CUR=DEF_CUR)
             units_parsed.append(unit_parsed)
         else:
             values_parsed[value_label] = value_raw
