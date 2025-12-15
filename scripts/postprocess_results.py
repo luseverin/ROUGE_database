@@ -24,6 +24,7 @@ from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
 from src.sanity_checks import *
+from string.templatelib import convert
 
 ### Post process
 #0. Formatting
@@ -45,6 +46,7 @@ filename_out =  "post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
+convert_to_people = False #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
 reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
@@ -118,7 +120,8 @@ else:
     #harmonize non metric units
     response_df_proc = response_df_proc.apply(harmonize_units, axis=1)
     #convert convertible (non-money) units
-    response_df_proc = response_df_proc.apply(convert_unit, axis=1)
+    if convert_to_people:
+        response_df_proc = response_df_proc.apply(convert_unit, axis=1)
     #reclassify units
     response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
     #normalize people units
