@@ -1,15 +1,13 @@
 ##paths and variables
 import getpass
-#import os
 from pathlib import Path
 DATA_PATH_LS = Path('/Users/lseverino/Documents/PhD/Projects/Como/Data_backup/')
-# DATA_PATH_LH = "/scratchx/lhasbini/como_school/"
 DATA_PATH_LH = Path("c:/Users/lhasbini/ownCloud/Documents/Thèse/Conférences_Discussions/2024_Como_Compound Events Training/data/")
 
 user = getpass.getuser()
 if user == "lhasbini" :
     DATA_PATH = DATA_PATH_LH
-elif user == "lseverino" : ##### TO CHANGE FOR LUCA
+elif user == "lseverino" : 
     DATA_PATH = DATA_PATH_LS
 else:
     raise ValueError(f"Unknown user: {user}")

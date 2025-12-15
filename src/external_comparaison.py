@@ -20,14 +20,6 @@ ifrc_go_impact_source = {"report" : "field_reports_",
                          "other" : "field_reports_other_"
                          }
 
-# mapping_impact_type = {"Affected People" : {"ifrc_monty" : "affected_total", "ifrc_go" : "field_reports_num_affected", "emdat" : "Total Affected"},
-#                        "Injured People" : {"ifrc_monty" : "injured", "ifrc_go" : "field_reports_num_injured", "emdat" : None},
-#                        "Displaced People" : {"ifrc_monty" : "displaced_total", "ifrc_go" : "field_reports_num_displaced", "emdat" : None},
-#                        "Human Deaths" : {"ifrc_monty" : "death", "ifrc_go" : "field_reports_num_dead", "emdat" : "Total Deaths"},
-#                        "Missing People" : {"ifrc_monty" : "missing", "ifrc_go" : "field_reports_num_missing", "emdat" : None}
-#                     #    "Homeless People"
-#                        }
-
 mapping_impact_type = {"Affected People" : {"ifrc_monty" : "affected_total", "ifrc_go" : "num_affected", "emdat" : "Total Affected"},
                        "Injured People" : {"ifrc_monty" : "injured", "ifrc_go" : "num_injured", "emdat" : None},
                        "Displaced People" : {"ifrc_monty" : "displaced_total", "ifrc_go" : "num_displaced", "emdat" : None},
@@ -49,14 +41,13 @@ def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
 
     # Create consolidated column
     df["impactValue_final"] = (
-        df["impactValue"]
-        .combine_first(df["impactValueMin"])
-        .combine_first(df["impactValueMax"])
+        df["impactValue"].replace("", pd.NA)
+        .combine_first(df["impactValueMin"].replace("", pd.NA))
+        .combine_first(df["impactValueMax"].replace("", pd.NA))
     )
 
     # Drop rows where final value is missing
     df = df.dropna(subset=["impactValue_final"])
-
     return df
 
 def consolidate_startYear(row):
@@ -211,7 +202,7 @@ def open_clean_ifrc_go() :
 
     #Rename columns
     df_ifrc_go = df_ifrc_go.rename({"appeals_code" : "appealCode"}, axis=1)
-    df_ifrc_go["id"] = df_ifrc_go["id"].astype(int)
+    df_ifrc_go["id"] = df_ifrc_go["id"].astype("Int64")
 
     #Select only DREF reports 
     df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"]=="DREF"]
@@ -228,7 +219,7 @@ def open_clean_ifrc_monty(df_ifrc_go) :
 
     #Use id and df_ifrc_go to fing appealCode
     df_ifrc_monty["id_clean"] = df_ifrc_monty["id"].str.extract(r"ifrcevent-impact--(\d+)-")
-    df_ifrc_monty["id_clean"] = df_ifrc_monty["id_clean"].astype(int)
+    df_ifrc_monty["id_clean"] = df_ifrc_monty["id_clean"].astype("Int64")
     df_ifrc_monty = df_ifrc_monty.merge(
         df_ifrc_go[["id", "appealCode"]].rename(columns={"id": "id_clean"}),
         on="id_clean",
@@ -255,8 +246,8 @@ def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
     df_em_dat = pd.read_excel(DATA_EXTERNAL_SOURCE / file_name)
     df_em_dat = df_em_dat.loc[df_em_dat["Disaster Type"].isin(hazard_mapping_emdat.keys())]
 
-    df_em_dat["Start Month"] = df_em_dat["Start Month"].fillna(1).astype(int)
-    df_em_dat["Start Day"] = df_em_dat["Start Day"].fillna(1).astype(int)
+    df_em_dat["Start Month"] = df_em_dat["Start Month"].fillna(1).astype("Int64")
+    df_em_dat["Start Day"] = df_em_dat["Start Day"].fillna(1).astype("Int64")
     df_em_dat["Start Date"] = pd.to_datetime(
         df_em_dat[["Start Year", "Start Month", "Start Day"]].rename(
             columns={"Start Year": "year", "Start Month": "month", "Start Day": "day"}
@@ -264,8 +255,8 @@ def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
         errors="coerce"
     )
 
-    df_em_dat["End Month"] = df_em_dat["End Month"].fillna(1).astype(int)
-    df_em_dat["End Day"] = df_em_dat["End Day"].fillna(1).astype(int)
+    df_em_dat["End Month"] = df_em_dat["End Month"].fillna(1).astype("Int64")
+    df_em_dat["End Day"] = df_em_dat["End Day"].fillna(1).astype("Int64")
     df_em_dat["End Date"] = pd.to_datetime(
         df_em_dat[["End Year", "End Month", "End Day"]].rename(
             columns={"End Year": "year", "End Month": "month", "End Day": "day"}
@@ -307,7 +298,7 @@ def choose_unique_disno(df_llm_em_dat, column_minimize):
     # chosen_disno = min_diff.idxmin()
 
     #Minimize the distance between start dates
-    min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.")[column_minimize].min()
+    min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.", group_keys=False)[column_minimize].min()
     chosen_disno = min_diff.idxmin()
     return chosen_disno
 
@@ -354,8 +345,8 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     # ].reset_index(drop=True)
 
     # Create date columns 
-    df_llm_em_dat["Start Month"] = df_llm_em_dat["Start Month"].fillna(1).astype(int)
-    df_llm_em_dat["Start Day"] = df_llm_em_dat["Start Day"].fillna(1).astype(int)
+    df_llm_em_dat["Start Month"] = df_llm_em_dat["Start Month"].fillna(1).astype("Int64")
+    df_llm_em_dat["Start Day"] = df_llm_em_dat["Start Day"].fillna(1).astype("Int64")
     df_llm_em_dat["Start Date"] = pd.to_datetime(
         df_llm_em_dat[["Start Year", "Start Month", "Start Day"]].rename(
             columns={"Start Year": "year", "Start Month": "month", "Start Day": "day"}
@@ -363,8 +354,8 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         errors="coerce"
     )
 
-    df_llm_em_dat["End Month"] = df_llm_em_dat["End Month"].fillna(1).astype(int)
-    df_llm_em_dat["End Day"] = df_llm_em_dat["End Day"].fillna(1).astype(int)
+    df_llm_em_dat["End Month"] = df_llm_em_dat["End Month"].fillna(1).astype("Int64")
+    df_llm_em_dat["End Day"] = df_llm_em_dat["End Day"].fillna(1).astype("Int64")
     df_llm_em_dat["End Date"] = pd.to_datetime(
         df_llm_em_dat[["End Year", "End Month", "End Day"]].rename(
             columns={"End Year": "year", "End Month": "month", "End Day": "day"}
@@ -372,8 +363,8 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         errors="coerce"
     )
 
-    df_llm_em_dat["startMonth"] = df_llm_em_dat["startMonth"].fillna(1).astype(int)
-    df_llm_em_dat["startDay"] = df_llm_em_dat["startDay"].fillna(1).astype(int)
+    df_llm_em_dat["startMonth"] = df_llm_em_dat["startMonth"].fillna(1).astype("Int64")
+    df_llm_em_dat["startDay"] = df_llm_em_dat["startDay"].fillna(1).astype("Int64")
     df_llm_em_dat["startDate"] = pd.to_datetime(
         df_llm_em_dat[["startYear", "startMonth", "startDay"]].rename(
             columns={"startYear": "year", "startMonth": "month", "startDay": "day"}
@@ -381,8 +372,8 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         errors="coerce"
     )
 
-    df_llm_em_dat["endMonth"] = df_llm_em_dat["endMonth"].fillna(1).astype(int)
-    df_llm_em_dat["endDay"] = df_llm_em_dat["endDay"].fillna(1).astype(int)
+    df_llm_em_dat["endMonth"] = df_llm_em_dat["endMonth"].fillna(1).astype("Int64")
+    df_llm_em_dat["endDay"] = df_llm_em_dat["endDay"].fillna(1).astype("Int64")
     df_llm_em_dat["endDate"] = pd.to_datetime(
         df_llm_em_dat[["endYear", "endMonth", "endDay"]].rename(
             columns={"endYear": "year", "endMonth": "month", "endDay": "day"}
@@ -402,7 +393,7 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df_llm_em_dat["DisNo."] = df_llm_em_dat["DisNo."].astype(str)
 
     appeal_to_disno = (
-        df_llm_em_dat.groupby("appealCode")
+        df_llm_em_dat.groupby("appealCode", group_keys=False)
         .apply(lambda x: choose_unique_disno(x, column_minimize))
         .reset_index()
         .rename(columns={0: "chosen_DisNo"})
