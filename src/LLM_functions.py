@@ -18,7 +18,7 @@ from copy import deepcopy
 from src.hazard_def import *
 from src.impact_def import *
 from src.data import *
-from src.prompts_hazards import *
+# from src.prompts_hazards import *
 from src.prompts_impacts import *
 from src.client import CLIENT, CONTEXT_WINDOW, MODEL_NAME, MAX_COMPLETION_TOKENS
 from src.classOutput import *
