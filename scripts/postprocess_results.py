@@ -18,13 +18,11 @@ from src.logger_setup import set_logger
 
 from src.data import *
 from src.text_processing_functions import *
-from src.plot_functions import *
 from src.post_process_functions import *
 from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
 from src.sanity_checks import *
-from string.templatelib import convert
 
 ### Post process
 #0. Formatting
