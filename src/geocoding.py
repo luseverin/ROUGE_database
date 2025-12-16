@@ -1099,7 +1099,7 @@ def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowes
     else:
         return pd.DataFrame()
 
-def run_parallel_in_batches(df_geo, df_geo_individual_locs, gdf_file, batch_size=1000, **kwargs):
+def run_parallel_in_batches(df_geo, df_geo_individual_locs, gdf_file, batch_size=2000, **kwargs):
     """
     Process `df_geo` in batches, running `run_parallel_associate` in parallel for each batch.
 
@@ -1129,7 +1129,7 @@ def run_parallel_in_batches(df_geo, df_geo_individual_locs, gdf_file, batch_size
 
 ##### Global function to perform the whole geocoding
 
-def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL") :
+def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False, save_path=False, res_savename=False, polygon_source="GAUL", **kwargs) :
     """
     Geocodes a DataFrame of locations into administrative polygons.
 
@@ -1184,9 +1184,8 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso = identify_robust_country(df_geo)
     end = time.time()
     time_open = (end - start) / 60
-    if print_info :
-        LOGGER.info("Number of unique locations : %s", len(unique_locations_countries))
-        LOGGER.info("Time to identify all locations %.2fmins", time_open)
+    LOGGER.info("Number of unique locations : %s", len(unique_locations_countries))
+    LOGGER.info("Time to identify all locations %.2fmins", time_open)
 
     # Run nominatim for each loc
     start = time.time()
@@ -1194,35 +1193,30 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     for (loc, country) in unique_loc_with_country :
         key = (loc, country)
         if key not in nom_loc_dict:
-            # countries = unique_locations_countries[loc]
-            # countries_iso = unique_locations_countries_iso[loc]
-            countries = list(unique_locations_countries.get(key, set()))#[country]
+            countries = list(unique_locations_countries.get(key, set()))
             countries_iso = list(unique_locations_countries_iso.get(key, set()))
 
-            nom_loc_dict[loc] = find_best_nomin(loc, countries, countries_iso, similarity_th, print_info=False)
+            nom_loc_dict[key] = find_best_nomin(loc, countries, countries_iso, similarity_th, print_info=False)
     end = time.time()
     time_open = (end - start) / 60
-    if print_info :
-        LOGGER.info("Time to nominatim all locations %.2fmins", time_open)
+    LOGGER.info("Time to nominatim all locations %.2fmins", time_open)
 
     # Convert nominatim output to polygons
     start = time.time()
     max_workers = min(10, (os.cpu_count() or 1) + 2)
-    df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gpd_files, print_info=False, max_workers=max_workers)
+    df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gpd_files, print_info=False, max_workers=max_workers, **kwargs)
     end = time.time()
     time_open = (end - start) / 60
-    if print_info:
-        LOGGER.info("Time to geocode all locations %.2fmins", time_open)
+    LOGGER.info("Time to geocode all locations %.2fmins", time_open)
 
     # Gather the polygons to df_row for 2 split options
     for split_lowest_levels in [True, False] :
         start = time.time()
         max_workers = min(10, (os.cpu_count() or 1))
-        df_geo_output = run_parallel_in_batches(df_geo, df_geo_individual_locs, gpd_files, split_lowest_levels=split_lowest_levels, polygon_source=polygon_source, max_workers=max_workers)
+        df_geo_output = run_parallel_in_batches(df_geo, df_geo_individual_locs, gpd_files, split_lowest_levels=split_lowest_levels, polygon_source=polygon_source, max_workers=max_workers, **kwargs)
         end = time.time()
         time_open = (end - start) / 60
-        if print_info :
-            LOGGER.info("Time to gather all locations per rows %.2fmins", time_open)
+        LOGGER.info("Time to gather all locations per rows %.2fmins", time_open)
 
         # Save the final df
         if save_path : 
