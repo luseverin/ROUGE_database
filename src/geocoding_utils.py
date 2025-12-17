@@ -283,70 +283,56 @@ def to_flat_multipolygon(geometries):
 
         if isinstance(geom, Polygon):
             flat_polys.append(geom)
+
         elif isinstance(geom, MultiPolygon):
             flat_polys.extend(list(geom.geoms))
+
+        elif isinstance(geom, GeometryCollection):
+            for g in geom.geoms:
+                if isinstance(g, Polygon):
+                    flat_polys.append(g)
+                elif isinstance(g, MultiPolygon):
+                    flat_polys.extend(list(g.geoms))
         else:
             raise ValueError(f"Unsupported geometry type: {type(geom)}")
+
+    if not flat_polys:
+        return None
 
     return MultiPolygon(flat_polys)
 
 def sanitize_and_merge_geometries(geometries):
     """
-    Takes a list of geometries and returns a clean, valid merged geometry.
-    Uses the existing clean_geometry() function. No inner functions.
+    - Cleans individual geometries
+    - Flattens to Polygon level
+    - Keeps ALL polygons, even nested ones
+    - Do not union
     """
 
-    # 1. Drop None / empty
-    cleaned = []
+    polys = []
+
     for g in geometries:
-        if g is None:
-            continue
-        if g.is_empty:
+        if g is None or g.is_empty:
             continue
 
-        # ensure polygon validity using your existing function
         g2 = clean_geometry(g)
         if g2 is None or g2.is_empty:
             continue
 
-        cleaned.append(g2)
+        if isinstance(g2, Polygon):
+            polys.append(g2)
 
-    if not cleaned:
+        elif isinstance(g2, MultiPolygon):
+            polys.extend(list(g2.geoms))
+
+        elif isinstance(g2, GeometryCollection):
+            for gg in g2.geoms:
+                if isinstance(gg, Polygon):
+                    polys.append(gg)
+                elif isinstance(gg, MultiPolygon):
+                    polys.extend(list(gg.geoms))
+
+    if not polys:
         return None
 
-    # 2. Unary union merge (most efficient)
-    try:
-        merged = unary_union(cleaned)
-
-    except Exception as e:
-        # LOGGER.error("[sanitize merge] unary_union failed: %s", e)
-        # fallback: MultiPolygon collection
-        merged = MultiPolygon([g for g in cleaned if isinstance(g, Polygon)])
-
-    # 3. If merge returns GeometryCollection → flatten polygons only
-    if isinstance(merged, GeometryCollection):
-        polys = [g for g in merged.geoms if isinstance(g, (Polygon, MultiPolygon))]
-        if len(polys) == 0:
-            return None
-        try:
-            merged = unary_union(polys)
-        except:
-            merged = MultiPolygon([g for g in polys if isinstance(g, Polygon)])
-
-    # 4. Final cleanup pass
-    if merged is None or merged.is_empty:
-        return None
-
-    if not merged.is_valid:
-        try:
-            merged = merged.buffer(0)
-        except:
-            pass
-
-    if not merged.is_valid:
-        try:
-            merged = shapely.make_valid(merged)
-        except:
-            pass
-
-    return merged
+    return MultiPolygon(polys)

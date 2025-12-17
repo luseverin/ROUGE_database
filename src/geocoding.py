@@ -378,47 +378,48 @@ def fallback_country_union(gdf_file, countries, iso_countries):
     empty_df = pd.DataFrame(
         {col: [None] for col in empty_cols}
     )
-    print("Fail to find country polygon")
+    LOGGER.error("[gather fallback_country_union fallback] Fail to find country's polygons")
     return empty_df
 
-def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
-    """
-    Downgrades all polygons to the lowest admin level available
-    """
-    geometries = []
-    locations_names = []
-    layer_name = f"ADM_{lowest_level}"
+# def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
+#     """
+#     Downgrades all polygons to the lowest admin level available
+#     """
+#     geometries = []
+#     locations_names = []
+#     layer_name = f"ADM_{lowest_level}"
 
-    for _, row in df_locations.iterrows():
-        try:
-            if row["finest_level"] == lowest_level:
-                geom = clean_geometry(row["geometry"])
-                if geom and not geom.is_empty :
-                    geometries.append(geom)
-                    locations_names.append(row["locationPolygon"])
-            else:
-                conditions = (gpd_files[layer_name]["ADMIN_0"] == row["ADMIN_0"])
-                if lowest_level >= 1:
-                    conditions &= gpd_files[layer_name]["ADMIN_1"] == row["ADMIN_1"]
-                if lowest_level == 2:
-                    conditions &= gpd_files[layer_name]["ADMIN_2"] == row["ADMIN_2"]
-                matches = gpd_files[layer_name].loc[conditions]
+#     for _, row in df_locations.iterrows():
+#         try:
+#             if row["finest_level"] == lowest_level:
+#                 geom = clean_geometry(row["geometry"])
+#                 if geom and not geom.is_empty :
+#                     geometries.append(geom)
+#                     locations_names.append(row["locationPolygon"])
+#             else:
+#                 conditions = (gpd_files[layer_name]["ADMIN_0"] == row["ADMIN_0"])
+#                 if lowest_level >= 1:
+#                     conditions &= gpd_files[layer_name]["ADMIN_1"] == row["ADMIN_1"]
+#                 if lowest_level == 2:
+#                     conditions &= gpd_files[layer_name]["ADMIN_2"] == row["ADMIN_2"]
+#                 matches = gpd_files[layer_name].loc[conditions]
 
-                geometries.extend(matches["geometry"].tolist())
-                locations_names.extend(matches[f"ADMIN_{lowest_level}"].tolist())
-        except Exception as e:
-            LOGGER.error("[gather admin fallback] Error: %s", e)
+#                 geometries.extend(matches["geometry"].tolist())
+#                 # locations_names.extend(matches[f"ADMIN_{lowest_level}"].tolist())
+#                 locations_names.append(row["locationPolygon"])
+#         except Exception as e:
+#             LOGGER.error("[gather admin fallback] Error: %s", e)
 
-    # Merge the polygons
-    if not geometries:
-        return None, []
+#     # Merge the polygons
+#     if not geometries:
+#         return None, []
     
-    merged_geometry = sanitize_and_merge_geometries(geometries)
+#     merged_geometry = sanitize_and_merge_geometries(geometries)
 
-    if not merged_geometry or merged_geometry.is_empty:
-        return None, locations_names
+#     if not merged_geometry or merged_geometry.is_empty:
+#         return None, locations_names
 
-    return merged_geometry, locations_names
+#     return merged_geometry, locations_names
 
 #### Queries nominatim and find best match
 
@@ -680,7 +681,6 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
         return None, None
 
     for curr_country, curr_iso in zip(countries, countries_iso) :
-        # print(curr_country, curr_iso)
         nom_result = query_nominatim(location, curr_country)
 
         if nom_result is None:
@@ -688,7 +688,6 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
 
         # Evaluate similarity
         loc_clean = remove_admin_words(location)
-        # print(f"Location {location}, location cleaned {loc_clean}")
         coords = (nom_result.latitude, nom_result.longitude)
         address = nom_result.raw.get("address", {}) if nom_result and isinstance(nom_result.raw, dict) else {}
 
@@ -939,7 +938,6 @@ def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locati
         return pd.DataFrame()
 
 ##### Associate rows with multiple locations to unique polygons
-
 def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split_lowest_levels=True, polygon_source="GAUL") :
     """Associate one row of locations with administrative boundary polygons,
     merging geometries to the lowest (or multiple) admin levels and returning
@@ -960,7 +958,6 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
     df_geo_output = pd.DataFrame()
 
     # If no matching found, return an empty file
-    # if df_locations.empty:
     if df_locations["geometry"].isna().all():
         df_empty = pd.DataFrame([row])  # base row
 
@@ -998,7 +995,8 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
     for merge_level in range(lowest_level, highest_level+1) :
         layer_name = f"ADM_{merge_level}"
         df_location_subset = df_locations.loc[df_locations["finest_level"]>=merge_level]
-        merged_geometry, location_names = gather_to_lowest_admin(df_location_subset, gdf_file, merge_level)
+        merged_geometry = sanitize_and_merge_geometries(df_location_subset["geometry"])
+        # merged_geometry, location_names = gather_to_lowest_admin(df_location_subset, gdf_file, merge_level)
         
         flag_country_count = (
             df_location_subset
@@ -1016,12 +1014,11 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_row_append = pd.DataFrame([row])
         df_row_append["geometry"] = merged_geometry
         df_row_append["locationLowestAdmin"] = layer_name
-        # df_row_append["flag_geocoding_country"] = df_location_subset['flag_geocoding_country'].sum()#count_flag_geocoding_country
-        # df_row_append["flag_geocoding_osm"] = df_location_subset['flag_geocoding_osm'].sum()#count_flag_geocoding_osm
         df_row_append["flag_geocoding_country"] = flag_country_count
         df_row_append["flag_geocoding_osm"] = flag_osm_count
         df_row_append["locationOsm"] = [df_location_subset["locationOsm"].unique().tolist()]
-        df_row_append["locationPolygon"] = [location_names]#[df_location_subset["locationPolygon"].unique().tolist()]
+        # df_row_append["locationPolygon"] = [location_names]#[df_location_subset["locationPolygon"].unique().tolist()]
+        df_row_append["locationPolygon"] = [df_location_subset["locationPolygon"].tolist()]
 
         # For the codes, take the list
         df_row_append["iso3_code"] = [df_location_subset["iso3_code"].unique().tolist()]
