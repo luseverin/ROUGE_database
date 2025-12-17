@@ -384,12 +384,12 @@ IMPACT_SUBTYPES_MERGED += [k for k in IMPACT_SUBTYPE_MERGER.keys()]
 
 # Update impact main type
 IMPACT_TYPES_MERGER = {"Transportation" : "Infrastructure and Service access",
-                       "TranspoWater, Sanitation, and Hygienertation" : "Infrastructure and Service access",
+                       "Water, Sanitation, and Hygiene" : "Infrastructure and Service access",
                        "Healthcare" : "Infrastructure and Service access",
                        "IT and Communication" : "Infrastructure and Service access",
                        "Education" : "Infrastructure and Service access",
                        "Agriculture and Access to Food" : "Infrastructure and Service access",
-                       "Power and Energy" : "Infrastructure and Service access",
+                       "Power and Energy Production" : "Infrastructure and Service access",
                        "Undefined Infrastructure and Service Access" : "Infrastructure and Service access"}
 
 IMPACT_TYPES_MERGED = {}
