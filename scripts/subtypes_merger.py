@@ -2,6 +2,7 @@ from venv import logger
 import pandas as pd
 import geopandas as gpd
 import logging
+import fiona
 from src.data import *
 from src.post_process_functions import merge_impact_subtypes, label_quanti_quali
 from src.geocoding import atomic_gpkg_save
@@ -20,7 +21,7 @@ res_savename = "post_processed_all_appeals_longest_1-717_meta-llama_llama-4-scou
 suffix = "_geo_v171225"
 res_savename_geo = res_savename + suffix
 response_df = pd.read_csv(DATA_OUT_PROC / (res_savename + ".csv"))
-response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo+".gpkg"))
+response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo+".gpkg"), engine="fiona")
 
 filename_out = "merged_subtypes_" + res_savename
 filename_out_geo = "merged_subtypes_" + res_savename_geo
@@ -68,9 +69,9 @@ columns_final = ["appealCode", "reportDate", "reportLink", "disasterType",
                  "quanti", 
                  "impactSubtype", "impactValue", "impactValueMin", "impactValueMax", "impactValuePrecision", "impactUnit", "valueAnnotation", 
                  "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay", "dateAnnotation",
-                 "hazard", "hazardsAnnotation",
+                 "hazards", "hazardsAnnotation",
                  "location", "locationAnnotation"]
-colums_final_geo = columns_final + ["locationPolygon", "locationLowestAdmin", "iso_code", "geometry"]
+colums_final_geo = columns_final + ["locationPolygon", "locationLowestAdmin", "iso3_code", "geometry"]
 
 response_df = response_df[columns_final]
 response_df_geo = response_df_geo[colums_final_geo]
