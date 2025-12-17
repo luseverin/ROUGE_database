@@ -14,9 +14,10 @@ dedup_cols = ["appealCode","impactSubtype", "impactValue", "impactUnit", "countr
               "endDay", "hazards"]
 
 ##load data (model)
-res_savename = "post_processed_labelled_reports_fixed_impact_desc_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
+res_savename = "post_processed_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
+#"post_processed_labelled_reports_fixed_impact_desc_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
 #"post_processed_new_unit_std_labelled_reports_impacts_all_v111025"
-suffix = "_geo_v271025"
+suffix = "_geo_v171225"
 res_savename_geo = res_savename + suffix
 response_df = pd.read_csv(DATA_OUT_PROC / (res_savename + ".csv"))
 response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo+".gpkg"))
@@ -61,6 +62,18 @@ response_df_geo = response_df_geo[~duplicates_geo]
 
 LOGGER.info(f"Dropped {init_len - len(response_df)} duplicates")
 LOGGER.info(f"Dropped {init_len_geo - len(response_df_geo)} duplicates in geolocated data")
+
+## select columns 
+columns_final = ["appealCode", "reportDate", "reportLink", "disasterType", 
+                 "quanti", 
+                 "impactSubtype", "impactValue", "impactValueMin", "impactValueMax", "impactValuePrecision", "impactUnit", "valueAnnotation", 
+                 "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay", "dateAnnotation",
+                 "hazard", "hazardsAnnotation",
+                 "location", "locationAnnotation"]
+colums_final_geo = columns_final + ["locationPolygon", "locationLowestAdmin", "iso_code", "geometry"]
+
+response_df = response_df[columns_final]
+response_df_geo = response_df_geo[colums_final_geo]
 
 ## save
 atomic_gpkg_save(response_df_geo, DATA_OUT_PROC / (filename_out_geo + ".gpkg"))
