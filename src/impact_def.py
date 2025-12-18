@@ -143,7 +143,7 @@ Impacts.register(
     description="Number of education infrastructures such as schools, universities, etc. impacted by a hazard.",
     keyword=r"\bEducation Infrastructure\b",
     expected_unit="education structures",
-    default_unit="schools"
+    default_unit="education structures"
 )
 
 Impacts.register(
