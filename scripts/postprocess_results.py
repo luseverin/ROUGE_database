@@ -33,6 +33,8 @@ from src.sanity_checks import *
 
 ## Parameters
 filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
+#"labelled_reports_fixed_impact_desc3_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
+#"all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
 #"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
 #"labelled_reports_turnoff_subtype_val_openai_gpt-oss-20b_v141025"
 #"labelled_reports_turnoff_subtype_val_all_llama-3.3-70b-versatile_v141025"
@@ -40,7 +42,7 @@ filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instru
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
-filename_out =  "post_processed_" + filename_in#post_processed_flags_
+filename_out =  filename_in#"post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
@@ -54,7 +56,7 @@ remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other H
 
 #geocoding params
 geocode = False #whether or not we want to geocode
-geocode_load = False #f"post_processed_{filename_in}_GEOCODE_v141025" #geocoded file to load or false
+geocode_load = False #set to True to load previously geocoded data
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -68,20 +70,22 @@ start_time = time.time()
 ## Load data
 if not post_proc: #try directly loading the postprocess data
     LOGGER.info("Reading %s", filename_out)
-    response_df_proc = pd.read_csv(DATA_OUT_PROC / (filename_out + ".csv"))
-    # response_df_proc = pd.read_csv(os.path.join(DATA_OUT_PROC, filename_out+'.csv'))
+    response_df_proc = pd.read_csv(data_path / (filename_out + ".csv"))
 
 else:
-    LOGGER.info("Processing %s...", filename_in)
-    response_df = pd.read_csv(data_path / (filename_in + ".csv"))
-    # response_df = pd.read_csv(os.path.join(data_path, filename_in+'.csv'))
+    if geocode_load:
+        LOGGER.info("Loading geocoded data %s...", filename_in)
+        #load geocoded data
+        response_df =  gpd.read_file(data_path / (filename_in+".gpkg"))
+    else:
+        LOGGER.info("Reading %s...", filename_in)
+        #load initial data
+        response_df = pd.read_csv(data_path / (filename_in + ".csv"))
 
     #copy data
     response_df_proc = cp.deepcopy(response_df)
 
     ## Formatting
-    ##get rid of nans
-    #response_df_proc = response_df_proc.dropna(subset=["nathaz_text"]) if "nathaz_text" in response_df_proc.columns else response_df_proc
     #convert numerical columns
     num_cols = ["impactValue", "impactValueMin", "impactValueMax","startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
     list_cols = ["country","location", "hazards", "valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation", "annotation"]
@@ -113,10 +117,10 @@ else:
     response_df_proc = response_df_proc.apply(replace_numbers_unit, axis=1)
     #standardize metric units
     response_df_proc = response_df_proc.apply(standardize_metric_units, axis=1)
-    #assign unit type (e.g. surface, volume, mass)
-    response_df_proc = response_df_proc.apply(assign_unit_type, axis=1)
     #harmonize non metric units
     response_df_proc = response_df_proc.apply(harmonize_units, axis=1)
+    #assign unit type (e.g. surface, volume, mass)
+    response_df_proc = response_df_proc.apply(assign_unit_type, axis=1)
     #convert convertible (non-money) units
     if convert_to_people:
         response_df_proc = response_df_proc.apply(convert_unit, axis=1)
@@ -135,7 +139,6 @@ else:
 
     ## Post conversion flags
     country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
-    # country_pop = pd.read_csv(os.path.join(DATA_PATH, "API_SP.POP.TOTL_DS2_en_csv_v2_131993", "API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
 
     response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
     response_df_proc["flag_value_no_unit"] = response_df_proc.apply(flag_value_no_unit, axis=1)
@@ -145,16 +148,11 @@ else:
 
     ## Save pre-geocoding results
     response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
-    # response_df_proc.to_csv(os.path.join(DATA_OUT_PROC, filename_out+"csv"), index=False)
 
 ## Geocoding
-if geocode:
+if geocode and not geocode_load:
     LOGGER.info("Geodecoding %s...", filename_in)
     df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
-elif geocode_load:
-    #load geocoded data
-    df_geo_output_split = gpd.read_file(DATA_OUT_PROC / (geocode_load.replace("GEOCODE", "geo_split_lowest")+".gpkg"))
-    df_geo_output =  gpd.read_file(DATA_OUT_PROC / (geocode_load.replace("GEOCODE", "geo")+".gpkg"))
 end_time = time.time()
 
 LOGGER.info("Total postprocessing time %.2f seconds", end_time - start_time)
