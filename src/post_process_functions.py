@@ -14,6 +14,8 @@ from currency_converter import CurrencyConverter, RateNotFoundError
 #from shapely import equals
 import logging
 
+from shapely import overlaps
+
 from src import units
 from src.text_processing_functions import *
 from src.units import *
@@ -203,17 +205,21 @@ def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     """
     if x["impactSubtype"] in list(impact_kw_reclass.keys()):
         x["flag_impactSubtype_reclass"] = False
+        x["flag_unknown_subtype"] = False
         return x
     candidates = []
     for key, value in impact_kw_reclass.items():
         if re.search(value, x["impactSubtype"], re.IGNORECASE):
             candidates.append(key)
     if len(candidates) == 1:
+        unknown_subtype = False
         new_subtype = candidates[0]
     else:
+        unknown_subtype = True
         new_subtype = "Unknown"
     x["impactSubtype"] = new_subtype
     x["flag_impactSubtype_reclass"] = True
+    x["flag_unknown_subtype"] = unknown_subtype
     return x
 
 
@@ -384,6 +390,10 @@ def assign_unit_type(x, unit_type_kw_reclass=UNIT_TYPE_KW_RECLASS):
     x["flag_unit_type"] = flag
     return x
 
+def re_match_overlaps(m1, m2):
+    a_start, a_end = m1.span()
+    b_start, b_end = m2.span()
+    return max(a_start, b_start) < min(a_end, b_end)  # strict overlap
 def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=IMPACT_EXPECTED_UNITS, default_subtype_unit=IMPACT_DEFAULT_UNITS, force_unit_to_subtype=True, reclass_subtype=True):
     """
     Reclassify units based on keywords
@@ -406,23 +416,39 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
     """
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     unit_type = x['unit_type']
+    flag_overlapping_units = False
     flag_unit_nonstd = False
     flag_reclass_subtype_from_unit = False
     unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
-    candidates = [unit_corr for unit_corr in unit_kw_reclass.keys() if re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE)]
-    if len(candidates) == 1:
-        reclass_unit = unit_prefix+candidates[0]
-    else:
-        if len(candidates) > 1:
-            LOGGER.warning("Multiple candidates found for %s: %s", unit, candidates)
+    matches = {unit_corr: re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE) for unit_corr, pattern in unit_kw_reclass.items() if re.search(pattern, unit, re.IGNORECASE)}
+    overlaps_found = set()
+    for u1, m1 in matches.items():
+        for u2, m2 in matches.items():
+            if u1 != u2 and re_match_overlaps(m1, m2):
+                overlaps_found.add(u1)
+                overlaps_found.add(u2)
+    # Remove overlapping matches
+    if len(overlaps_found) > 0:
+        for u in overlaps_found:
+            flag_overlapping_units = True
+            LOGGER.warning("Removing overlapping unit match for %s", u)
+            del matches[u]
+    candidates = list(matches.keys())
+    if len(candidates) == 0:
         flag_unit_nonstd = True
         #no unit identified, infer unit from category
         if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
             reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
         else:
             reclass_unit = unit
+    else:
+        for unit_corr in candidates:
+            reclass_unit = re.sub(unit_kw_reclass[unit_corr], unit_corr, unit)
+        reclass_unit = unit_prefix+reclass_unit
+
     if reclass_subtype:
-        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
+        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys()
+                             for candidate in candidates if (candidate == expected_unit_subtype[subtype] and candidate not in HARMONIZE_UNITS_KW.keys())]
         if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
             flag_reclass_subtype_from_unit = True
             LOGGER.info("Reclassified subtype from %s to %s with unit reclass %s and orig unit %s", x['impactSubtype'], possible_subtypes[0], reclass_unit, unit)
@@ -430,6 +456,7 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
             x["impactSubtype"] = possible_subtypes[0]
     x["impactUnit"] = reclass_unit
     x["flag_unit_nonstd"] = flag_unit_nonstd
+    x["flag_overlapping_units"] = flag_overlapping_units
     x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
     return x
 
