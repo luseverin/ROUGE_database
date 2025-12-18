@@ -229,7 +229,7 @@ class TestImpactFunctions(unittest.TestCase):
                        "unit_type": "other",
                        "impactSubtype": "Affected People"})
         out = reclassify_units(x.copy())
-        self.assertIn("people", out["impactUnit"])
+        self.assertEqual("people", out["impactUnit"])
         self.assertEqual(out["impactValue"], 10)
         self.assertTrue(pd.isna(out["impactValueMin"]))
         self.assertEqual(out["impactValueMax"], 20)
@@ -240,11 +240,11 @@ class TestImpactFunctions(unittest.TestCase):
         x = pd.Series({"impactValue": 10,
                        "impactValueMin": np.nan,
                        "impactValueMax": 20,
-                       "impactUnit": "displaced",
+                       "impactUnit": "idp families",
                        "unit_type": "other",
                        "impactSubtype": "Affected People"})
         out = reclassify_units(x.copy())
-        self.assertIn("displaced", out["impactUnit"])
+        self.assertEqual("displaced families", out["impactUnit"])
         self.assertEqual(out["impactValue"], 10)
         self.assertTrue(pd.isna(out["impactValueMin"]))
         self.assertEqual(out["impactValueMax"], 20)
@@ -252,10 +252,9 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(out["flag_reclass_subtype_from_unit"])
         self.assertEqual(out["impactSubtype"], "Displaced People")
 
-
     def test_standardize_metric_units(self):
-        xin = pd.DataFrame({"impactValue": [10, 20, 20], "impactUnit": ["liters", "square meter", "meter square"], "impactValueMin": [np.nan, 20, 20], "impactValueMax": [20, 20, 20]})
-        xexp = pd.DataFrame({"impactValue": [0.01, 0.00002, 0.00002], "impactUnit": ["m**3", "km**2", "km**2"], "impactValueMin": [np.nan, 0.00002, 0.00002], "impactValueMax": [0.02, 0.00002, 0.00002]})
+        xin = pd.DataFrame({"impactValue": [10, 20, 20, 30], "impactUnit": ["liters", "square meter", "meter square", "ha"], "impactValueMin": [np.nan, 20, 20, 30], "impactValueMax": [20, 20, 20, 30]})
+        xexp = pd.DataFrame({"impactValue": [0.01, 0.00002, 0.00002, 0.3], "impactUnit": ["m**3", "km**2", "km**2", "km**2"], "impactValueMin": [np.nan, 0.00002, 0.00002, 0.3], "impactValueMax": [0.02, 0.00002, 0.00002, 0.3]})
         for i in range(len(xin)):
             out = standardize_metric_units(xin.iloc[i])
             self.assertEqual(out["impactUnit"], xexp["impactUnit"].iloc[i])
