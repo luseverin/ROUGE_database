@@ -80,21 +80,44 @@ def identify_robust_country(df_geo) :
         countries = row["country"]
         isos = row["country_iso3"]
 
+        # isos_is_missing = (
+        #     isos is None or
+        #     (isinstance(isos, float) and pd.isna(isos)) or
+        #     (isinstance(isos, (list, tuple)) and (len(isos) == 0 or all(x is None for x in isos)))
+        # )
+
         isos_is_missing = (
             isos is None or
             (isinstance(isos, float) and pd.isna(isos)) or
-            (isinstance(isos, (list, tuple)) and (len(isos) == 0 or all(x is None for x in isos)))
+            (isinstance(isos, str) and isos.strip().lower() in {"none", "nan", ""}) or
+            (isinstance(isos, (list, tuple)) and (
+                len(isos) == 0 or
+                all(x is None or (isinstance(x, str) and x.strip().lower() in {"none", "nan", ""})
+                    for x in isos)
+            ))
         )
 
+        # countries_is_missing = (
+        #     countries is None or
+        #     (isinstance(countries, float) and pd.isna(countries)) or
+        #     (isinstance(countries, (list, tuple)) and len(countries) == 0)
+        # )
         countries_is_missing = (
             countries is None or
             (isinstance(countries, float) and pd.isna(countries)) or
-            (isinstance(countries, (list, tuple)) and len(countries) == 0)
+            (isinstance(countries, str) and countries.strip().lower() in {"none", "nan", ""}) or
+            (isinstance(countries, (list, tuple)) and (
+                len(countries) == 0 or
+                all(x is None or (isinstance(x, str) and x.strip().lower() in {"none", "nan", ""})
+                    for x in countries)
+            ))
         )
 
-        if countries_is_missing or isos_is_missing:
-            isos = row["country_iso3_kw"]
+        if countries_is_missing : 
             countries = row["country_kw"]
+
+        if isos_is_missing:
+            isos = row["country_iso3_kw"]
 
         # ensure iterable
         if not isinstance(countries, (list, set, tuple)):
@@ -378,7 +401,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
     empty_df = pd.DataFrame(
         {col: [None] for col in empty_cols}
     )
-    LOGGER.error("[gather fallback_country_union fallback] Fail to find country's polygons")
+    LOGGER.error("[gather fallback_country_union fallback] Fail to find country's polygons, %s, %s", countries, iso_countries)
     return empty_df
 
 # def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
@@ -558,7 +581,6 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
 
                     if print_info:
                         LOGGER.info("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
-                    # print("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
 
                     if sim == 1 :
                         found = True
@@ -595,7 +617,6 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
             sim = rotated_levenshtein_similarity(loc_clean, val_clean)
             if print_info:
                 LOGGER.info("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
-            # print("Found geocoding at resolution %s, Initial: %s, Geocoded: %s, Similarity: %.2f", admin_level, loc_clean, val, sim)
 
             #If exact match, return it directly
             if sim == 1 :
@@ -1159,17 +1180,11 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     df_geo = deepcopy(df)
 
     if "country_kw" in df_geo.columns :
-        col_to_list = ["location", "country", "country_kw"]
+        col_to_list = ["location", "country", "country_kw", "country_iso3"]
         df_type = "llm"
     else :
-        col_to_list = ["location", "country"]
+        col_to_list = ["location", "country", "country_iso3"]
         df_type = "labelled"
-
-    # for col in col_to_list : 
-    #     df_geo[col] = df_geo[col].apply(
-    #         lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith("[") else ([x] if pd.notna(x) else None)
-    #     )
-
     df_geo[col_to_list] = df_geo[col_to_list].map(lambda x: listify_strings(x))
 
 
@@ -1184,24 +1199,31 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     LOGGER.info("Number of unique locations : %s", len(unique_locations_countries))
     LOGGER.info("Time to identify all locations %.2fmins", time_open)
 
-    # Run nominatim for each loc
+    # Run nominatim for each loc 
     start = time.time()
     nom_loc_dict = {}
-    for (loc, country) in unique_loc_with_country :
+
+    for (loc, country) in unique_loc_with_country:
         key = (loc, country)
         if key not in nom_loc_dict:
             countries = list(unique_locations_countries.get(key, set()))
             countries_iso = list(unique_locations_countries_iso.get(key, set()))
 
-            nom_loc_dict[key] = find_best_nomin(loc, countries, countries_iso, similarity_th, print_info=False)
+            nom_loc_dict[key] = find_best_nomin(
+                loc,
+                countries,
+                countries_iso,
+                similarity_th,
+                print_info=True
+            )
     end = time.time()
     time_open = (end - start) / 60
-    LOGGER.info("Time to nominatim all locations %.2fmins", time_open)
+    LOGGER.info("Time to geocode all locations %.2fmins", time_open)
 
     # Convert nominatim output to polygons
     start = time.time()
     max_workers = min(10, (os.cpu_count() or 1) + 2)
-    df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gpd_files, print_info=False, max_workers=max_workers, **kwargs)
+    df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gpd_files, print_info=False, max_workers=max_workers)
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
@@ -1210,7 +1232,7 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     for split_lowest_levels in [True, False] :
         start = time.time()
         max_workers = min(10, (os.cpu_count() or 1))
-        df_geo_output = run_parallel_in_batches(df_geo, df_geo_individual_locs, gpd_files, split_lowest_levels=split_lowest_levels, polygon_source=polygon_source, max_workers=max_workers, **kwargs)
+        df_geo_output = run_parallel_in_batches(df_geo, df_geo_individual_locs, gpd_files, split_lowest_levels=split_lowest_levels, polygon_source=polygon_source, max_workers=max_workers, batch_size=2000)
         end = time.time()
         time_open = (end - start) / 60
         LOGGER.info("Time to gather all locations per rows %.2fmins", time_open)
