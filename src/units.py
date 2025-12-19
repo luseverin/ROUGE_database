@@ -73,12 +73,12 @@ HARMONIZE_UNITS_KW = {
     'structures' : r"\b(facilities|facility|buildings?|(infra)?structures?|buildings?|utilities?|institutions?)\b",
     'homes' : r"\b(residences?|houses?|homes?|housing units?|dwellings?|properties?|housing structures?)\b",
     '%' : r"\b(%|perc\.?|per(\s)?cent(s)?|percentages?)\b",
-
 }
+
 UNIT_KW_RECLASS = {
     'people': r"\b(people)\b",
     'deaths' : r"\b(fatalities?|deaths?|lives|loss(es)? of life|deceased|dead)\b",
-    'displaced' : r"\b(displaced|evacuees?|evacuated|idps?)\b",
+    'displaced' : r"\b(displaced|evacuees?|evacuated|idps?(?!\s*(sites?|camps?)))\b",
     'homelesses' : r"\b(homeless(es)?|homeless people)\b",
     'injuries' : r"\b(injuries|injured|injury|casualties|casualty)\b",
     'missings' : r"\b(missing|missing persons?|missing individuals?|missing residents?|missing people|disappeared)\b",
@@ -91,12 +91,12 @@ UNIT_KW_RECLASS = {
     'IT and communication structures': r"\b((tele)?communication(s)? (structures?|center?|lines?)|radios?|tv|cell towers?|antennas?)\b",
     'power and energy production structures': r"\b((power|energy|wind|solar|hydro|electric) (structures?|generators?|dams?|poles?|lines?|supply|supplies))\b",
     'homes': r"\b(residential structures|homes?)\b",
-    'education structures': r"\b(education(al|learning)? (centers?|centres?|units?|structures?|institutions?)|schools?|universit(y|ies)|colleges?)\b",
+    'education structures': r"\b(education(al|learning)? (centers?|centres?|units?|structures?|institutions?)|schools?|universit(y|ies)|colleges?|classrooms?)\b",
     'undefined structures' : r"\b((critical|public|undefined|utility) (structures|units?))\b",
     'crop production and forestry': r"\b(crops?|(farm)?lands?|fields?|plantations?|forests?|trees?|bananas?|coffee|cocoa|cotton|maize|rice|sorghum|soybeans?|sugar|tobacco|wheat)\b",
     'agricultural structures': r"\b(irrigation|barns?|farms?(?!\s*land))\b",
     'affected animals': r"\b(livestock|animals?|fish|cows?|sheep|poultr(y|ies)|cattle|goats?|pigs?|chickens?|horses?|heads?)\b",
-    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?|shelters?|idp sites?|huts?)\b",
+    'informal settlements': r"\b(camps?|tents?|refuge(e|es)|settlements?|shelters?|huts?|idp (sites?|camps?))\b",
     'EUR' : r"\b(euro?s?|€)\b",
     'businesses' : r"\b(business(es)?|companies?|industries?|sectors?|enterprises?)\b",
     'null' : r"\b(null|none|nan|np.nan)\b",
@@ -250,4 +250,5 @@ ALL_POSSIBLE_UNITS = {}
 #list of standard units
 STANDARD_UNITS = [key for unit_dict in [UNIT_TYPE_KW_RECLASS, HARMONIZE_UNITS_KW, UNIT_KW_RECLASS] for key in unit_dict.keys()]
 STANDARD_UNITS.append(DEF_CUR)
+STANDARD_UNITS.extend(["students", "children"])
 STANDARD_UNITS = set(STANDARD_UNITS)
