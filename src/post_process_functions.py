@@ -392,7 +392,7 @@ def re_match_overlaps(m1, m2):
     a_start, a_end = m1.span()
     b_start, b_end = m2.span()
     return max(a_start, b_start) < min(a_end, b_end)  # strict overlap
-def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=IMPACT_EXPECTED_UNITS, default_subtype_unit=IMPACT_DEFAULT_UNITS, force_unit_to_subtype=True, reclass_subtype=True):
+def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS):
     """
     Reclassify units based on keywords
 
@@ -414,7 +414,6 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
     """
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     unit_type = x['unit_type']
-    flag_reclass_subtype_from_unit = False
     unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
     candidates = [unit_corr for unit_corr in unit_kw_reclass.keys() if re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE)]
     if len(candidates) == 1:
@@ -422,18 +421,71 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
     else:
         if len(candidates) > 1:
             LOGGER.warning("Multiple candidates found for %s: %s", unit, candidates)
-        #no unit identified, infer unit from category
-        if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
-            reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
-        else:
-            reclass_unit = unit
-    if reclass_subtype:
-        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
-        if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
-            flag_reclass_subtype_from_unit = True
-            LOGGER.info("Reclassified subtype from %s to %s with unit reclass %s and orig unit %s", x['impactSubtype'], possible_subtypes[0], reclass_unit, unit)
-            x["impactSubtype"] = possible_subtypes[0]
+        reclass_unit = unit
+    x["flag_unit_reclass"] = (reclass_unit != unit)
     x["impactUnit"] = reclass_unit
+    return x
+def force_unit_to_subtype(x, default_subtype_unit=IMPACT_DEFAULT_UNITS):
+    """
+    Force unit to default unit of subtype when unknown unit
+
+    Parameters
+    ----------
+    x : pd.Series
+        row of pandas dataframe
+    expected_unit_subtype : dict
+        dictionary of expected unit for each subtype
+
+    Returns
+    -------
+    str
+        reclassified unit
+    """
+    unit = str(x["impactUnit"]).lower() #ensure unit is string
+    flag_force_unit_to_subtype = False
+    unit_type = x['unit_type']
+    no_reclass = ["null", "", "people"]
+    if pd.isnull(unit) or unit in no_reclass:
+        x["flag_force_unit_to_subtype"] = flag_force_unit_to_subtype
+        return x
+
+    unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
+    if x["impactSubtype"] != "Unknown":
+        reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
+        LOGGER.info("Forcing unit from %s to %s for subtype %s", unit, reclass_unit, x['impactSubtype'])
+        flag_force_unit_to_subtype = True
+    else:
+        reclass_unit = unit
+    x["flag_force_unit_to_subtype"] = flag_force_unit_to_subtype
+    x["impactUnit"] = reclass_unit
+    return x
+def reclass_subtype_from_unit(x, expected_unit_subtype=IMPACT_EXPECTED_UNITS):
+    """
+    Reclassify subtype based on unit
+
+    Parameters
+    ----------
+    x : pd.Series
+        row of pandas dataframe
+    expected_unit_subtype : dict
+        dictionary of expected unit for each subtype
+
+    Returns
+    -------
+    str
+        reclassified subtype
+    """
+    unit = str(x["impactUnit"]).lower() #ensure unit is string
+    no_reclass = ["null", "", "people"]
+    flag_reclass_subtype_from_unit = False
+    if pd.isnull(unit) or unit in no_reclass:
+        x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
+        return x
+    possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if unit == expected_unit_subtype[subtype]]
+    if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
+        flag_reclass_subtype_from_unit = True
+        LOGGER.info("Reclassified subtype from %s to %s with unit %s", x['impactSubtype'], possible_subtypes[0], unit)
+        x["impactSubtype"] = possible_subtypes[0]
     x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
     return x
 

@@ -47,9 +47,9 @@ data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we
 #postprocess params
 post_proc = False #whether or not we want to process the LLM output or the labelled data
 convert_to_people = False #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
-force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
+force_unit_to_subtype_default = False #whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
-reclass_subtype = True #whether or not we want to reclassify impact subtype in function of the unit
+infer_subtype_from_unit = True #whether or not we want to reclassify impact subtype in function of the unit
 filter_unknown_subtype = False #whether or not we want to filter out unknown impact subtype
 merge_subtypes = False #whether or not we want to merge impact subtypes
 remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other Human Impacts", "Other Infrastructural Impacts", "Other Agricultural Impacts", "Other Service Access Impacts"] #list of impactSubtypes to remove
@@ -127,11 +127,18 @@ else:
     if convert_to_people:
         response_df_proc = response_df_proc.apply(convert_unit, axis=1)
     #reclassify units
-    response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, reclass_subtype=reclass_subtype, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, axis=1)
     #normalize people units
     response_df_proc = response_df_proc.apply(normalize_people_unit, axis=1)
     #convert money
     response_df_proc = response_df_proc.apply(convert_monetary_units, axis=1)
+    #force unit to subtype default
+    if force_unit_to_subtype_default:
+        response_df_proc = response_df_proc.apply(force_unit_to_subtype, axis=1)
+    #infer subtype from unit
+    if infer_subtype_from_unit:
+        response_df_proc = response_df_proc.apply(reclass_subtype_from_unit, axis=1)
+    # filter unknown subtype
     if filter_unknown_subtype:
         response_df_proc = response_df_proc[response_df_proc["impactSubtype"] != "Unknown"]
     if force_no_unit_quali:
