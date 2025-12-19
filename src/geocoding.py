@@ -69,14 +69,14 @@ _conn.commit()
 # Lock guarantees safe concurrent writes
 _cache_lock = threading.Lock()
 
-#### Preprocessing of the location 
-def identify_robust_country(df_geo) : 
+#### Preprocessing of the location
+def identify_robust_country(df_geo) :
     unique_loc_with_country = {}
     unique_locations_countries = defaultdict(set)
     unique_locations_countries_iso = defaultdict(set)
 
     for _, row in df_geo.iterrows():
-        # Handle countries 
+        # Handle countries
         countries = row["country"]
         isos = row["country_iso3"]
 
@@ -113,7 +113,7 @@ def identify_robust_country(df_geo) :
             ))
         )
 
-        if countries_is_missing : 
+        if countries_is_missing :
             countries = row["country_kw"]
 
         if isos_is_missing:
@@ -125,7 +125,7 @@ def identify_robust_country(df_geo) :
         if not isinstance(isos, (list, set, tuple)):
             isos = [isos]
 
-        # Handle locations 
+        # Handle locations
         locations = row["location"]
         if not locations:
             # No specific location → use country as both key and location
@@ -228,7 +228,7 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
             LOGGER.error("[open_admin_gpd][geoBoundaries] Error loading GPD files: %s", e)
             return None
 
-    #Correct potential invalid mask 
+    #Correct potential invalid mask
     for i in range(2):
         invalid_mask = ~gpd_files[f"ADM_{i}"]["geometry"].is_valid
         gpd_files[f"ADM_{i}"].loc[invalid_mask, "geometry"] = gpd_files[f"ADM_{i}"].loc[invalid_mask, "geometry"].buffer(0)
@@ -386,8 +386,8 @@ def fallback_country_union(gdf_file, countries, iso_countries):
         # combined["geometry"] = GeometryCollection(combined["geometry"].tolist())
         combined = combined.iloc[[0]]
         return combined
-    
-    # If no columns found 
+
+    # If no columns found
     empty_cols = [
         "finest_level",
         "locationOsm",
@@ -436,7 +436,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
 #     # Merge the polygons
 #     if not geometries:
 #         return None, []
-    
+
 #     merged_geometry = sanitize_and_merge_geometries(geometries)
 
 #     if not merged_geometry or merged_geometry.is_empty:
@@ -449,7 +449,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
 def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=10):
     """
     Make nominatim query with robust error handling
-    From location and country, return a OSM object 
+    From location and country, return a OSM object
     """
     # Initialize geolocator with longer timeout
     geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
@@ -593,7 +593,7 @@ def find_best_match(loc_clean, address, similarity_th, print_info):
                             "key": key
                         }
                         return best_info, best_sim
-                    
+
                     if sim >= similarity_th and sim > best_sim : #and admin_level>=best_info["admin_level"]:
                         found = True
                         best_sim = sim
@@ -667,7 +667,7 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
         except:
             pass
 
-def save_df_geo(df_geo, save_path, res_savename, split_lowest_levels) :
+def save_df_geo(df_geo, save_path, res_savename) :
     """Save a GeoDataFrame to a GeoPackage file with standardized CRS and naming."""
     save_df = df_geo.copy()
     save_df = delistify_cols(save_df)
@@ -676,12 +676,8 @@ def save_df_geo(df_geo, save_path, res_savename, split_lowest_levels) :
 
     if save_path :
         try:
-            suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
-            suffix = suffix + f"_v{dt.datetime.now().strftime('%d%m%y')}"
-
             #Save gpkg
-            # gpkg_path = save_path + f"{res_savename}{suffix}.gpkg"
-            gpkg_path = os.path.join(save_path, f"{res_savename}{suffix}.gpkg")
+            gpkg_path = os.path.join(save_path, f"{res_savename}.gpkg")
             if not atomic_gpkg_save(save_gdf, gpkg_path):
                 raise Exception(f"[GeoPackage Save Error] Failed to save GeoPackage to {gpkg_path}")
         except Exception as e:
@@ -907,14 +903,14 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
             if df_gpd is not None:
                 step = "prepare_result_df"
                 return prepare_result_df(df_gpd, best_result, location, osm_flag=osm_flag)
-            
+
             # If we got here, nothing was found → decrease admin level
             adm_lev -= 1
             best_result["admin_field"] = f"ADMIN_{adm_lev}"
-            
+
         # If loop finishes without returning anything
         return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
-    
+
     except Exception as e:
         print(step)
         LOGGER.warning("[geocode_from_nomin_output_optimized] %s. Falling back to country level.", e)
@@ -931,10 +927,10 @@ def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locati
             executor.submit(
                 geocode_from_nominatim_output_optimized,
                 gdf_file,
-                loc,                              
+                loc,
                 best_nomin,
                 best_result,
-                unique_locations_countries[(loc, country)],  
+                unique_locations_countries[(loc, country)],
                 unique_locations_countries_iso[(loc, country)],
                 print_info
             ): (loc, country)
@@ -1001,7 +997,7 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_empty["impactValueApprox"] = np.nan
 
         return df_empty
-    
+
     #Retrieve the lowest admin level
     lowest_level = df_locations["finest_level"].min()
     highest_level = df_locations["finest_level"].max()
@@ -1018,7 +1014,7 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_location_subset = df_locations.loc[df_locations["finest_level"]>=merge_level]
         merged_geometry = sanitize_and_merge_geometries(df_location_subset["geometry"])
         # merged_geometry, location_names = gather_to_lowest_admin(df_location_subset, gdf_file, merge_level)
-        
+
         flag_country_count = (
             df_location_subset
             .loc[df_location_subset["flag_geocoding_country"] == 1, "location"]
@@ -1199,7 +1195,7 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     LOGGER.info("Number of unique locations : %s", len(unique_locations_countries))
     LOGGER.info("Time to identify all locations %.2fmins", time_open)
 
-    # Run nominatim for each loc 
+    # Run nominatim for each loc
     start = time.time()
     nom_loc_dict = {}
 
@@ -1238,8 +1234,10 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
         LOGGER.info("Time to gather all locations per rows %.2fmins", time_open)
 
         # Save the final df
-        if save_path : 
-            save_df_geo(df_geo_output, save_path, res_savename, split_lowest_levels)
+        if save_path :
+            suffix = "_geo_split_lowest" if split_lowest_levels else "_geo"
+            res_savename_suffix = f"{res_savename}{suffix}"
+            save_df_geo(df_geo_output, save_path, res_savename_suffix)
         if split_lowest_levels :
             df_geo_output_split = df_geo_output.copy()
 
