@@ -347,26 +347,33 @@ def harmonize_units(x, harmonize_units_kw=HARMONIZE_UNITS_KW):
         x["flag_unit_harmonization"] = True
     return x
 
-def convert_unit(x, unit_converter=UNIT_CONVERTER):
+def convert_unit(x, unit_converter=UNIT_CONVERTER, default_unit_dict=IMPACT_DEFAULT_UNITS):
     """Convert units that can be converted e.g. families => people"""
 
     unit = x['impactUnit']
     x["flag_unit_conversion"] = False
     if not isinstance(unit, str):
         return x  # skip if unit is None or not a string
-    unit = unit.strip()
-    if unit == "":
-        return x
+    elif pd.isnull(unit) or unit in ["", "null"]:
+        return x  # skip if unit is null or empty
+    default_unit_subtype = default_unit_dict.get(x["impactSubtype"], None)
+
+    if default_unit_subtype != "people":
+        return x  # skip conversion if default unit for subtype is not people
+    conv_val = {}
     for old_unit_pattern, (conv_fact, new_unit) in unit_converter.items():
         if re.search(old_unit_pattern, unit, re.IGNORECASE) and not re.search(r"\b(people)\b", unit, re.IGNORECASE): #avoid conversion when people already in unit e.g. people per household
-            x["flag_unit_conversion"] = True
-            for key in ["impactValueMin", "impactValueMax", "impactValue"]:
-                try:
-                    x[key] = float(x[key]) #force conversion to float
-                    x[key] = conv_fact*x[key]
-                    x["impactUnit"] = re.sub(old_unit_pattern, new_unit, unit) #replace unit with new_unit
-                except Exception as e:
-                    LOGGER.error("Skipping unit conversion for row due to error: %s", e)
+            try:
+                for key in ["impactValueMin", "impactValueMax", "impactValue"]:
+                    conv_val[key] = float(x[key]) #force conversion to float
+                    conv_val[key] = conv_fact*conv_val[key]
+                x["impactUnit"] = re.sub(old_unit_pattern, new_unit, unit) #replace unit with new_unit
+                for key in ["impactValueMin", "impactValueMax", "impactValue"]:#do assignement after all conversions to avoid partial conversion
+                    x[key] = conv_val[key]
+                x["flag_unit_conversion"] = True
+            except Exception as e:
+                LOGGER.error("Skipping unit conversion for row due to error: %s", e)
+                x["flag_unit_conversion"] = False
     return x
 
 ## assign_unit_type is redundant with standardize_metric_units, could simplified and removed
@@ -402,10 +409,6 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS):
         row of pandas dataframe
     unit_kw_reclass : dict
         dictionary of unit keywords and corresponding unit strings
-    default_subtype_unit : dict
-        dictionary of default subtype units
-    force_unit_to_subtype : bool
-        whether or not to force unit to default unit of subtype when unknown unit
 
     Returns
     -------
@@ -508,10 +511,12 @@ def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit
     #matched = [(target_unit, unit_patterns) for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, unit, re.IGNORECASE) for pattern in unit_patterns])]
     if len(identified_units) == 0:
         x["flag_unit_standardization"] = False
+        x["unit_type"] = "other"
         return x
     elif len(identified_units) > 1:
         LOGGER.warning("Multiple potential units found for token %s, identified units %s. Not standardizing", unit, identified_units)
         x["flag_unit_standardization"] = False
+        x["unit_type"] = "multiple"
         return x
 
     identified_unit = identified_units[0]
@@ -526,6 +531,7 @@ def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit
         converted_quantity = quantity.to(si_unit)
         converted_values.append(converted_quantity.magnitude)
 
+    x["unit_type"] = si_unit
     x["impactValueMin"] = converted_values[0]
     x["impactValue"] = converted_values[1]
     x["impactValueMax"] = converted_values[2]
