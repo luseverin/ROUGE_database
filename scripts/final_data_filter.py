@@ -9,6 +9,7 @@ import geopandas as gpd
 from src.data import *
 from src.post_process_functions import merge_impact_subtypes, label_quanti_quali
 from src.geocoding import atomic_gpkg_save
+from src.geocoding_utils import split_continents
 from src.impact_def import IMPACT_SUBTYPE_MERGER
 from src.logger_setup import set_logger
 
@@ -102,3 +103,9 @@ response_df_filtered = response_df.copy()
 response_df_filtered = response_df_filtered[columns_final]
 response_df_geo_filtered = response_df_geo.copy()
 response_df_geo_filtered = response_df_geo_filtered[colums_final_geo]
+
+## Split per continent 
+world = gpd.read_file(ADMIN_PATH / "ne_50m_admin_0_countries/ne_50m_admin_0_countries.shp")
+response_df_geo_filtered_continent = split_continents(response_df_geo_filtered, world)
+for continent, df in response_df_geo_filtered_continent.items():
+    atomic_gpkg_save(df, DATA_OUT_PROC / f"{filename_out_geo}_{continent}")

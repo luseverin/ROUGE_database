@@ -336,3 +336,31 @@ def sanitize_and_merge_geometries(geometries):
         return None
 
     return MultiPolygon(polys)
+
+def get_continent(iso_code, world):
+    try:
+        return world[world['ISO_A3'] == iso_code]['CONTINENT'].values[0]
+    except IndexError:
+        return None
+
+def split_continents(df_geom, world) : 
+    iso_to_continent = (
+        world[["ADM0_ISO", "CONTINENT"]]
+        .dropna()
+        .drop_duplicates()
+        .set_index("ADM0_ISO")["CONTINENT"]
+        .to_dict()
+    )
+
+    df_geom["continent"] = df_geom["iso3_code"].apply(
+        lambda iso_list: sorted(
+            {iso_to_continent.get(iso) for iso in iso_list if iso in iso_to_continent}
+        ) if isinstance(iso_list, list) else []
+    )
+
+    df_continent = df_geom.explode("continent")
+    db_per_continent = {
+        continent: df
+        for continent, df in df_continent.groupby("continent")
+    }
+    return db_per_continent
