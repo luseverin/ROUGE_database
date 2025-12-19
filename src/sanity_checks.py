@@ -2,8 +2,9 @@
 import pandas as pd
 import numpy as np
 import logging
+import regex as re
 from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers, format_number
-
+from src.units import STANDARD_UNITS
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
@@ -44,32 +45,33 @@ def flag_value_no_unit(x):
     """
     return not np.isnan(x["impactValue"]) and pd.isna(x["impactUnit"])
 
-def pop_cntry_check(x, country_pop):
+def pop_cntry_check(x, country_pop, country_col="country_iso3"):
+
     """
-    Adds a column to the dataframe, "pop_cntry_check", which is
-    True if the impactValue is less than the population of the country
-    for the report year, and False otherwise. If the impactValue is NaN,
-    the value_in_text is also NaN. If the report year is not in the
-    population data, the value for 2023 is used.
+    Checks if the impact value (and/or the impactValueMax and impactValueMin)
+    is larger than the population of the country in the given year.
 
     Parameters
     ----------
-    extracted_data : pandas.DataFrame
+    x : pandas.Series
         The dataframe containing the extracted data
     country_pop : pandas.DataFrame
-        The dataframe containing the population for each country
+        The dataframe containing the population data
+    country_col : str, default "country_iso3"
+        The column name in x containing the country iso3 code
 
     Returns
     -------
-    pandas.DataFrame
-        The dataframe with the added column
+    bool
+        Whether the impact value (and/or the impactValueMax and impactValueMin)
+        is larger than the population of the country in the given year
     """
+    flag_pop = False
     if not x["impactUnit"] == "people" or pd.isna(x[["impactValue", "impactValueMax", "impactValueMin"]]).values.all():
-        return np.nan
+        return flag_pop
     year = str(pd.to_datetime(x["reportDate"]).year)
     population = 0
-    countries = np.unique(x["country_iso3"])
-    flag_pop = False
+    countries = np.unique(x[country_col])
     for country in countries:
         year_check = year if year in country_pop[country_pop["Country Code"] == country].columns else None
         if not year_check:
@@ -103,6 +105,39 @@ def flag_partial_unit(x):
     """
     return x["impactUnit"] == x["unit_type"]
 
+def flag_response_unit(x):
+    """
+    Adds a column to the dataframe, "flag_response_unit", which is True if the impactUnit is equal to "responses", and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    response_units = r"\b(volunteers?|staff|beneficiaries?|branches?|national socities?)\b"
+    x["flag_response_unit"] = re.search(response_units, x["impactUnit"]) is not None
+    return x
+def flag_unit_nonstd(x, standard_units=STANDARD_UNITS):
+    """
+    Adds a column to the dataframe, "flag_unit_nonstd", which is True if the impactUnit is not in the list of standard units, and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    std_units_pattern = "|".join([re.escape(unit) for unit in standard_units])
+    return re.search(std_units_pattern, x["impactUnit"]) is None
 def flag_percent(x):
     """
     Adds a column to the dataframe, "flag_percent", which is True if the impactValue is a percent and the impactSubtype is not "Other Economic Activity & Livelihood Production", and False otherwise.
