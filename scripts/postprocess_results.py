@@ -42,7 +42,7 @@ filename_in = "geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-1
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
-filename_out =  "post_processed_"+filename_in#"post_processed_" + filename_in#post_processed_flags_
+filename_out =  "post_processed_"+filename_in+f"_v{dt.datetime.now().strftime('%d%m%y')}"#"post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_PROC #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
@@ -69,10 +69,11 @@ log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 start_time = time.time()
 ## Load data
+country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
+
 if not post_proc: #try directly loading the postprocess data
     LOGGER.info("Reading %s", filename_in)
     response_df_proc = pd.read_csv(data_path / (filename_in + ".csv"))
-
 else:
     if geocode_load:
         LOGGER.info("Loading geocoded data %s...", filename_in)
@@ -89,7 +90,8 @@ else:
     ## Formatting
     #convert numerical columns
     num_cols = ["impactValue", "impactValueMin", "impactValueMax","startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
-    list_cols = ["country","location", "hazards", "valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation", "annotation"]
+    list_cols = ["country","location", "hazards", "valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation", "annotation", "iso3_code"]
+    num_cols = [key for key in num_cols if key in response_df_proc.columns]
     list_cols = [key for key in list_cols if key in response_df_proc.columns]
     response_df_proc = format_output(response_df_proc, num_cols=num_cols, list_cols=list_cols)
 
@@ -122,8 +124,6 @@ else:
     response_df_proc = response_df_proc.apply(standardize_metric_units, axis=1)
     #harmonize non metric units
     response_df_proc = response_df_proc.apply(harmonize_units, axis=1)
-    #assign unit type (e.g. surface, volume, mass)
-    response_df_proc = response_df_proc.apply(assign_unit_type, axis=1)
     #convert convertible (non-money) units
     if convert_to_people:
         response_df_proc = response_df_proc.apply(convert_unit, axis=1)
@@ -148,17 +148,22 @@ else:
         response_df_proc = response_df_proc.apply(merge_impact_subtypes, axis=1)
 
     ## Post conversion flags
-    country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
-
-    response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
     response_df_proc["flag_unit_nonstd"] = response_df_proc.apply(flag_unit_nonstd, axis=1)
     response_df_proc["flag_value_no_unit"] = response_df_proc.apply(flag_value_no_unit, axis=1)
     response_df_proc["flag_partial_unit"] = response_df_proc.apply(flag_partial_unit, axis=1)
     response_df_proc["flag_percent"] = response_df_proc.apply(flag_percent, axis=1)
     response_df_proc["flag_remove_cat"] = response_df_proc.apply(flag_remove_cat, remove_cats=remove_cats, axis=1)
+    response_df_proc["flag_response_unit"] = response_df_proc.apply(flag_response_unit, axis=1)
 
-    ## Save pre-geocoding results
-    response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+    if not geocode and not geocode_load:
+        response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
+        ## Save pre-geocoding results
+        response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+    elif geocode_load:
+        response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, country_col="iso3_code",axis=1)
+        ## Save post-geocoding results
+        save_df_geo(response_df_proc, DATA_OUT_PROC, filename_out)
+        response_df_proc.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
 
 ## Geocoding
 if geocode and not geocode_load:
@@ -169,6 +174,15 @@ if geocode and not geocode_load:
     if "country_iso3_kw" not in response_df_proc.columns:
         response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None)
     df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
+
+    # Post geocoding flags
+    df_geo_output["flag_pop_cntry"] = df_geo_output.apply(pop_cntry_check, country_pop=country_pop, country_col="iso3_code",axis=1)
+    df_geo_output_split["flag_pop_cntry"] = df_geo_output_split.apply(pop_cntry_check, country_pop=country_pop, country_col="iso3_code",axis=1)
+
+    #save without geometry column
+    df_geo_output.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + "_geo.csv"), index=False)
+    df_geo_output_split.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + "_geo_split_lowest.csv"), index=False)
+
 end_time = time.time()
 
 LOGGER.info("Total postprocessing time %.2f seconds", end_time - start_time)
