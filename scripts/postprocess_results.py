@@ -32,7 +32,7 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
+filename_in = "geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v191225"
 #"labelled_reports_fixed_impact_desc3_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
 #"all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
 #"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
@@ -42,11 +42,12 @@ filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instru
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
-filename_out =  "geocoded_"+filename_in#"post_processed_" + filename_in#post_processed_flags_
-data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+filename_out =  "post_processed_"+filename_in#"post_processed_" + filename_in#post_processed_flags_
+data_path = DATA_OUT_PROC #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
-post_proc = False #whether or not we want to process the LLM output or the labelled data
-convert_to_people = False #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
+post_proc = True #whether or not we want to process the LLM output or the labelled data
+check_flag_value_in_text = False #whether or not we want to check if the value is in the original text
+convert_to_people = True #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False #whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
 infer_subtype_from_unit = True #whether or not we want to reclassify impact subtype in function of the unit
@@ -55,8 +56,8 @@ merge_subtypes = False #whether or not we want to merge impact subtypes
 remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other Human Impacts", "Other Infrastructural Impacts", "Other Agricultural Impacts", "Other Service Access Impacts"] #list of impactSubtypes to remove
 
 #geocoding params
-geocode = True #whether or not we want to geocode
-geocode_load = False #set to True to load previously geocoded data
+geocode = False #whether or not we want to geocode
+geocode_load = True #set to True to load previously geocoded data
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -99,7 +100,7 @@ else:
     response_df_proc = response_df_proc.apply(label_quanti_quali, axis=1)
 
     #pre conversion flags
-    if "nathaz_text" in response_df_proc.columns:
+    if check_flag_value_in_text:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
 
     #add iso3
@@ -127,7 +128,7 @@ else:
     if convert_to_people:
         response_df_proc = response_df_proc.apply(convert_unit, axis=1)
     #reclassify units
-    response_df_proc = response_df_proc.apply(reclassify_units,force_unit_to_subtype=force_unit_to_subtype, axis=1)
+    response_df_proc = response_df_proc.apply(reclassify_units, axis=1)
     #normalize people units
     response_df_proc = response_df_proc.apply(normalize_people_unit, axis=1)
     #convert money
