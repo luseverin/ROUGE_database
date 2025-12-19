@@ -42,10 +42,10 @@ filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instru
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
-filename_out =  filename_in#"post_processed_" + filename_in#post_processed_flags_
+filename_out =  "geocoded_"+filename_in#"post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
-post_proc = True #whether or not we want to process the LLM output or the labelled data
+post_proc = False #whether or not we want to process the LLM output or the labelled data
 convert_to_people = False #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype = False #whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
@@ -55,7 +55,7 @@ merge_subtypes = False #whether or not we want to merge impact subtypes
 remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other Human Impacts", "Other Infrastructural Impacts", "Other Agricultural Impacts", "Other Service Access Impacts"] #list of impactSubtypes to remove
 
 #geocoding params
-geocode = False #whether or not we want to geocode
+geocode = True #whether or not we want to geocode
 geocode_load = False #set to True to load previously geocoded data
 similarity_th=0.2
 similarity_polygon = 0.6
@@ -69,8 +69,8 @@ LOGGER = set_logger(log_file, logger_name=logger_name)
 start_time = time.time()
 ## Load data
 if not post_proc: #try directly loading the postprocess data
-    LOGGER.info("Reading %s", filename_out)
-    response_df_proc = pd.read_csv(data_path / (filename_out + ".csv"))
+    LOGGER.info("Reading %s", filename_in)
+    response_df_proc = pd.read_csv(data_path / (filename_in + ".csv"))
 
 else:
     if geocode_load:
@@ -103,8 +103,10 @@ else:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)
 
     #add iso3
-    response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
-    response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None )
+    if "country_iso3" not in response_df_proc.columns:
+        response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
+    if "country_iso3_kw" not in response_df_proc.columns:
+        response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None)
 
     ## Reclassify impacType
     response_df_proc = response_df_proc.apply(reclassify_impact_subtype, axis=1)
@@ -141,6 +143,7 @@ else:
     country_pop = pd.read_csv(DATA_PATH / ("API_SP.POP.TOTL_DS2_en_csv_v2_131993/"+"API_SP.POP.TOTL_DS2_en_csv_v2_131993.csv"),sep=',', header=2).dropna(how="all",axis=1)
 
     response_df_proc["flag_pop_cntry"] = response_df_proc.apply(pop_cntry_check, country_pop=country_pop, axis=1)
+    response_df_proc["flag_unit_nonstd"] = response_df_proc.apply(flag_unit_nonstd, axis=1)
     response_df_proc["flag_value_no_unit"] = response_df_proc.apply(flag_value_no_unit, axis=1)
     response_df_proc["flag_partial_unit"] = response_df_proc.apply(flag_partial_unit, axis=1)
     response_df_proc["flag_percent"] = response_df_proc.apply(flag_percent, axis=1)
@@ -152,6 +155,11 @@ else:
 ## Geocoding
 if geocode and not geocode_load:
     LOGGER.info("Geodecoding %s...", filename_in)
+    #add iso3
+    if "country_iso3" not in response_df_proc.columns:
+        response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
+    if "country_iso3_kw" not in response_df_proc.columns:
+        response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None)
     df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
 end_time = time.time()
 
