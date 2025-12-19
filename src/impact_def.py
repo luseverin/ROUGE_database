@@ -143,7 +143,7 @@ Impacts.register(
     description="Number of education infrastructures such as schools, universities, etc. impacted by a hazard.",
     keyword=r"\bEducation Infrastructure\b",
     expected_unit="education structures",
-    default_unit="schools"
+    default_unit="education structures"
 )
 
 Impacts.register(
@@ -241,7 +241,7 @@ Impacts.register(
     main_type="Service access",
     description="People losing safe, clean, and consistent supply of water for drinking, sanitation, and other essential uses.",
     keyword=r"\bWater Quality and Availability\b",
-    expected_unit="unknown",
+    expected_unit="water points",
     default_unit="unknown"
 )
 

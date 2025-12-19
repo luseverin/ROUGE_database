@@ -265,21 +265,68 @@ class TestComputeWeightedSim(unittest.TestCase):
             [[0.8, 0.9], [0.7, 0.8], [0.6, 0.7]],
             [[0.9, 0.7], [0.8, 0.9], [0.7, 0.8]]
         ])
-        matching_cols = ["col1", "col2"]
+        similarity_cols = ["col1", "col2"]
         weights = {"col1": 0.5, "col2": 0.5}
 
-        result = compute_weighted_sim(dist_mat, matching_cols, weights)
+        result = compute_weighted_sim(dist_mat, similarity_cols, weights)
         self.assertEqual(result.shape, (2, 3))
 
     def test_compute_weighted_sim_values(self):
         """Test weighted similarity computation values"""
         # All same values, should average to same value
         dist_mat = np.ones((2, 3, 2)) * 0.8
-        matching_cols = ["col1", "col2"]
+        similarity_cols = ["col1", "col2"]
         weights = {"col1": 0.5, "col2": 0.5}
 
-        result = compute_weighted_sim(dist_mat, matching_cols, weights)
+        result = compute_weighted_sim(dist_mat, similarity_cols, weights)
         np.testing.assert_array_almost_equal(result, np.ones((2, 3)) * 0.8)
+
+    def test_compute_weighted_sim_unequal_weights(self):
+        """Test weighted similarity with unequal weights"""
+        dist_mat = np.array([
+            [[0.8, 0.2], [0.5, 0.5]],
+            [[0.3, 0.7], [0.6, 0.4]]
+        ])
+        similarity_cols = ["col1", "col2"]
+        weights = {"col1": 0.7, "col2": 0.3}
+
+        result = compute_weighted_sim(dist_mat, similarity_cols, weights)
+        # (0.8*0.7 + 0.2*0.3) = 0.56 + 0.06 = 0.62
+        expected_00 = (0.8 * 0.7 + 0.2 * 0.3) / 1.0
+        self.assertAlmostEqual(result[0, 0], expected_00, places=5)
+
+    def test_compute_weighted_sim_dimension_mismatch(self):
+        """Test that dimension mismatch raises ValueError"""
+        dist_mat = np.ones((2, 3, 2)) * 0.8
+        similarity_cols = ["col1", "col2", "col3"]  # 3 cols but dist_mat has 2
+        weights = {"col1": 0.5, "col2": 0.25, "col3": 0.25}
+
+        with self.assertRaises(ValueError) as context:
+            compute_weighted_sim(dist_mat, similarity_cols, weights)
+        self.assertIn("dist_mat has 2 columns", str(context.exception))
+
+    def test_compute_weighted_sim_missing_weights(self):
+        """Test that missing weights raises ValueError"""
+        dist_mat = np.ones((2, 3, 2)) * 0.8
+        similarity_cols = ["col1", "col2"]
+        weights = {"col1": 0.5}  # Missing col2
+
+        with self.assertRaises(ValueError) as context:
+            compute_weighted_sim(dist_mat, similarity_cols, weights)
+        self.assertIn("have no weights", str(context.exception))
+
+    def test_compute_weighted_sim_with_nans(self):
+        """Test weighted similarity computation with NaN values"""
+        dist_mat = np.array([
+            [[0.8, np.nan], [0.7, 0.8]],
+            [[0.9, 0.7], [np.nan, 0.9]]
+        ])
+        similarity_cols = ["col1", "col2"]
+        weights = {"col1": 0.5, "col2": 0.5}
+
+        result = compute_weighted_sim(dist_mat, similarity_cols, weights)
+        # NaNs should be handled by np.nansum
+        self.assertFalse(np.isnan(result[0, 0]))  # (0.8*0.5 + nan*0.5) / 1.0 = 0.8
 
 
 class TestFindMatchSim(unittest.TestCase):
@@ -289,11 +336,34 @@ class TestFindMatchSim(unittest.TestCase):
             [[0.9, 0.5], [0.3, 0.4]],
             [[0.4, 0.3], [0.8, 0.9]]
         ])
-        matching_cols = ["col1", "col2"]
+        similarity_cols = ["col1", "col2"]
         weights = {"col1": 0.5, "col2": 0.5}
 
-        id_ext, id_lab = find_match_sim(dist_mat, matching_cols, weights)
+        id_ext, id_lab = find_match_sim(dist_mat, similarity_cols, weights)
         self.assertEqual(len(id_ext), len(id_lab))
+
+    def test_find_match_sim_calls_compute_weighted_sim(self):
+        """Test that find_match_sim properly calls compute_weighted_sim with similarity_cols"""
+        dist_mat = np.array([
+            [[0.9, 0.5], [0.3, 0.4]],
+            [[0.4, 0.3], [0.8, 0.9]]
+        ])
+        similarity_cols = ["col1", "col2"]
+        weights = {"col1": 1.0, "col2": 1.0}
+
+        # Should not raise an error about column mismatch
+        id_ext, id_lab = find_match_sim(dist_mat, similarity_cols, weights)
+        self.assertIsInstance(id_ext, np.ndarray)
+        self.assertIsInstance(id_lab, np.ndarray)
+
+    def test_find_match_sim_dimension_validation(self):
+        """Test that dimension mismatch in find_match_sim raises error"""
+        dist_mat = np.ones((2, 3, 2)) * 0.8
+        similarity_cols = ["col1", "col2", "col3"]  # Mismatch: 3 vs 2
+        weights = {"col1": 0.5, "col2": 0.25, "col3": 0.25}
+
+        with self.assertRaises(ValueError):
+            find_match_sim(dist_mat, similarity_cols, weights)
 
 
 class TestFindMatchValue(unittest.TestCase):
@@ -495,6 +565,123 @@ class TestTruePositives(unittest.TestCase):
         self.assertEqual(result, 3)  # 3 unique labelled ids
 
 
+class TestMatchRows(unittest.TestCase):
+    """Test match_rows function with proper column tracking"""
+
+    def setUp(self):
+        """Set up test data for matching"""
+        # Create simple test dataframes
+        self.ext_df = pd.DataFrame({
+            "orig_index": [0, 1],
+            "hazards": [["flood"], ["storm"]],
+            "iso3_code": [["USA"], ["USA"]],
+            "impactValue": [100.0, 200.0],
+            "impactSubtype": ["Affected People", "Affected People"]
+        })
+
+        self.lab_df = pd.DataFrame({
+            "orig_index": [10, 11],
+            "hazards": [["flood"], ["storm"]],
+            "iso3_code": [["USA"], ["USA"]],
+            "impactValue": [105.0, 195.0],
+            "impactSubtype": ["Affected People", "Affected People"]
+        })
+
+        # Create vectorized dataframes
+        unique_hazards = ["flood", "storm"]
+        unique_iso3 = ["USA", "FRA"]
+        unique_subtype = ["Affected People", "Deaths"]
+
+        self.ext_vec = pd.DataFrame({
+            "hazards": [self.vectorize_test(h, unique_hazards) for h in self.ext_df["hazards"]],
+            "iso3_code": [self.vectorize_test(i, unique_iso3) for i in self.ext_df["iso3_code"]],
+            "impactSubtype": [self.vectorize_test(s, unique_subtype) for s in self.ext_df["impactSubtype"]]
+        })
+
+        self.lab_vec = pd.DataFrame({
+            "hazards": [self.vectorize_test(h, unique_hazards) for h in self.lab_df["hazards"]],
+            "iso3_code": [self.vectorize_test(i, unique_iso3) for i in self.lab_df["iso3_code"]],
+            "impactSubtype": [self.vectorize_test(s, unique_subtype) for s in self.lab_df["impactSubtype"]]
+        })
+
+        self.similarity_cols = ["hazards", "iso3_code", "impactSubtype"]
+        self.matching_cols = ["hazards", "iso3_code", "impactSubtype"]
+
+        self.weights = {
+            "hazards": 1.0,
+            "iso3_code": 1.0,
+            "impactSubtype": 1.0,
+            "geometry": 0,
+            "impactValue": 0
+        }
+
+    def vectorize_test(self, cell_values, unique_values):
+        """Helper to vectorize for tests"""
+        cell_values = [cell_values] if not isinstance(cell_values, list) else cell_values
+        vector = [1 if unique_value in cell_values else 0 for unique_value in unique_values]
+        return np.array(vector)
+
+    def test_match_rows_basic(self):
+        """Test basic row matching"""
+        reid_ext, reid_lab, accuracy_matrix = match_rows(
+            self.ext_df, self.lab_df, self.ext_vec, self.lab_vec,
+            self.matching_cols, self.similarity_cols, self.weights,
+            geo_match=False, value_match=None
+        )
+
+        # Should return match indices and accuracy matrix
+        self.assertEqual(len(reid_ext), len(reid_lab))
+        self.assertIsNotNone(accuracy_matrix)
+        # accuracy_matrix should have shape (n_matches, n_cols in similarity_cols)
+        self.assertEqual(accuracy_matrix.shape[1], len(self.similarity_cols))
+
+    def test_match_rows_with_value_match_pre(self):
+        """Test match_rows with value_match='pre'"""
+        reid_ext, reid_lab, accuracy_matrix = match_rows(
+            self.ext_df, self.lab_df, self.ext_vec, self.lab_vec,
+            self.matching_cols + ["impactValue"], self.similarity_cols, self.weights,
+            geo_match=False, value_match="pre"
+        )
+
+        # accuracy_matrix should now include impactValue column
+        # Shape should be (n_matches, n_similarity_cols + 1 for impactValue)
+        self.assertEqual(accuracy_matrix.shape[1], len(self.similarity_cols) + 1)
+
+    def test_match_rows_similarity_cols_subset_of_matching(self):
+        """Test that similarity_cols is validated as subset of matching_cols"""
+        # This should work fine
+        reid_ext, reid_lab, accuracy_matrix = match_rows(
+            self.ext_df, self.lab_df, self.ext_vec, self.lab_vec,
+            self.matching_cols, self.similarity_cols, self.weights,
+            geo_match=False, value_match=None
+        )
+        self.assertIsNotNone(accuracy_matrix)
+
+    def test_match_rows_similarity_cols_not_subset(self):
+        """Test that error is raised if similarity_cols has cols not in matching_cols"""
+        invalid_similarity_cols = ["hazards", "iso3_code", "invalid_col"]
+
+        with self.assertRaises(ValueError) as context:
+            match_rows(
+                self.ext_df, self.lab_df, self.ext_vec, self.lab_vec,
+                self.matching_cols, invalid_similarity_cols, self.weights,
+                geo_match=False, value_match=None
+            )
+        self.assertIn("must be in matching_cols", str(context.exception))
+
+    def test_match_rows_dist_mat_column_tracking(self):
+        """Test that dist_mat columns are properly tracked"""
+        # When value_match='pre', impactValue should be added to dist_mat_cols
+        reid_ext, reid_lab, accuracy_matrix = match_rows(
+            self.ext_df, self.lab_df, self.ext_vec, self.lab_vec,
+            self.matching_cols + ["impactValue"], self.similarity_cols, self.weights,
+            geo_match=False, value_match="pre"
+        )
+
+        # Should return without error about dimension mismatch
+        self.assertIsNotNone(accuracy_matrix)
+        # Dimensions should be properly aligned
+        self.assertEqual(len(reid_ext), len(reid_lab))
 
 
 

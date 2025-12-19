@@ -203,17 +203,21 @@ def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     """
     if x["impactSubtype"] in list(impact_kw_reclass.keys()):
         x["flag_impactSubtype_reclass"] = False
+        x["flag_unknown_subtype"] = False
         return x
     candidates = []
     for key, value in impact_kw_reclass.items():
         if re.search(value, x["impactSubtype"], re.IGNORECASE):
             candidates.append(key)
     if len(candidates) == 1:
+        unknown_subtype = False
         new_subtype = candidates[0]
     else:
+        unknown_subtype = True
         new_subtype = "Unknown"
     x["impactSubtype"] = new_subtype
     x["flag_impactSubtype_reclass"] = True
+    x["flag_unknown_subtype"] = unknown_subtype
     return x
 
 
@@ -384,6 +388,10 @@ def assign_unit_type(x, unit_type_kw_reclass=UNIT_TYPE_KW_RECLASS):
     x["flag_unit_type"] = flag
     return x
 
+def re_match_overlaps(m1, m2):
+    a_start, a_end = m1.span()
+    b_start, b_end = m2.span()
+    return max(a_start, b_start) < min(a_end, b_end)  # strict overlap
 def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=IMPACT_EXPECTED_UNITS, default_subtype_unit=IMPACT_DEFAULT_UNITS, force_unit_to_subtype=True, reclass_subtype=True):
     """
     Reclassify units based on keywords
@@ -406,30 +414,43 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
     """
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     unit_type = x['unit_type']
-    flag_unit_nonstd = False
+    flag_overlapping_units = False
     flag_reclass_subtype_from_unit = False
     unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
-    candidates = [unit_corr for unit_corr in unit_kw_reclass.keys() if re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE)]
-    if len(candidates) == 1:
-        reclass_unit = unit_prefix+candidates[0]
-    else:
-        if len(candidates) > 1:
-            LOGGER.warning("Multiple candidates found for %s: %s", unit, candidates)
-        flag_unit_nonstd = True
+    matches = {unit_corr: re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE) for unit_corr, pattern in unit_kw_reclass.items() if re.search(pattern, unit, re.IGNORECASE)}
+    overlaps_found = set()
+    for u1, m1 in matches.items():
+        for u2, m2 in matches.items():
+            if u1 != u2 and re_match_overlaps(m1, m2):
+                overlaps_found.add(u1)
+                overlaps_found.add(u2)
+    # Remove overlapping matches
+    if len(overlaps_found) > 0:
+        for u in overlaps_found:
+            flag_overlapping_units = True
+            LOGGER.warning("Removing overlapping unit match for %s", u)
+            del matches[u]
+    candidates = list(matches.keys())
+    if len(candidates) == 0:
         #no unit identified, infer unit from category
         if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
             reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
         else:
             reclass_unit = unit
+    else:
+        for unit_corr in candidates:
+            reclass_unit = re.sub(unit_kw_reclass[unit_corr], unit_corr, unit)
+
     if reclass_subtype:
-        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
+        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys()
+                             for candidate in candidates if (candidate == expected_unit_subtype[subtype] and candidate not in HARMONIZE_UNITS_KW.keys())]
         if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
             flag_reclass_subtype_from_unit = True
             LOGGER.info("Reclassified subtype from %s to %s with unit reclass %s and orig unit %s", x['impactSubtype'], possible_subtypes[0], reclass_unit, unit)
             #print(x["valueAnnotation"])
             x["impactSubtype"] = possible_subtypes[0]
     x["impactUnit"] = reclass_unit
-    x["flag_unit_nonstd"] = flag_unit_nonstd
+    x["flag_overlapping_units"] = flag_overlapping_units
     x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
     return x
 
@@ -521,7 +542,7 @@ def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR")
         flag = True
     return value_parsed, unit_parsed, flag
 
-def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS, DEF_CUR="EUR"):
+def convert_monetary_units(x, currency_dict=CURRENCY_CONVERTER, all_possible_units=ALL_POSSIBLE_UNITS, DEF_CUR="EUR"):
     """
     Convert units that are currencies to a common baseline (EUR) by parsing the string
     and using a currency converter.
@@ -538,40 +559,50 @@ def convert_monetary_units(x, all_possible_units=ALL_POSSIBLE_UNITS, DEF_CUR="EU
     """
     value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     unit_raw = x["impactUnit"]
-    unit_raw = unit_raw.upper() if len(unit_raw) == 3 else unit_raw #price parser requires  capital 3-letter currency codes
-    flag_conversion = False
+    #unit_raw = unit_raw.upper() if len(unit_raw) == 3 else unit_raw #price parser requires  capital 3-letter currency codes
     flag_failed_conversion = False
-    if unit_raw in all_possible_units.keys():
-        #price parser is a bit too loose (e.g. "INVALID" -> "VAL")
-        #at least avoid converting units that are "known" non-monetary units
-        x["flag_currency_conversion"] = flag_conversion
+    #if unit_raw in all_possible_units.keys():
+    #    #price parser is a bit too loose (e.g. "INVALID" -> "VAL")
+    #    #at least avoid converting units that are "known" non-monetary units
+    #    x["flag_currency_conversion"] = flag_conversion
+    #    x["flag_failed_currency_conversion"] = flag_failed_conversion
+    #    return x
+    report_date = pd.to_datetime(x["reportDate"])
+    values_converted = {}
+    units_converted = []
+    #try to identify currency from impactUnit
+    id_currencies = [curr for curr, pattern in currency_dict.items() if re.search(pattern, unit_raw, re.IGNORECASE)]
+    if len(id_currencies) == 0:
+        x["flag_currency_conversion"] = False
         x["flag_failed_currency_conversion"] = flag_failed_conversion
         return x
-    report_date = pd.to_datetime(x["reportDate"])
-    values_parsed = {}
-    units_parsed = []
-    flag_failed_conversion = False
+    elif len(id_currencies) > 1:
+        LOGGER.warning("Multiple potential currencies found for token %s, identified currencies %s. Not converting", unit_raw, id_currencies)
+        x["flag_currency_conversion"] = False
+        x["flag_failed_currency_conversion"] = True
+        return x
+    else:
+        unit_parsed = id_currencies[0]
     for value_label in value_labels:
         value_raw = x[value_label]
-        parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
-        unit_parsed = parsed_price.currency
-        value_parsed = parsed_price.amount_float
-        if unit_parsed and value_parsed:#if monetary unit is identified, try to convert it to default currency
-            flag_conversion = True
-            values_parsed[value_label], unit_parsed, flag_failed_conversion = money_converter(value_parsed, unit_parsed, report_date, flag_failed_conversion, DEF_CUR=DEF_CUR)
-            units_parsed.append(unit_parsed)
+        #parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
+        #unit_parsed = parsed_price.currency
+        #value_parsed = parsed_price.amount_float
+        if not pd.isnull(value_raw) and not pd.isna(value_raw):#if monetary unit is identified, try to convert it to default currency
+            values_converted[value_label], unit_converted, flag_failed_conversion = money_converter(value_raw, unit_parsed, report_date, flag_failed_conversion, DEF_CUR=DEF_CUR)
+            units_converted.append(unit_converted)
         else:
-            values_parsed[value_label] = value_raw
+            values_converted[value_label] = value_raw
 
-    if len(pd.unique(units_parsed)) > 1:#only do assignment if all units are the same
-        LOGGER.warning("Multiple units parsed: %s", units_parsed)
+    if len(pd.unique(units_converted)) > 1:#only do assignment if all units are the same
+        LOGGER.warning("Multiple units parsed: %s", units_converted)
         flag_failed_conversion = True
-    elif len(pd.unique(units_parsed)) == 1:
+    elif len(pd.unique(units_converted)) == 1:
         for value_label in value_labels:
-            x[value_label] = values_parsed[value_label]
-        x["impactUnit"] = units_parsed[0]
+            x[value_label] = values_converted[value_label]
+        x["impactUnit"] = units_converted[0]
 
-    x["flag_currency_conversion"] = flag_conversion
+    x["flag_currency_conversion"] = not flag_failed_conversion
     x["flag_failed_currency_conversion"] = flag_failed_conversion
     return x
 
