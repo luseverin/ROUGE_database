@@ -222,19 +222,26 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(result["unit_type"], "other")
 
     def test_reclassify_units(self):
-        x = pd.Series({"impactValue": 10,
-                       "impactValueMin": np.nan,
-                       "impactValueMax": 20,
-                       "impactUnit": "families",
-                       "unit_type": "other",
-                       "impactSubtype": "Affected People"})
-        out = reclassify_units(x.copy())
-        self.assertEqual("people", out["impactUnit"])
-        self.assertEqual(out["impactValue"], 10)
-        self.assertTrue(pd.isna(out["impactValueMin"]))
-        self.assertEqual(out["impactValueMax"], 20)
-        self.assertTrue(out["flag_unit_nonstd"])
-        self.assertFalse(out["flag_reclass_subtype_from_unit"])
+        xin = pd.DataFrame({"impactValue": [10, 10],
+                       "impactValueMin": [np.nan, np.nan],
+                       "impactValueMax": [20, 20],
+                       "unit_type": ["other", "km**2"],
+                       "impactUnit": ["families", "km**2 of banana plantations"],
+                       "impactSubtype": ["Affected People", "agricultural infrastructure"]})
+        xexp = pd.DataFrame({"impactValue": [10, 10],
+                            "impactValueMin": [np.nan, np.nan],
+                            "impactValueMax": [20, 20],
+                            "impactUnit": ["people", "km**2 of crop production and forestry"],
+                            "impactSubtype": ["Affected People", "Crop Production and Forestry"]})
+
+        for i in range(len(xin)):
+            out = reclassify_units(xin.iloc[i])
+            xexp_i = xexp.iloc[i]
+            self.assertEqual(xexp_i["impactUnit"], out["impactUnit"])
+            self.assertEqual(out["impactValue"], xexp_i["impactValue"])
+            self.assertTrue(pd.isna(out["impactValueMin"]))
+            self.assertEqual(out["impactValueMax"], xexp_i["impactValueMax"])
+            self.assertFalse(out["flag_reclass_subtype_from_unit"])
 
     def test_reclassify_units_reclass_subtype(self):
         x = pd.Series({"impactValue": 10,
@@ -248,7 +255,6 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(out["impactValue"], 10)
         self.assertTrue(pd.isna(out["impactValueMin"]))
         self.assertEqual(out["impactValueMax"], 20)
-        self.assertFalse(out["flag_unit_nonstd"])
         self.assertTrue(out["flag_reclass_subtype_from_unit"])
         self.assertEqual(out["impactSubtype"], "Displaced People")
 
@@ -283,7 +289,7 @@ class TestImpactFunctions(unittest.TestCase):
             "impactValue": [1500, 1500, 10],
             "impactValueMin": [1000, 1000, 10],
             "impactValueMax": [2000, 2000, 10],
-            "impactUnit": ["USD", "chf", "euro"],
+            "impactUnit": ["us $", "chf", "euro"],
             "reportDate": ["2020-01-01", "", "2019-06-15"]
         })
         for i in range(len(x)):
@@ -293,13 +299,14 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertIsInstance(out["impactValueMin"], (int, float))
             self.assertIsInstance(out["impactValueMax"], (int, float))
             self.assertTrue(out["flag_currency_conversion"])
+            self.assertFalse(out["flag_failed_currency_conversion"])
 
     def test_convert_monetary_units_invalid_currency(self):
         x = pd.DataFrame({
             "impactValue": [1500, 1500],
             "impactValueMin": [1000, 1000],
             "impactValueMax": [2000, 2000],
-            "impactUnit": ["people", "swiss francs"],
+            "impactUnit": ["people", "europe"],
             "reportDate": ["2020-01-01", "2019-06-15"]
         })
         for i in range(len(x)):
