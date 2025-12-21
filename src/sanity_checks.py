@@ -120,8 +120,7 @@ def flag_response_unit(x):
         The series with the added column
     """
     response_units = r"\b(volunteers?|staff|beneficiaries?|branches?|national socities?)\b"
-    x["flag_response_unit"] = re.search(response_units, x["impactUnit"]) is not None
-    return x
+    return re.search(response_units, x["impactUnit"]) is not None
 def flag_unit_nonstd(x, standard_units=STANDARD_UNITS):
     """
     Adds a column to the dataframe, "flag_unit_nonstd", which is True if the impactUnit is not in the list of standard units, and False otherwise.
@@ -180,3 +179,29 @@ def flag_hazard(extracted_data, hazard_list):
 
 def flag_remove_cat(x, remove_cats=["DREF Allocation", "Targeted People", "Assisted People"]):
     return x["impactSubtype"] in remove_cats
+
+def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
+    """
+    Gathers all flag columns into a single column "any_flag", which is True if any of the flag columns are True, and False otherwise.
+
+    Parameters
+    ----------
+    extracted_data : pandas.DataFrame
+        The dataframe containing the extracted data
+    flag_columns : list
+        The list of flag columns to gather
+    flag_name : str, default "any_flag"
+        The name of the column to store the gathered flags
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe with the added column
+    """
+    def check_any_flag(x):
+        return any(x[flag] for flag in flag_columns if flag in x.index)
+    extracted_data[flag_name] = np.nan
+    extracted_data[flag_name] = extracted_data.apply(check_any_flag, axis=1)
+    #drop individual flag columns
+    extracted_data = extracted_data.drop(columns=flag_columns)
+    return extracted_data
