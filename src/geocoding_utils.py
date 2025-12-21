@@ -139,7 +139,7 @@ def country_to_iso(countries, representation="alpha3", fillvalue=None, fuzzy_thr
     iso_list = []
     for country in countries:
 
-        # Check if the country is not already an ISO-CODE 
+        # Check if the country is not already an ISO-CODE
         if isinstance(country, str):
             c_up = country.upper()
             if len(c_up) == 2:
@@ -167,7 +167,7 @@ def country_to_iso(countries, representation="alpha3", fillvalue=None, fuzzy_thr
             except ValueError:
                 pass
 
-        # Otherwise look for the iso corresponding to the country name 
+        # Otherwise look for the iso corresponding to the country name
         country = country if isinstance(country, str) else f"{int(country):03d}"
         try:
             match = pycountry.countries.lookup(country)
@@ -202,7 +202,7 @@ def country_to_iso(countries, representation="alpha3", fillvalue=None, fuzzy_thr
         if representation == "numeric":
             iso = int(iso)
         iso_list.append(iso)
-    
+
     return iso_list[0] if return_single else iso_list
 
 #### Helpers functions
@@ -343,7 +343,7 @@ def get_continent(iso_code, world):
     except IndexError:
         return None
 
-def split_continents(df_geom, world) : 
+def split_continents(df_geom, world) :
     iso_to_continent = (
         world[["ADM0_ISO", "CONTINENT"]]
         .dropna()
@@ -352,7 +352,7 @@ def split_continents(df_geom, world) :
         .to_dict()
     )
 
-    df_geom["continent"] = df_geom["iso3_code"].apply(
+    df_geom["continent"] = df_geom["country_iso3"].apply(
         lambda iso_list: sorted(
             {iso_to_continent.get(iso) for iso in iso_list if iso in iso_to_continent}
         ) if isinstance(iso_list, list) else []
