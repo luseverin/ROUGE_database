@@ -36,7 +36,26 @@ logger_name = "data_filter"
 log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 
-## First, parse to correct dtypes
+## drop duplicates (needs to be done before formatting as lists dtypes cannot be dedup)
+init_len = len(response_df)
+init_len_geo = len(response_df_geo)
+duplicates = response_df.duplicated(subset=dedup_cols)
+duplicates_geo = response_df_geo.duplicated(subset=dedup_cols)
+with pd.option_context(
+    "display.max_rows", None,
+    "display.max_columns", None,
+    "display.width", None,
+):
+    LOGGER.info("Duplicates:\n %s", response_df.loc[duplicates, dedup_cols])#.to_string(max_rows=None, max_cols=None)
+    LOGGER.info("Duplicates in geolocated data:\n %s", response_df_geo.loc[duplicates_geo, dedup_cols])#.to_string(max_rows=None, max_cols=None)
+
+response_df = response_df[~duplicates]
+response_df_geo = response_df_geo[~duplicates_geo]
+
+LOGGER.info(f"Dropped {init_len - len(response_df)} duplicates")
+LOGGER.info(f"Dropped {init_len_geo - len(response_df_geo)} duplicates in geolocated data")
+
+## Parse to correct dtypes
 response_df = format_output(response_df)
 response_df_geo = format_output(response_df_geo)
 
@@ -71,27 +90,8 @@ response_df_geo = gather_flags(response_df_geo, flag_error_columns, flag_name="f
 
 ## gather annotation columns
 annotation_columns = ["valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation"]
-response_df["sourceExcerpts"] = response_df.apply(merge_annotations(annotation_columns), axis=1)
-response_df_geo["sourceExcerpts"] = response_df_geo.apply(merge_annotations(annotation_columns), axis=1)
-
-## drop duplicates
-init_len = len(response_df)
-init_len_geo = len(response_df_geo)
-duplicates = response_df.duplicated(subset=dedup_cols)
-duplicates_geo = response_df_geo.duplicated(subset=dedup_cols)
-with pd.option_context(
-    "display.max_rows", None,
-    "display.max_columns", None,
-    "display.width", None,
-):
-    LOGGER.info("Duplicates:\n %s", response_df.loc[duplicates, dedup_cols])#.to_string(max_rows=None, max_cols=None)
-    LOGGER.info("Duplicates in geolocated data:\n %s", response_df_geo.loc[duplicates_geo, dedup_cols])#.to_string(max_rows=None, max_cols=None)
-
-response_df = response_df[~duplicates]
-response_df_geo = response_df_geo[~duplicates_geo]
-
-LOGGER.info(f"Dropped {init_len - len(response_df)} duplicates")
-LOGGER.info(f"Dropped {init_len_geo - len(response_df_geo)} duplicates in geolocated data")
+response_df["sourceExcerpts"] = response_df.apply(merge_annotations, args=(annotation_columns,), axis=1)
+response_df_geo["sourceExcerpts"] = response_df_geo.apply(merge_annotations, args=(annotation_columns,), axis=1)
 
 ## Filter unwanted columns
 columns_data_final = ["appealCode", "reportDate", "reportLink", "disasterType",
@@ -138,7 +138,6 @@ response_df_filtered.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False
 ## Split per continent
 world = gpd.read_file(ADMIN_PATH / "ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp")
 #need to be formated to list
-response_df_geo_filtered_continent = format_output(response_df_geo_filtered, list_cols=["country_iso3"])
 response_df_geo_filtered_continent = split_continents(response_df_geo_filtered, world)
 for continent, df in response_df_geo_filtered_continent.items():
     atomic_gpkg_save(df, DATA_OUT_PROC / (f"{filename_out_geo}_{continent}" + ".gpkg"))
