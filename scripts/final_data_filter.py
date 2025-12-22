@@ -3,11 +3,10 @@
 #1 drop duplicates
 #2 select columns
 
-from colorama import init
 import pandas as pd
 import geopandas as gpd
 from src.data import *
-from src.data_format import format_output
+from src.data_format import *
 from src.post_process_functions import merge_annotations
 from src.sanity_checks import gather_flags
 from src.geocoding import atomic_gpkg_save
@@ -28,8 +27,22 @@ res_savename_geo = res_savename + suffix
 response_df = pd.read_csv(DATA_OUT_PROC / (res_savename + ".csv"))
 response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo+".gpkg"))
 
-filename_out = "filtered_" + res_savename
-filename_out_geo = "filtered_" + res_savename_geo
+# Sort list columns
+response_df = format_output(response_df)
+response_df_geo = format_output(response_df_geo)
+
+for col in LIST_COLS : 
+    if col in response_df.columns : 
+        response_df[col] = response_df[col].apply(sorted)
+    if col in response_df_geo.columns : 
+        response_df_geo[col] = response_df_geo[col].apply(sorted)
+
+response_df = delistify_cols(response_df)
+response_df_geo = delistify_cols(response_df_geo)
+
+# Set up final name
+filename_out = "filt_" + res_savename
+filename_out_geo = "filt_" + res_savename_geo
 
 #set up logger
 logger_name = "data_filter"
@@ -133,6 +146,7 @@ response_df_filtered = response_df_filtered.rename(columns=col_rename)
 
 ## Save
 atomic_gpkg_save(response_df_geo_filtered, DATA_OUT_PROC / (filename_out_geo + ".gpkg"))
+response_df_geo_filtered.to_parquet(DATA_OUT_PROC / (filename_out_geo+".parquet"),compression="zstd", index=False)
 response_df_filtered.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
 
 ## Split per continent
@@ -140,4 +154,9 @@ world = gpd.read_file(ADMIN_PATH / "ne_110m_admin_0_countries/ne_110m_admin_0_co
 #need to be formated to list
 response_df_geo_filtered_continent = split_continents(response_df_geo_filtered, world)
 for continent, df in response_df_geo_filtered_continent.items():
+    continent = continent.replace(" ", "_")
+    if len(str(DATA_OUT_PROC / f"{filename_out_geo}_{continent}.parquet")) > 260 : 
+        LOGGER.info(f"More than 260 characters, Unable to save file to {str(DATA_OUT_PROC / f"{filename_out_geo}_{continent}.parquet")}")
+    else : 
+        df.to_parquet(DATA_OUT_PROC / (f"{filename_out_geo}_{continent}"+".parquet"),compression="zstd", index=False)
     atomic_gpkg_save(df, DATA_OUT_PROC / (f"{filename_out_geo}_{continent}" + ".gpkg"))
