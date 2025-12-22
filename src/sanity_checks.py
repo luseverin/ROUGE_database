@@ -178,6 +178,21 @@ def flag_hazard(extracted_data, hazard_list):
     return extracted_data
 
 def flag_remove_cat(x, remove_cats=["DREF Allocation", "Targeted People", "Assisted People"]):
+    """
+    Adds a column to the dataframe, "flag_remove_cat", which is True if the impactSubtype is in the list of categories to remove, and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+    remove_cats : list (optional)
+        The list of categories to remove (default is ["DREF Allocation", "Targeted People", "Assisted People"])
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
     return x["impactSubtype"] in remove_cats
 
 def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
