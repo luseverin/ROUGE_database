@@ -460,7 +460,7 @@ def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit
             x["flag_SI_unit_standardization"] = True
             converted_values[value_label] = x[value_label]
     #assign values only if no error occured
-    if not x["flag_SI_unit_standardization"]:
+    if not x["flag_SI_unit_standardization_error"]:
         for value_label in value_labels:
             x[value_label] = converted_values[value_label]
     x["unit_type"] = si_unit
