@@ -36,6 +36,7 @@ import threading
 import time
 import geopy as gpy
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+from joblib import dump
 
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
@@ -1221,6 +1222,9 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
+    nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{res_savename}.joblib")
+    dump(nom_loc_dict, nominatim_save_path)
+    LOGGER.info("Nominatim output saved in %s", nominatim_save_path)
 
     # Convert nominatim output to polygons
     start = time.time()
@@ -1229,6 +1233,9 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
+    geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{res_savename}.gpkg")
+    atomic_gpkg_save(df_geo_individual_locs, geocode_unique_save_path, layer_name="multipolygons")
+    LOGGER.info("Geocoded unique locations saved in %s", geocode_unique_save_path)
 
     # Gather the polygons to df_row for 2 split options
     for split_lowest_levels in [True, False] :
