@@ -147,7 +147,7 @@ def calc_value_sim(v1, v2, clip=(0,1)):
 
     return 1 - np.clip(max_value_diff(v1, v2), 0, 1)
 
-def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights):
+def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights, valid_shape=True, valid_cols=True):
     """
     Compute weighted similarity aggregation across columns.
 
@@ -174,7 +174,7 @@ def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights):
         if similarity_cols contains columns not in matching_cols_weights.
     """
     # Validation: ensure dimensions match
-    if dist_mat.shape[2] != len(similarity_cols):
+    if valid_shape and dist_mat.shape[2] != len(similarity_cols):
         raise ValueError(
             f"dist_mat has {dist_mat.shape[2]} columns but similarity_cols has {len(similarity_cols)} columns. "
             f"These must match. Make sure dist_mat was built with similarity_cols in the same order."
@@ -182,7 +182,7 @@ def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights):
 
     # Validation: ensure all columns have weights
     missing_cols = [col for col in similarity_cols if col not in matching_cols_weights]
-    if missing_cols:
+    if valid_cols and missing_cols:
         raise ValueError(
             f"The following columns in similarity_cols have no weights: {missing_cols}. "
             f"Available weights: {list(matching_cols_weights.keys())}"
@@ -348,6 +348,22 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
 
     #slice dist_mat only including best candidates to store accuracy results
     accuracy_matrix = dist_mat[id_match_ext, id_match_lab, :]
+
+    # Compute aggregated weighted similarity for each matched pair and append
+    #agg_sim = compute_weighted_sim(accuracy_matrix, dist_mat_cols, matching_cols_weights, valid_shape=False)
+    #accuracy_matrix = np.append(accuracy_matrix, agg_sim.reshape(-1, 1), axis=1)
+
+    try:
+        weights = np.array([matching_cols_weights[col] for col in dist_mat_cols], dtype=float)
+        sum_weights = np.nansum(weights)
+        if sum_weights == 0:
+            match_sim = np.full((accuracy_matrix.shape[0],), np.nan)
+        else:
+            match_sim = np.nansum(accuracy_matrix * weights, axis=1) / sum_weights
+        accuracy_matrix = np.append(accuracy_matrix, match_sim.reshape(-1, 1), axis=1)
+    except Exception:
+        # If weighting fails for any reason, append NaNs to keep shape consistent
+        accuracy_matrix = np.append(accuracy_matrix, np.full((accuracy_matrix.shape[0], 1), np.nan), axis=1)
 
     return reid_match_ext, reid_match_lab, accuracy_matrix
 
