@@ -167,21 +167,21 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL") :
     if polygon_source == "GAUL" :
         try :
             ##### ADMIN2 From GAUL
-            # gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
-            gaul2 = gpd.read_file(os.path.join(ADMIN_PATH, 'GAUL_2024_L2', 'GAUL_2024_L2.shp'))
+            gaul2 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L2/GAUL_2024_L2.shp")
+            # gaul2 = gpd.read_file(os.path.join(ADMIN_PATH, 'GAUL_2024_L2', 'GAUL_2024_L2.shp'))
             gaul2 = gaul2.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1", "gaul2_name":"ADMIN_2"}, axis=1)
             gpd_files["ADM_2"] = gaul2
 
             ##### ADMIN1 From GAUL
-            # gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
-            gaul1 = gpd.read_file(os.path.join(ADMIN_PATH, 'GAUL_2024_L1', 'GAUL_2024_L1.shp'))
+            gaul1 = gpd.read_file(ADMIN_PATH+"GAUL_2024_L1/GAUL_2024_L1.shp")
+            # gaul1 = gpd.read_file(os.path.join(ADMIN_PATH, 'GAUL_2024_L1', 'GAUL_2024_L1.shp'))
             gaul1 = gaul1.rename({"gaul0_name":"ADMIN_0", "gaul1_name":"ADMIN_1"}, axis=1)
             gaul1["gaul2_code"] = None
             gpd_files["ADM_1"] = gaul1
 
             ##### ADMIN0 From Natural Earth
-            # ne_0 = gpd.read_file(ADMIN_PATH+"ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp")
-            ne_0 = gpd.read_file(os.path.join(ADMIN_PATH, 'ne_10m_admin_0_countries', 'ne_10m_admin_0_countries.shp'))
+            ne_0 = gpd.read_file(ADMIN_PATH+"ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp")
+            # ne_0 = gpd.read_file(os.path.join(ADMIN_PATH, 'ne_110m_admin_0_countries', 'ne_110m_admin_0_countries.shp'))
             ne_0 = ne_0.rename({"ADMIN":"ADMIN_0", "ISO_A3" : "iso3_code"}, axis=1)
             ne_0["gaul1_code"] = None
             ne_0["gaul2_code"] = None
@@ -456,6 +456,8 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
 
     if not location:
         query = f"{country}"
+    if not country : 
+        query = f"{location}"
     else:
         query = f"{location}, {country}"
 
@@ -699,6 +701,9 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
 
     for curr_country, curr_iso in zip(countries, countries_iso) :
         nom_result = query_nominatim(location, curr_country)
+
+        if nom_result is None:
+            nom_result = query_nominatim(location, None)
 
         if nom_result is None:
             return None, None
