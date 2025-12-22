@@ -16,6 +16,7 @@ NUM_COLS = ["impactValue",
             'valid_errors_haz',
             'flag_geocoding_country',
             'flag_geocoding_osm']
+
 LIST_COLS = ['valueAnnotation',
              "country",
              'country_kw',
@@ -75,7 +76,6 @@ def listify_strings(x):
     """
     if isinstance(x, str):
         try :
-            #x = json.loads(x.replace("'", '"'))
             x = json_repair.loads(x)
         except :
             x = [x]

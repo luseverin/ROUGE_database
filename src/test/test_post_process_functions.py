@@ -14,16 +14,18 @@ from src.hazard_def import *
 # import your functions
 from src.post_process_functions import (
     country_name_to_iso3, list_country_name_to_iso3,
-    separate_locs, remove_startspace,
-    delistify_cols, listify_strings,
-    format_output,
+    separate_locs, remove_startspace, label_quanti_quali,
     parse_impact_value_precision,
     reclassify_impact_subtype, reclassify_hazard,
     convert_unit, assign_unit_type, reclassify_units,
     standardize_metric_units, join_value_units, split_value_units,
     convert_monetary_units, replace_numbers_unit,
-    make_date, harmonize_units, normalize_people_unit
+    make_date, harmonize_units, normalize_people_unit,
+    force_unit_to_subtype, reclass_subtype_from_unit
 )
+
+# Use redefined helpers from data_format for list/format helpers
+from src.data_format import delistify_cols, listify_strings, format_output
 
 # Define positive and negative test cases for each category
 regex_test_cases = {
@@ -35,31 +37,35 @@ regex_test_cases = {
         "positives": ["roads damaged", "roads", "roads destroyed"],
         "negatives": ["broadway show", "offroaders"]
     },
-    'transportation facilities': {
-        "positives": ["railway", "train tracks", "airport damaged", "bus", "taxis", "airplane"],
+    'transportation structures': {
+        "positives": ["railway", "train tracks", "airport damaged", "seaports"],
         "negatives": ["trail", "training"]
     },
-    'water, sanitation and hygiene facilities': {
-        "positives": ["latrines built", "water shortage", "aqueduct", "reservoir"],
+    'water points': {
+        "positives": ["water sources", "wells", "taps", "reservoir", "water supply"],
         "negatives": ["watershed", "hydropower"]
     },
-    'healthcare facilities': {
+    'WASH structures': {
+        "positives": ["latrines built", "sanitation systems", "aqueduct", "toilets", "water treatment plants"],
+        "negatives": ["water points", "wells"]
+    },
+    'healthcare structures': {
         "positives": ["hospital destroyed", "medical clinic", "maternity center"],
         "negatives": ["healthiness", "medicine"]
     },
-    'IT and communication facilities': {
-        "positives": ["radio station", "cell tower down", "antenna"],
-        "negatives": ["communication skills", "televisionary", "tv damaged"]
+    'IT and communication structures': {
+        "positives": ["radio station", "cell tower down", "antenna", "telecommunication center"],
+        "negatives": ["communication skills", "televisionary"]
     },
-    'power and energy production infrastructure facilities': {
-        "positives": ["power outage", "solar panels", "hydro dam", "generator"],
+    'power and energy production structures': {
+        "positives": ["power lines", "solar generators", "hydro dams", "electric poles", "electric supply"],
         "negatives": ["empowered", "energetic"]
     },
     'homes': {
         "positives": ["homes destroyed", "home", "residential structures"],
         "negatives": ["homeostasis", "building up momentum"]
     },
-    'education facilities': {
+    'education structures': {
         "positives": ["schools collapsed", "universities closed", "college damaged"],
         "negatives": ["schooling fish", "educationalist"]
     },
@@ -67,16 +73,16 @@ regex_test_cases = {
         "positives": ["crop loss", "rice fields", "forest fire", "coffee plantations", "maize production"],
         "negatives": ["treetop adventure", "bananarama band"]
     },
-    'agricultural facilities': {
+    'agricultural structures': {
         "positives": ["barn collapsed", "irrigation channel", "farms flooded"],
-        "negatives": ["farming practice", "barnacle"]
+        "negatives": ["farming practice", "barnacle", "farmlands"]
     },
     'affected animals': {
         "positives": ["livestock lost", "dead cows", "sheep killed", "poultry disease", "cattle evacuated"],
         "negatives": ["dog", "animalistic"]
     },
     'informal settlements': {
-        "positives": ["refugee camp", "tent", "informal settlement"],
+        "positives": ["refugee camp", "tent", "informal settlement", "huts", "idp site"],
         "negatives": ["campus", "camping gear"]
     }
 }
@@ -196,16 +202,24 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(out["flag_hazards_reclass"])
 
     def test_convert_unit(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "families", "impactValueMin": np.nan, "impactValueMax": np.nan})
+        x = pd.Series({"impactValue": 10, "impactUnit": "families", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Affected People"})
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "people")
         self.assertEqual(out["impactValue"], 30)
         self.assertTrue(out["flag_unit_conversion"])
 
     def test_convert_unit_no_match(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "kg", "impactValueMin": np.nan, "impactValueMax": np.nan})
+        x = pd.Series({"impactValue": 10, "impactUnit": "kg", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Affected People"})
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "kg")
+        self.assertFalse(out["flag_unit_conversion"])
+
+    def test_convert_unit_non_people_subtype(self):
+        # Test that conversion is skipped when default unit for subtype is not 'people'
+        x = pd.Series({"impactValue": 10, "impactUnit": "families", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Damaged Structures"})
+        out = convert_unit(x.copy())
+        self.assertEqual(out["impactUnit"], "families")  # Should not convert
+        self.assertEqual(out["impactValue"], 10)  # Should not multiply
         self.assertFalse(out["flag_unit_conversion"])
 
     def test_assign_unit_type(self):
@@ -231,7 +245,7 @@ class TestImpactFunctions(unittest.TestCase):
         xexp = pd.DataFrame({"impactValue": [10, 10],
                             "impactValueMin": [np.nan, np.nan],
                             "impactValueMax": [20, 20],
-                            "impactUnit": ["people", "km**2 of crop production and forestry"],
+                            "impactUnit": ["families", "km**2 of crop production and forestry"],
                             "impactSubtype": ["Affected People", "Crop Production and Forestry"]})
 
         for i in range(len(xin)):
@@ -241,22 +255,24 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertEqual(out["impactValue"], xexp_i["impactValue"])
             self.assertTrue(pd.isna(out["impactValueMin"]))
             self.assertEqual(out["impactValueMax"], xexp_i["impactValueMax"])
-            self.assertFalse(out["flag_reclass_subtype_from_unit"])
 
     def test_reclassify_units_reclass_subtype(self):
-        x = pd.Series({"impactValue": 10,
-                       "impactValueMin": np.nan,
-                       "impactValueMax": 20,
-                       "impactUnit": "idp families",
-                       "unit_type": "other",
-                       "impactSubtype": "Affected People"})
-        out = reclassify_units(x.copy())
-        self.assertEqual("displaced families", out["impactUnit"])
-        self.assertEqual(out["impactValue"], 10)
-        self.assertTrue(pd.isna(out["impactValueMin"]))
-        self.assertEqual(out["impactValueMax"], 20)
-        self.assertTrue(out["flag_reclass_subtype_from_unit"])
-        self.assertEqual(out["impactSubtype"], "Displaced People")
+        # Unit contains 'idp' → reclassify to 'displaced', then subtype inferred to 'Displaced People'
+        x = pd.Series({
+            "impactValue": 10,
+            "impactValueMin": np.nan,
+            "impactValueMax": 20,
+            "impactUnit": "idp families",
+            "unit_type": "other",
+            "impactSubtype": "Affected People"
+        })
+        out_units = reclassify_units(x.copy())
+        self.assertEqual("displaced", out_units["impactUnit"])  # reclassify_units collapses to keyword
+        self.assertTrue(out_units["flag_unit_reclass"])  # unit changed
+
+        out_subtype = reclass_subtype_from_unit(out_units.copy())
+        self.assertEqual(out_subtype["impactSubtype"], "Displaced People")
+        self.assertTrue(out_subtype["flag_reclass_subtype_from_unit"])
 
     def test_standardize_metric_units(self):
         xin = pd.DataFrame({"impactValue": [10, 20, 20, 30], "impactUnit": ["liters", "square meter", "meter square", "ha"], "impactValueMin": [np.nan, 20, 20, 30], "impactValueMax": [20, 20, 20, 30]})
@@ -276,6 +292,49 @@ class TestImpactFunctions(unittest.TestCase):
         x = pd.Series({"impactValue": 10, "impactUnit": "unknown", "impactValueMin": np.nan, "impactValueMax": np.nan})
         out = standardize_metric_units(x)
         self.assertFalse(out["flag_unit_standardization"])
+
+    def test_force_unit_to_subtype_applies(self):
+        # When unit is unknown and subtype is known, force unit to default subtype unit
+        x = pd.Series({
+            "impactValue": 1,
+            "impactValueMin": np.nan,
+            "impactValueMax": np.nan,
+            "impactUnit": "unknown_unit",
+            "unit_type": "other",
+            "impactSubtype": "Education Infrastructure"
+        })
+        out = force_unit_to_subtype(x.copy())
+        self.assertEqual(out["impactUnit"], "education structures")
+        self.assertTrue(out["flag_force_unit_to_subtype"])
+
+    def test_force_unit_to_subtype_skips_people_or_null(self):
+        # Should not force when unit is already people or empty/null
+        for unit in ["people", "", "null"]:
+            x = pd.Series({
+                "impactValue": 1,
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+                "impactUnit": unit,
+                "unit_type": "other",
+                "impactSubtype": "Affected People"
+            })
+            out = force_unit_to_subtype(x.copy())
+            self.assertEqual(out["impactUnit"], unit)
+            self.assertFalse(out["flag_force_unit_to_subtype"])
+
+    def test_reclass_subtype_from_unit(self):
+        # If unit equals expected unit for a different subtype, subtype should be updated
+        x = pd.Series({
+            "impactValue": 5,
+            "impactValueMin": np.nan,
+            "impactValueMax": np.nan,
+            "impactUnit": "displaced",
+            "unit_type": "other",
+            "impactSubtype": "Affected People"
+        })
+        out = reclass_subtype_from_unit(x.copy())
+        self.assertEqual(out["impactSubtype"], "Displaced People")
+        self.assertTrue(out["flag_reclass_subtype_from_unit"])
 
     def test_join_split_value_units(self):
         x = pd.Series({"impactValue": 5, "impactUnit": "kg"})
@@ -298,6 +357,22 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertIsInstance(out["impactValue"], (int, float))
             self.assertIsInstance(out["impactValueMin"], (int, float))
             self.assertIsInstance(out["impactValueMax"], (int, float))
+            self.assertTrue(out["flag_currency_conversion"])
+            self.assertFalse(out["flag_failed_currency_conversion"])
+
+    def test_convert_monetary_units_additional_currencies(self):
+        # Test some of the newly added currencies
+        x = pd.DataFrame({
+            "impactValue": [1000, 5000, 200],
+            "impactValueMin": [800, 4000, 150],
+            "impactValueMax": [1200, 6000, 250],
+            "impactUnit": ["indian rupees", "japanese yen", "british pounds"],
+            "reportDate": ["2020-01-01", "2020-01-01", "2020-01-01"]
+        })
+        for i in range(len(x)):
+            out = convert_monetary_units(x.iloc[i])
+            self.assertEqual(out["impactUnit"], "EUR")
+            self.assertIsInstance(out["impactValue"], (int, float))
             self.assertTrue(out["flag_currency_conversion"])
             self.assertFalse(out["flag_failed_currency_conversion"])
 
@@ -431,6 +506,144 @@ class TestFormatOutput(unittest.TestCase):
         out = format_output(df, num_cols=["num"], list_cols=["list"])
         self.assertTrue(np.issubdtype(out["num"].dtype, np.floating))
         self.assertIsInstance(out["list"].iloc[0], list)
+
+
+class TestPostProcessingPipeline(unittest.TestCase):
+    """Integration test that verifies the complete postprocessing pipeline"""
+
+    def test_full_pipeline(self):
+        """Test the complete postprocessing workflow as in postprocess_results.py"""
+        # Create sample data mimicking LLM output
+        sample_data = pd.DataFrame({
+            "impactValue": ["100", "50", "1500", "10"],
+            "impactValueMin": [None, "30", "1000", "5"],
+            "impactValueMax": ["120", None, "2000", "15"],
+            "impactUnit": ["families", "2 houses", "us $", "ha of agricultural land"],
+            "impactSubtype": ["Affected People", "Damaged Structures", "Economic Loss", "agricultural land"],
+            "country": ["['France', 'Germany']", "['Spain']", "['Switzerland']", "['Kenya']"],
+            "location": ["['Paris', 'Berlin']", "['Madrid']", "['Zurich']", "['Nairobi']"],
+            "hazards": ["['flood', 'tornado']", "['earthquake']", "['wildfire']", "['drought']"],
+            "startYear": [2020, 2021, 2022, 2023],
+            "startMonth": [1, None, 6, 3],
+            "startDay": [15, None, None, 10],
+            "endYear": [2020, 2021, 2022, 2023],
+            "endMonth": [2, None, 7, 4],
+            "endDay": [20, None, None, 15],
+            "reportDate": ["2020-03-01", "2021-05-01", "2022-08-01", "2023-05-01"]
+        })
+
+        # Step 1: Format output
+        num_cols = ["impactValue", "impactValueMin", "impactValueMax",
+                    "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
+        list_cols = ["country", "location", "hazards"]
+        df = format_output(sample_data.copy(), num_cols=num_cols, list_cols=list_cols)
+
+        # Step 2: Parse impact value precision
+        df = df.apply(parse_impact_value_precision, axis=1)
+
+        # Step 3: Label quanti/quali
+        df = df.apply(label_quanti_quali, axis=1)
+
+        # Step 4: Reclassify impact subtypes
+        df = df.apply(reclassify_impact_subtype, axis=1)
+
+        # Step 5: Reclassify hazards
+        df = df.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
+
+        # Step 6: Replace numbers in units
+        df = df.apply(replace_numbers_unit, axis=1)
+
+        # Step 7: Standardize metric units
+        df = df.apply(standardize_metric_units, axis=1)
+
+        # Step 8: Harmonize units
+        df = df.apply(harmonize_units, axis=1)
+
+        # Step 9: Assign unit type
+        df = df.apply(assign_unit_type, axis=1)
+
+        # Step 10: Convert units (families -> people)
+        df = df.apply(convert_unit, axis=1)
+
+        # Step 11: Reclassify units
+        df = df.apply(reclassify_units, axis=1)
+
+        # Step 12: Normalize people units
+        df = df.apply(normalize_people_unit, axis=1)
+
+        # Step 13: Convert monetary units
+        df = df.apply(convert_monetary_units, axis=1)
+
+        # Verify results
+        # Row 0: families -> people conversion
+        self.assertEqual(df.loc[0, "impactUnit"], "people")
+        self.assertEqual(df.loc[0, "impactValue"], 360)  # 120 families * 3
+        self.assertEqual(df.loc[0, "impactSubtype"], "Affected People")
+        self.assertTrue(df.loc[0, "flag_unit_conversion"])
+
+        # Row 1: houses with number extraction
+        self.assertEqual(df.loc[1, "impactUnit"], "homes")
+        self.assertEqual(df.loc[1, "impactValue"], 100)  # 50 * 2
+        self.assertTrue(df.loc[1, "flag_reformat_unit"])
+
+        # Row 2: currency conversion to EUR
+        self.assertEqual(df.loc[2, "impactUnit"], "EUR")
+        self.assertTrue(df.loc[2, "flag_currency_conversion"])
+        self.assertIsInstance(df.loc[2, "impactValue"], (int, float))
+
+        # Row 3: metric unit standardization
+        self.assertEqual(df.loc[3, "impactUnit"], "km**2 of crop production and forestry")
+        self.assertTrue(df.loc[3, "flag_unit_standardization"])
+
+        # Verify hazard reclassification
+        self.assertIn("Flood", df.loc[0, "hazards"])
+        self.assertIn("Convective storm", df.loc[0, "hazards"])
+
+        # Verify all rows have quanti label
+        self.assertTrue(all(df["quanti"] == "quanti"))
+
+        # Verify numeric columns are proper floats
+        for col in ["impactValue", "impactValueMin", "impactValueMax"]:
+            self.assertTrue(np.issubdtype(df[col].dtype, np.floating))
+
+    def test_pipeline_with_quali_data(self):
+        """Test pipeline with qualitative data (no values)"""
+        sample_data = pd.DataFrame({
+            "impactValue": [None, None],
+            "impactValueMin": [None, None],
+            "impactValueMax": [None, None],
+            "impactUnit": ["people", "structures"],
+            "impactSubtype": ["Displaced People", "Damaged Structures"],
+            "country": ["['Haiti']", "['Bangladesh']"],
+            "location": ["['Port-au-Prince']", "['Dhaka']"],
+            "hazards": ["['earthquake']", "['flood']"],
+            "startYear": [2010, 2020],
+            "startMonth": [1, 7],
+            "startDay": [12, 15],
+            "endYear": [2010, 2020],
+            "endMonth": [1, 8],
+            "endDay": [12, 1],
+            "reportDate": ["2010-02-01", "2020-09-01"]
+        })
+
+        # Run through pipeline
+        num_cols = ["impactValue", "impactValueMin", "impactValueMax",
+                    "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
+        list_cols = ["country", "location", "hazards"]
+        df = format_output(sample_data.copy(), num_cols=num_cols, list_cols=list_cols)
+        df = df.apply(parse_impact_value_precision, axis=1)
+        df = df.apply(label_quanti_quali, axis=1)
+        df = df.apply(reclassify_impact_subtype, axis=1)
+        df = df.apply(reclassify_hazard, axis=1)
+        df = df.apply(harmonize_units, axis=1)
+        df = df.apply(normalize_people_unit, axis=1)
+
+        # Verify all rows are labeled as quali
+        self.assertTrue(all(df["quanti"] == "quali"))
+
+        # Verify subtypes are preserved
+        self.assertEqual(df.loc[0, "impactSubtype"], "Displaced People")
+        self.assertEqual(df.loc[1, "impactSubtype"], "Unknown")  # 'Damaged Structures' not in keywords
 
 if __name__ == "__main__":
     unittest.main()

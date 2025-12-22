@@ -7,7 +7,8 @@ from colorama import init
 import pandas as pd
 import geopandas as gpd
 from src.data import *
-from src.post_process_functions import format_output, merge_annotations
+from src.data_format import format_output
+from src.post_process_functions import merge_annotations
 from src.sanity_checks import gather_flags
 from src.geocoding import atomic_gpkg_save
 from src.geocoding_utils import split_continents
@@ -36,12 +37,8 @@ log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ## First, parse to correct dtypes
-num_cols = ["impactValue", "impactValueMin", "impactValueMax","startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
-response_df[num_cols] = response_df[num_cols].apply(pd.to_numeric, errors='coerce')
-response_df_geo[num_cols] = response_df_geo[num_cols].apply(pd.to_numeric, errors='coerce')
-list_cols = ["hazards", "location"]
-response_df = format_output(response_df, list_cols=list_cols)
-response_df_geo = format_output(response_df_geo, list_cols=list_cols)
+response_df = format_output(response_df)
+response_df_geo = format_output(response_df_geo)
 
 ##Filter unwanted flags
 unwanted_flags = ["flag_remove_cat", "flag_value_no_unit", "flag_unit_nonstd", "flag_response_unit", "flag_unknown_subtype"]
