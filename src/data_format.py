@@ -4,7 +4,7 @@ import json_repair
 NUM_COLS = ["impactValue",
             "impactValueMin",
             "impactValueMax",
-           "startYear",
+            "startYear",
             "startMonth",
             "startDay",
             "endYear",
@@ -21,15 +21,16 @@ LIST_COLS = ['valueAnnotation',
              'country_kw',
              "location",
              "hazards",
-             "valueAnnotation",
              "locationAnnotation",
              "dateAnnotation",
              "hazardsAnnotation",
              "annotation",
+             "sourceExcerpts",
              "iso3_code",
              'nathaz_text',
              'locationOsm',
-             'locationPolygon']
+             'locationPolygon', 
+             'continent']
 
 def delistify_cols(df):
     """
