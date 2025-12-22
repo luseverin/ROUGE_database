@@ -731,6 +731,24 @@ def merge_annotations(x, annotation_cols):
     """
     annotations = []
     for col in annotation_cols:
-        if col in x and pd.notnull(x[col]):
-            annotations.append(str(x[col]))
-    return pd.unique(annotations)
+        if col not in x.index:
+            continue
+        val = x[col]
+        if val is None:
+            continue
+        # handle iterables (lists/arrays/Series) and scalars
+        if isinstance(val, (list, tuple, np.ndarray, pd.Series)):
+            for item in val:
+                if pd.notnull(item):
+                    annotations.append(str(item))
+        else:
+            if pd.notnull(val):
+                annotations.append(str(val))
+    # keep unique preserving order
+    seen = set()
+    unique_ann = []
+    for a in annotations:
+        if a not in seen:
+            seen.add(a)
+            unique_ann.append(a)
+    return unique_ann
