@@ -7,7 +7,7 @@ from colorama import init
 import pandas as pd
 import geopandas as gpd
 from src.data import *
-from src.post_process_functions import format_output
+from src.post_process_functions import format_output, merge_annotations
 from src.sanity_checks import gather_flags
 from src.geocoding import atomic_gpkg_save
 from src.geocoding_utils import split_continents
@@ -34,6 +34,14 @@ filename_out_geo = "filtered_" + res_savename_geo
 logger_name = "data_filter"
 log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
+
+## First, parse to correct dtypes
+num_cols = ["impactValue", "impactValueMin", "impactValueMax","startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
+response_df[num_cols] = response_df[num_cols].apply(pd.to_numeric, errors='coerce')
+response_df_geo[num_cols] = response_df_geo[num_cols].apply(pd.to_numeric, errors='coerce')
+list_cols = ["hazards", "location"]
+response_df = format_output(response_df, list_cols=list_cols)
+response_df_geo = format_output(response_df_geo, list_cols=list_cols)
 
 ##Filter unwanted flags
 unwanted_flags = ["flag_remove_cat", "flag_value_no_unit", "flag_unit_nonstd", "flag_response_unit", "flag_unknown_subtype"]
@@ -64,6 +72,11 @@ response_df_geo = gather_flags(response_df_geo, flag_unit_std, flag_name="flag_n
 response_df = gather_flags(response_df, flag_error_columns, flag_name="flag_unit_processing_error")
 response_df_geo = gather_flags(response_df_geo, flag_error_columns, flag_name="flag_unit_processing_error")
 
+## gather annotation columns
+annotation_columns = ["valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation"]
+response_df["sourceExcerpts"] = response_df.apply(merge_annotations(annotation_columns), axis=1)
+response_df_geo["sourceExcerpts"] = response_df_geo.apply(merge_annotations(annotation_columns), axis=1)
+
 ## drop duplicates
 init_len = len(response_df)
 init_len_geo = len(response_df_geo)
@@ -85,10 +98,9 @@ LOGGER.info(f"Dropped {init_len_geo - len(response_df_geo)} duplicates in geoloc
 
 ## Filter unwanted columns
 columns_data_final = ["appealCode", "reportDate", "reportLink", "disasterType",
-                 "impactSubtype", "impactValue", "impactValueMin", "impactValueMax", "impactValuePrecision", "impactUnit", "valueAnnotation",
-                 "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay", "dateAnnotation",
-                 "hazards", "hazardsAnnotation",
-                 "location", "locationAnnotation"]
+                 "impactSubtype", "impactValue", "impactValueMin", "impactValueMax", "impactValuePrecision", "impactUnit",
+                 "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay", "hazards", "location",
+                 "locationPolygon", "locationLowestAdmin", "iso3_code", "sourceExcerpts"]
 
 columns_flags_final = ['valid_errors_impactValue',
          'valid_errors_loc',
@@ -109,15 +121,15 @@ columns_flags_final = ['valid_errors_impactValue',
          'flag_geocoding_country',
          'flag_geocoding_osm']
 
-colums_final_geo = columns_data_final + ["locationPolygon", "locationLowestAdmin", "iso3_code", "geometry"]
-
 response_df_filtered = response_df.copy()
 response_df_filtered = response_df_filtered[columns_data_final + columns_flags_final]
 response_df_geo_filtered = response_df_geo.copy()
-response_df_geo_filtered = response_df_geo_filtered[colums_final_geo + columns_flags_final]
+response_df_geo_filtered = response_df_geo_filtered[columns_data_final + ["geometry"] + columns_flags_final]
+
 ## Rename cols
 col_rename = {
     "iso3_code": "country_iso3",
+    "disasterType": "disasterType_IFRC"
 }
 response_df_geo_filtered = response_df_geo_filtered.rename(columns=col_rename)
 response_df_filtered = response_df_filtered.rename(columns=col_rename)
