@@ -19,6 +19,7 @@ from src.logger_setup import set_logger
 from src.data import *
 from src.text_processing_functions import *
 from src.post_process_functions import *
+from src.data_format import format_output
 from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
@@ -42,11 +43,11 @@ filename_in = "geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-1
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
-filename_out =  "post_processed_"+filename_in+f"_v{dt.datetime.now().strftime('%d%m%y')}"#"post_processed_" + filename_in#post_processed_flags_
+filename_out =  "post_processed_"+filename_in#+f"_v{dt.datetime.now().strftime('%d%m%y')}"#"post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_PROC #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
-check_flag_value_in_text = False #whether or not we want to check if the value is in the original text
+check_flag_value_in_text = True #whether or not we want to check if the value is in the original text
 convert_to_people = True #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False #whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
@@ -89,11 +90,7 @@ else:
 
     ## Formatting
     #convert numerical columns
-    num_cols = ["impactValue", "impactValueMin", "impactValueMax","startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
-    list_cols = ["country","location", "hazards", "valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation", "annotation", "iso3_code"]
-    num_cols = [key for key in num_cols if key in response_df_proc.columns]
-    list_cols = [key for key in list_cols if key in response_df_proc.columns]
-    response_df_proc = format_output(response_df_proc, num_cols=num_cols, list_cols=list_cols)
+    response_df_proc = format_output(response_df_proc)
 
     #process impactValue
     response_df_proc = response_df_proc.apply(parse_impact_value_precision, axis=1)
