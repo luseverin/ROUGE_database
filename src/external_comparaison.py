@@ -9,7 +9,6 @@ import pandas as pd
 import copy as cp
 import datetime
 from src.LLM_functions import *
-from src.plot_functions import *
 from src.data import *
 from src.hazard_def import *
 from src.impact_def import *
@@ -308,24 +307,26 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df2 : DataFrame with the emdat data 
     """
     df1 = cp.deepcopy(df_llm)
+    df1_no_split = cp.deepcopy(df_llm)
+    # df1["_row_id"] = np.arange(len(df1))
     df2 = cp.deepcopy(df_em_dat)
 
     # Map the hazard to emdat type 
     reverse_hazard_mapping_emdat = reverse_mapping(hazard_mapping_emdat) 
     df1["hazards_reclass"] = df1["hazards"].apply(lambda x: reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat)) ## ADD the reverse_haazrd_mapping
-    
+
     # Explode countries 
-    df1 = df1.explode("country").reset_index(drop=True)
+    df1 = df1.explode("iso3_code").reset_index(drop=True)
 
     # Rename and add columns 
-    df2 = df2.rename({'Country' : 'country_emdat'}, axis=1)
+    df2 = df2.rename({'ISO' : 'iso_emdat'}, axis=1)
 
     ## First occurence year
     # df_llm_em_dat = df2.merge(df1, left_on='Start Year', right_on = 'startYear', how='inner')
     df_llm_em_dat = df2.merge(
         df1,
-        left_on="country_emdat",
-        right_on="country",
+        left_on="iso_emdat",
+        right_on="iso3_code",
         how="inner"
     )
 
@@ -399,15 +400,27 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         .rename(columns={0: "chosen_DisNo"})
     )
 
-    df1 = df1.merge(appeal_to_disno, on="appealCode", how="left")
+    df1_no_split = df1_no_split.merge(appeal_to_disno, on="appealCode", how="left")
 
-    df_matched = df1.merge(
+    df_matched = df1_no_split.merge(
         df2,
         left_on="chosen_DisNo",
         right_on="DisNo.",
         how="left"
     )
 
+    # emdat_cols = df2.columns.tolist()  # or explicit list if you prefer
+
+    # # Group back the iso3_code
+    # group_cols = ["appealCode", "impactSubtype", "impactValue", 
+    #           "startYear", "startMonth", "startDay", 
+    #           "endYear", "endMonth", "endDay", ""]
+
+    # df_matched = (
+    #     df_matched
+    #     .groupby(group_cols, dropna=False, as_index=False)
+    #     .agg({"iso3_code": lambda x: sorted(set(x.dropna()))})
+    # )
     return df_matched, df_llm_em_dat
 
 def match_impact_values(df_llm_all_geo_linked, impactType): 
