@@ -203,5 +203,6 @@ def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
     extracted_data[flag_name] = np.nan
     extracted_data[flag_name] = extracted_data.apply(check_any_flag, axis=1)
     #drop individual flag columns
-    extracted_data = extracted_data.drop(columns=flag_columns)
+    flags_drop = [flag for flag in flag_columns if flag != flag_name]
+    extracted_data = extracted_data.drop(columns=flags_drop)
     return extracted_data
