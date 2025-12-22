@@ -334,8 +334,16 @@ def sanitize_and_merge_geometries(geometries):
 
     if not polys:
         return None
+    
+    # ---- Deduplicate geometries ----
+    unique = {}
+    for p in polys:
+        # normalize() ensures consistent vertex ordering
+        key = p.normalize().wkb
+        unique[key] = p
 
-    return MultiPolygon(polys)
+    return MultiPolygon(list(unique.values()))
+    # return MultiPolygon(polys)
 
 def get_continent(iso_code, world):
     try:
