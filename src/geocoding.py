@@ -564,7 +564,7 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
 
     return None
 
-def find_best_match(loc_clean, address, similarity_th, print_info):
+def find_best_match(loc_clean, address, similarity_th, print_info=False):
     """
     Match the best location from reverse geocode result
     """
@@ -1216,7 +1216,7 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
                 countries,
                 countries_iso,
                 similarity_th,
-                print_info=True
+                print_info
             )
     end = time.time()
     time_open = (end - start) / 60
