@@ -184,7 +184,7 @@ Impacts.register(
 
 Impacts.register(
     key="Recreation, Tourism, and Culture",
-    main_type="Economic Activity and Livelihood Production",
+    main_type="Economy & Culture",
     description="Tourist attractions and cultural sites impacted by a hazard.",
     keyword=r"\bRecreation, Tourism, and Culture\b",
     expected_unit="unknown",
@@ -193,7 +193,7 @@ Impacts.register(
 
 Impacts.register(
     key="Economy and Livelihood",
-    main_type="Economic Activity and Livelihood Production",
+    main_type="Economy & Culture",
     description="Any identified impact on the economy which cannot be associated with the previous impactSubtypes.",
     keyword=r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
     expected_unit="businesses",
@@ -314,7 +314,7 @@ Impacts.register(
 
 Impacts.register(
     key="DREF Allocation",
-    main_type="Economic Activity and Livelihood Production",
+    main_type="Economy & Culture",
     description="The DREF allocation for the event in CHF or other currency.",
     keyword=r"\bDREF Allocation\b",
     expected_unit=None,#"CHF", ! None to avoid automatic conversion
