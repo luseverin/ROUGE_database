@@ -159,10 +159,10 @@ class TestDataFrameHelpers(unittest.TestCase):
         self.assertEqual(listify_strings(np.nan), [])
 
     def test_format_output(self):
-        df = pd.DataFrame({"a": ["1", "2", None], "b": ["[1,2]", "x", None]})
-        out = format_output(df, num_cols=["a"], list_cols=["b"])
-        self.assertTrue(np.issubdtype(out["a"].dtype, np.floating))
-        self.assertIsInstance(out["b"].iloc[0], list)
+        df = pd.DataFrame({"impactValue": ["1", "2", None], "annotation": ["[1,2]", "x", None]})
+        out = format_output(df, num_cols=["impactValue"], list_cols=["annotation"])
+        self.assertTrue(np.issubdtype(out["impactValue"].dtype, np.floating))
+        self.assertIsInstance(out["annotation"].iloc[0], list)
 
 class TestImpactFunctions(unittest.TestCase):
     def test_parse_impact_value_precision(self):
@@ -268,7 +268,7 @@ class TestImpactFunctions(unittest.TestCase):
         })
         out_units = reclassify_units(x.copy())
         self.assertEqual("displaced", out_units["impactUnit"])  # reclassify_units collapses to keyword
-        self.assertTrue(out_units["flag_unit_reclass"])  # unit changed
+        self.assertTrue(out_units["flag_non-SI_unit_standardization"])  # unit changed
 
         out_subtype = reclass_subtype_from_unit(out_units.copy())
         self.assertEqual(out_subtype["impactSubtype"], "Displaced People")
@@ -286,12 +286,12 @@ class TestImpactFunctions(unittest.TestCase):
             else:
                 self.assertAlmostEqual(out["impactValueMin"], xexp["impactValueMin"].iloc[i], places=5)
             self.assertAlmostEqual(out["impactValueMax"], xexp["impactValueMax"].iloc[i], places=5)
-            self.assertTrue(out["flag_unit_standardization"])
+            self.assertTrue(out["flag_SI_unit_standardization"])
 
     def test_standardize_metric_units_invalid(self):
         x = pd.Series({"impactValue": 10, "impactUnit": "unknown", "impactValueMin": np.nan, "impactValueMax": np.nan})
         out = standardize_metric_units(x)
-        self.assertFalse(out["flag_unit_standardization"])
+        self.assertFalse(out["flag_SI_unit_standardization"])
 
     def test_force_unit_to_subtype_applies(self):
         # When unit is unknown and subtype is known, force unit to default subtype unit
@@ -396,7 +396,7 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(out["impactValue"], 10)
         self.assertEqual(out["impactValueMin"], 4)
         self.assertTrue(pd.isna(out["impactValueMax"]))
-        self.assertTrue(out["flag_reformat_unit"])
+        self.assertTrue(out["flag_remove_number_unit"])
 
         x = pd.Series({"impactValue": 5, "impactUnit": "two houses", "impactValueMin": 2, "impactValueMax": np.nan})
         out = replace_numbers_unit(x)
@@ -404,7 +404,7 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(out["impactValue"], 10)
         self.assertEqual(out["impactValueMin"], 4)
         self.assertTrue(pd.isna(out["impactValueMax"]))
-        self.assertTrue(out["flag_reformat_unit"])
+        self.assertTrue(out["flag_remove_number_unit"])
 
         x = pd.Series({"impactValue": 5, "impactUnit": "thousands people", "impactValueMin": 2, "impactValueMax": np.nan})
         out = replace_numbers_unit(x)
@@ -412,12 +412,12 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(out["impactValue"], 5000)
         self.assertEqual(out["impactValueMin"], 2000)
         self.assertTrue(pd.isna(out["impactValueMax"]))
-        self.assertTrue(out["flag_reformat_unit"])
+        self.assertTrue(out["flag_remove_number_unit"])
 
     def test_replace_numbers_unit_none(self):
         x = pd.Series({"impactValue": 5, "impactUnit": None, "impactValueMin": np.nan, "impactValueMax": np.nan})
         out = replace_numbers_unit(x)
-        self.assertFalse(out["flag_reformat_unit"])
+        self.assertFalse(out["flag_remove_number_unit"])
 
     def test_make_date(self):
         df = pd.DataFrame({
@@ -488,24 +488,24 @@ class TestAdditionalUnitFunctions(unittest.TestCase):
 
 class TestFormatOutput(unittest.TestCase):
     def test_format_output_numeric_conversion(self):
-        df = pd.DataFrame({"a": ["1", "2", None], "b": ["x", "y", "z"]})
-        out = format_output(df, num_cols=["a"])
-        self.assertTrue(np.issubdtype(out["a"].dtype, np.floating))
+        df = pd.DataFrame({"impactValue": ["1", "2", None], "b": ["x", "y", "z"]})
+        out = format_output(df, num_cols=["impactValue"])
+        self.assertTrue(np.issubdtype(out["impactValue"].dtype, np.floating))
 
     def test_format_output_list_conversion(self):
-        df = pd.DataFrame({"a": [1, 2, 3], "b": ["[1,2]", "x", "[]"]})
-        out = format_output(df, list_cols=["b"])
-        self.assertIsInstance(out["b"].iloc[0], list)
-        self.assertEqual(out["b"].iloc[0], [1, 2])
+        df = pd.DataFrame({"impactValue": [1, 2, 3], "annotation": ["[1,2]", "x", "[]"]})
+        out = format_output(df, list_cols=["annotation"])
+        self.assertIsInstance(out["annotation"].iloc[0], list)
+        self.assertEqual(out["annotation"].iloc[0], [1, 2])
 
     def test_format_output_mixed(self):
         df = pd.DataFrame({
-            "num": ["1", "2", None],
-            "list": ["['a','b']", "hello", None]
+            "impactValue": ["1", "2", None],
+            "annotation": ["['a','b']", "hello", None]
         })
-        out = format_output(df, num_cols=["num"], list_cols=["list"])
-        self.assertTrue(np.issubdtype(out["num"].dtype, np.floating))
-        self.assertIsInstance(out["list"].iloc[0], list)
+        out = format_output(df, num_cols=["impactValue"], list_cols=["annotation"])
+        self.assertTrue(np.issubdtype(out["impactValue"].dtype, np.floating))
+        self.assertIsInstance(out["annotation"].iloc[0], list)
 
 
 class TestPostProcessingPipeline(unittest.TestCase):
@@ -584,7 +584,7 @@ class TestPostProcessingPipeline(unittest.TestCase):
         # Row 1: houses with number extraction
         self.assertEqual(df.loc[1, "impactUnit"], "homes")
         self.assertEqual(df.loc[1, "impactValue"], 100)  # 50 * 2
-        self.assertTrue(df.loc[1, "flag_reformat_unit"])
+        self.assertTrue(df.loc[1, "flag_remove_number_unit"])
 
         # Row 2: currency conversion to EUR
         self.assertEqual(df.loc[2, "impactUnit"], "EUR")
@@ -593,7 +593,7 @@ class TestPostProcessingPipeline(unittest.TestCase):
 
         # Row 3: metric unit standardization
         self.assertEqual(df.loc[3, "impactUnit"], "km**2 of crop production and forestry")
-        self.assertTrue(df.loc[3, "flag_unit_standardization"])
+        self.assertTrue(df.loc[3, "flag_SI_unit_standardization"])
 
         # Verify hazard reclassification
         self.assertIn("Flood", df.loc[0, "hazards"])
