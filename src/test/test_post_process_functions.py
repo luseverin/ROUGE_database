@@ -533,10 +533,7 @@ class TestPostProcessingPipeline(unittest.TestCase):
         })
 
         # Step 1: Format output
-        num_cols = ["impactValue", "impactValueMin", "impactValueMax",
-                    "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
-        list_cols = ["country", "location", "hazards"]
-        df = format_output(sample_data.copy(), num_cols=num_cols, list_cols=list_cols)
+        df = format_output(sample_data.copy())
 
         # Step 2: Parse impact value precision
         df = df.apply(parse_impact_value_precision, axis=1)
@@ -609,10 +606,10 @@ class TestPostProcessingPipeline(unittest.TestCase):
     def test_pipeline_with_quali_data(self):
         """Test pipeline with qualitative data (no values)"""
         sample_data = pd.DataFrame({
-            "impactValue": [None, None],
-            "impactValueMin": [None, None],
-            "impactValueMax": [None, None],
-            "impactUnit": ["people", "structures"],
+            "impactValue": [None, np.nan],
+            "impactValueMin": [None, np.nan],
+            "impactValueMax": [None, np.nan],
+            "impactUnit": ["people", np.nan],
             "impactSubtype": ["Displaced People", "Damaged Structures"],
             "country": ["['Haiti']", "['Bangladesh']"],
             "location": ["['Port-au-Prince']", "['Dhaka']"],
@@ -627,16 +624,45 @@ class TestPostProcessingPipeline(unittest.TestCase):
         })
 
         # Run through pipeline
-        num_cols = ["impactValue", "impactValueMin", "impactValueMax",
-                    "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay"]
-        list_cols = ["country", "location", "hazards"]
-        df = format_output(sample_data.copy(), num_cols=num_cols, list_cols=list_cols)
+        df = format_output(sample_data.copy())
+
+        # Step 2: Parse impact value precision
         df = df.apply(parse_impact_value_precision, axis=1)
+
+        # Step 3: Label quanti/quali
         df = df.apply(label_quanti_quali, axis=1)
+
+        # Step 4: Reclassify impact subtypes
         df = df.apply(reclassify_impact_subtype, axis=1)
-        df = df.apply(reclassify_hazard, axis=1)
+
+        # Step 5: Reclassify hazards
+        df = df.apply(reclassify_hazard, hazard_kw_reclass=hazard_kw_reclass, axis=1)
+
+        # Step 6: Replace numbers in units
+        df = df.apply(replace_numbers_unit, axis=1)
+
+        # Step 7: Standardize metric units
+        df = df.apply(standardize_metric_units, axis=1)
+
+        # Step 8: Harmonize units
         df = df.apply(harmonize_units, axis=1)
+
+        # Step 9: Assign unit type
+        df = df.apply(assign_unit_type, axis=1)
+
+        # Step 10: Convert units (families -> people)
+        df = df.apply(convert_unit, axis=1)
+
+        # Step 11: Reclassify units
+        df = df.apply(reclassify_units, axis=1)
+
+        # Step 12: Normalize people units
         df = df.apply(normalize_people_unit, axis=1)
+
+        # Step 13: Convert monetary units
+        df = df.apply(convert_monetary_units, axis=1)
+
+        #df.loc[df["quanti"] == "quali", "impactUnit"] = "null"
 
         # Verify all rows are labeled as quali
         self.assertTrue(all(df["quanti"] == "quali"))
@@ -644,6 +670,10 @@ class TestPostProcessingPipeline(unittest.TestCase):
         # Verify subtypes are preserved
         self.assertEqual(df.loc[0, "impactSubtype"], "Displaced People")
         self.assertEqual(df.loc[1, "impactSubtype"], "Unknown")  # 'Damaged Structures' not in keywords
+
+        #Verify units are processed correctly
+        self.assertEqual(df.loc[0, "impactUnit"], "people")
+        self.assertEqual(df.loc[1, "impactUnit"], "null")
 
 if __name__ == "__main__":
     unittest.main()
