@@ -1,17 +1,12 @@
 import pandas as pd
 import numpy as np
-import ast
 import geopy as gpy
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-import itertools
 import time
-import pycountry
-import langcodes
 from copy import deepcopy
 import geopandas as gpd
 from functools import partial
-import concurrent.futures
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from shapely.geometry import Point, Polygon, MultiPolygon, GeometryCollection
 from shapely.ops import unary_union
@@ -21,13 +16,10 @@ from src.data import *
 import os
 import tempfile
 import shutil
-from urllib.parse import quote
 import requests
 from collections import defaultdict
-import datetime as dt
 import gc
 import logging
-import multiprocessing as mp
 import pandarallel
 import traceback
 import pprint
@@ -41,13 +33,7 @@ from joblib import dump
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
-#Countries
-import pycountry
-import re
-
 # Add Geolocation and spatial information (region from cities)
-from geopy.extra.rate_limiter import RateLimiter
-from rapidfuzz.distance import Levenshtein
 from src.client import NOMINATIM_USER_AGENT
 from src.geocoding_utils import *
 
@@ -73,6 +59,35 @@ _cache_lock = threading.Lock()
 
 #### Preprocessing of the location
 def identify_robust_country(df_geo) :
+    """
+    Identify unique location-country pairs and map them to country names and ISO codes.
+
+    Iterates through a GeoDataFrame with location and country information to:
+    - Ensure all missing countries or ISO codes are replaced with keyword-based fallbacks.
+    - Normalize entries to be iterable.
+    - Build unique location-country pairs.
+    - Maintain mappings of each location-country pair to sets of country names and ISO codes.
+
+    Parameters
+    ----------
+    df_geo : pd.DataFrame
+        DataFrame containing at least the columns:
+        - 'country': country names
+        - 'country_iso3': ISO alpha-3 country codes
+        - 'country_kw': fallback country names
+        - 'country_iso3_kw': fallback ISO codes
+        - 'location': specific location names within countries
+
+    Returns
+    -------
+    tuple
+        - unique_loc_with_country : list of tuple
+            List of unique (location, country) pairs.
+        - unique_locations_countries : defaultdict(set)
+            Dictionary mapping each (location, country) pair to a set of country names.
+        - unique_locations_countries_iso : defaultdict(set)
+            Dictionary mapping each (location, country) pair to a set of ISO alpha-3 codes.
+    """
     unique_loc_with_country = {}
     unique_locations_countries = defaultdict(set)
     unique_locations_countries_iso = defaultdict(set)
@@ -81,12 +96,6 @@ def identify_robust_country(df_geo) :
         # Handle countries
         countries = row["country"]
         isos = row["country_iso3"]
-
-        # isos_is_missing = (
-        #     isos is None or
-        #     (isinstance(isos, float) and pd.isna(isos)) or
-        #     (isinstance(isos, (list, tuple)) and (len(isos) == 0 or all(x is None for x in isos)))
-        # )
 
         isos_is_missing = (
             isos is None or
@@ -99,11 +108,6 @@ def identify_robust_country(df_geo) :
             ))
         )
 
-        # countries_is_missing = (
-        #     countries is None or
-        #     (isinstance(countries, float) and pd.isna(countries)) or
-        #     (isinstance(countries, (list, tuple)) and len(countries) == 0)
-        # )
         countries_is_missing = (
             countries is None or
             (isinstance(countries, float) and pd.isna(countries)) or
@@ -140,15 +144,12 @@ def identify_robust_country(df_geo) :
             # Multiple locations in the row
             for loc in locations:
                 for c, iso in zip(countries, isos):
-
-                    # --- NEW KEY (loc, country) ---
                     key = (loc, c)
                     unique_loc_with_country[key] = True
 
                     unique_locations_countries[key].add(c)
                     unique_locations_countries_iso[key].add(iso)
-    # unique_locations_countries = dict(unique_locations_countries)
-    # unique_locations_countries_iso = dict(unique_locations_countries_iso)
+
     unique_loc_with_country = list(unique_loc_with_country.keys())
     return unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso
 
@@ -406,52 +407,32 @@ def fallback_country_union(gdf_file, countries, iso_countries):
     LOGGER.error("[gather fallback_country_union fallback] Fail to find country's polygons, %s, %s", countries, iso_countries)
     return empty_df
 
-# def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
-#     """
-#     Downgrades all polygons to the lowest admin level available
-#     """
-#     geometries = []
-#     locations_names = []
-#     layer_name = f"ADM_{lowest_level}"
-
-#     for _, row in df_locations.iterrows():
-#         try:
-#             if row["finest_level"] == lowest_level:
-#                 geom = clean_geometry(row["geometry"])
-#                 if geom and not geom.is_empty :
-#                     geometries.append(geom)
-#                     locations_names.append(row["locationPolygon"])
-#             else:
-#                 conditions = (gpd_files[layer_name]["ADMIN_0"] == row["ADMIN_0"])
-#                 if lowest_level >= 1:
-#                     conditions &= gpd_files[layer_name]["ADMIN_1"] == row["ADMIN_1"]
-#                 if lowest_level == 2:
-#                     conditions &= gpd_files[layer_name]["ADMIN_2"] == row["ADMIN_2"]
-#                 matches = gpd_files[layer_name].loc[conditions]
-
-#                 geometries.extend(matches["geometry"].tolist())
-#                 # locations_names.extend(matches[f"ADMIN_{lowest_level}"].tolist())
-#                 locations_names.append(row["locationPolygon"])
-#         except Exception as e:
-#             LOGGER.error("[gather admin fallback] Error: %s", e)
-
-#     # Merge the polygons
-#     if not geometries:
-#         return None, []
-
-#     merged_geometry = sanitize_and_merge_geometries(geometries)
-
-#     if not merged_geometry or merged_geometry.is_empty:
-#         return None, locations_names
-
-#     return merged_geometry, locations_names
-
 #### Queries nominatim and find best match
 
 def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=10):
     """
-    Make nominatim query with robust error handling
-    From location and country, return a OSM object
+    Query Nominatim (OpenStreetMap) for a location with robust error handling.
+
+    Attempts to retrieve a geocoded location object based on a location name and country.
+    Implements retry logic with exponential backoff to handle transient network or service errors.
+
+    Parameters
+    ----------
+    location : str
+        Name of the location (city, region, etc.).
+    country : str
+        Name of the country.
+    max_retries : int, optional
+        Maximum number of retry attempts in case of timeout or service errors (default=2).
+    initial_delay : float, optional
+        Initial delay (seconds) before retry, doubles with each attempt (default=1).
+    timeout : float, optional
+        Timeout for each Nominatim request in seconds (default=10).
+
+    Returns
+    -------
+    geopy.location.Location or None
+        Geocoded location object if successful, otherwise None.
     """
     # Initialize geolocator with longer timeout
     geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
@@ -491,13 +472,36 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
 
 def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=10, zoom=13):
     """
-    Parallel-safe reverse geocode with SQLite caching.
-    """
+    Reverse geocode latitude/longitude coordinates with caching and retry logic.
 
+    Checks a local SQLite cache before querying Nominatim. If no cached result is found,
+    performs a reverse geocoding query with retry and exponential backoff.
+    Stores successful results in the cache for future use.
+
+    Parameters
+    ----------
+    coords : tuple of float
+        Latitude and longitude coordinates (lat, lon).
+    lang : str
+        Language code for the returned address.
+    max_retries : int, optional
+        Maximum number of retry attempts (default=2).
+    initial_delay : float, optional
+        Initial delay for retries in seconds (default=1).
+    timeout : float, optional
+        Timeout for each Nominatim request (default=10).
+    zoom : int, optional
+        Level of detail for reverse geocoding (default=13).
+
+    Returns
+    -------
+    geopy.location.Location or None
+        Reverse geocoded location object if successful, otherwise None.
+    """
     lat, lon = float(coords[0]), float(coords[1])
 
     # 1. Check cache first
-    with _cache_lock:  # Lock needed for SQLite SELECT when multiple writers exist
+    with _cache_lock: 
         row = _cur.execute("""
             SELECT result FROM reverse_cache
             WHERE lat=? AND lon=? AND lang=? AND zoom=?
@@ -508,7 +512,7 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
         try:
             return gpy.location.Location(**json.loads(row[0]))
         except Exception:
-            pass  # If reconstruction fails, fall back to Nominatim
+            pass 
 
     # 2. Create geolocator
     geolocator = gpy.geocoders.Nominatim(
@@ -567,7 +571,34 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
 
 def find_best_match(loc_clean, address, similarity_th, print_info=False):
     """
-    Match the best location from reverse geocode result
+    Identify the best matching location from a reverse geocode address.
+
+    Compares a cleaned location string against the address components returned by Nominatim.
+    Uses a rotated Levenshtein similarity to find the best match above a specified threshold.
+    Prioritizes higher administrative levels and exact matches.
+
+    Parameters
+    ----------
+    loc_clean : str
+        Cleaned location string to match.
+    address : dict
+        Address dictionary from Nominatim (contains administrative levels and names).
+    similarity_th : float
+        Minimum similarity threshold to consider a match (0-1 scale).
+    print_info : bool, optional
+        If True, logs matching attempts and similarity scores (default=False).
+
+    Returns
+    -------
+    best_info : dict
+        Information about the best match, including keys:
+        - 'sim': similarity score
+        - 'admin_level': administrative level
+        - 'admin_field': field name in address
+        - 'name': matched name
+        - 'key': original address key
+    best_sim : float
+        Similarity score of the best match.
     """
     best_sim = 0
     best_info = {"admin_level":0}
@@ -598,7 +629,7 @@ def find_best_match(loc_clean, address, similarity_th, print_info=False):
                         }
                         return best_info, best_sim
 
-                    if sim >= similarity_th and sim > best_sim : #and admin_level>=best_info["admin_level"]:
+                    if sim >= similarity_th and sim > best_sim :
                         found = True
                         best_sim = sim
                         best_info = {
@@ -634,7 +665,7 @@ def find_best_match(loc_clean, address, similarity_th, print_info=False):
                 }
                 return best_info, best_sim
 
-            elif sim >= similarity_th and sim > best_sim :#and admin_level>=best_info["admin_level"]:
+            elif sim >= similarity_th and sim > best_sim :
                 best_sim = sim
                 best_info = {
                     "sim": sim,
@@ -648,7 +679,27 @@ def find_best_match(loc_clean, address, similarity_th, print_info=False):
 #### To save files
 
 def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
-    """Save to a temporary file then rename (atomic operation)"""
+    """
+    Save a GeoDataFrame to a GeoPackage in an atomic operation.
+
+    Writes to a temporary file first, then moves it to the target location to 
+    avoid partial writes if the process is interrupted. Ensures existing files 
+    are safely replaced.
+
+    Parameters
+    ----------
+    gdf : geopandas.GeoDataFrame
+        GeoDataFrame to be saved.
+    target_path : str
+        Full file path to save the GeoPackage.
+    layer_name : str, optional
+        Name of the layer inside the GeoPackage (default is "multipolygons").
+
+    Returns
+    -------
+    bool
+        True if the save was successful, False otherwise.
+    """
     temp_dir = tempfile.mkdtemp()
     try:
         # Save to temp file
@@ -672,7 +723,27 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
             pass
 
 def save_df_geo(df_geo, save_path, res_savename) :
-    """Save a GeoDataFrame to a GeoPackage file with standardized CRS and naming."""
+    """
+    Save a GeoDataFrame to a GeoPackage file with standardized CRS and column handling.
+
+    Converts columns containing lists to individual entries, ensures the 
+    geometry column is correctly set, and sets CRS to EPSG:4326. 
+    Uses `atomic_gpkg_save` to safely write the file.
+
+    Parameters
+    ----------
+    df_geo : pandas.DataFrame or geopandas.GeoDataFrame
+        DataFrame containing geometry and associated data.
+    save_path : str
+        Directory path where the GeoPackage should be saved.
+    res_savename : str
+        File name (without extension) for the saved GeoPackage.
+
+    Returns
+    -------
+    None
+        Errors are logged if saving fails.
+    """
     save_df = df_geo.copy()
     save_df = delistify_cols(save_df)
     save_gdf = gpd.GeoDataFrame(save_df, geometry='geometry')
@@ -692,8 +763,30 @@ def save_df_geo(df_geo, save_path, res_savename) :
 ##### Functions for nominatim
 
 def find_best_nomin(location, countries, countries_iso, similarity_th, print_info=False) :
-    """Query Nominatim for a location across candidate countries and
-    return the best matching result with similarity evaluation."""
+    """
+    Query Nominatim for a location across candidate countries and return 
+    the best matching result based on similarity evaluation.
+
+    Parameters
+    ----------
+    location : str
+        Location name to query.
+    countries : list of str
+        Candidate country names.
+    countries_iso : list of str
+        ISO3 codes corresponding to `countries`.
+    similarity_th : float
+        Minimum similarity threshold to consider a match.
+    print_info : bool, optional
+        Whether to log detailed matching information (default: False).
+
+    Returns
+    -------
+    nom_result : geopy.location.Location or None
+        The raw Nominatim query result.
+    best_result : dict or None
+        Dictionary containing best match info (coordinates, country, similarity, etc.).
+    """
     best_result = None
     best_sim = 0
 
@@ -731,8 +824,27 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
 ##### Convert individual locations to polygons
 
 def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
-    """Attempt alternative strategies to match an administrative polygon
-    when the direct lookup fails (alternative Nominatim keys, language-based fallbacks)."""
+    """
+    Attempt alternative strategies to match an administrative polygon 
+    when direct lookup fails, including alternative Nominatim keys and 
+    language-based reverse geocoding.
+
+    Parameters
+    ----------
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each admin level.
+    best_nomin : geopy.location.Location
+        Best Nominatim location found.
+    best_result : dict
+        Info about best matching location.
+    adm_lev : int
+        Administrative level to match (e.g., 0, 1, 2).
+
+    Returns
+    -------
+    geopandas.GeoDataFrame or None
+        GeoDataFrame corresponding to the matched polygon, or None if not found.
+    """
     # Strategy 1: Alternative nominatim keys
     try :
         fallback_address = best_nomin.raw.get("address", {})
@@ -761,7 +873,23 @@ def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
 
 def try_nominatim_key_fallback(gdf_file, best_nomin, best_result, adm_lev):
     """
-    Strategy 1 only: try alternative Nominatim keys.
+    Attempt to match polygon using alternative Nominatim keys only.
+
+    Parameters
+    ----------
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each admin level.
+    best_nomin : geopy.location.Location
+        Best Nominatim location found.
+    best_result : dict
+        Info about best matching location.
+    adm_lev : int
+        Administrative level to match.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame or None
+        GeoDataFrame corresponding to the matched polygon, or None if not found.
     """
     try:
         fallback_address = best_nomin.raw.get("address", {})
@@ -786,8 +914,23 @@ def try_nominatim_key_fallback(gdf_file, best_nomin, best_result, adm_lev):
 
 def try_translate_language_fallback(gdf_file, best_nomin, best_result, adm_lev):
     """
-    Strategy 2 only: language-based reverse geocoding.
-    MUST BE RUN SEQUENTIALLY (uses Nominatim API)
+    Attempt to match polygon using language-based reverse geocoding.
+
+    Parameters
+    ----------
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each admin level.
+    best_nomin : geopy.location.Location
+        Best Nominatim location found.
+    best_result : dict
+        Info about best matching location.
+    adm_lev : int
+        Administrative level to match.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame or None
+        GeoDataFrame corresponding to the matched polygon, or None if not found.
     """
     try:
         language = LANGUAGES.get(
@@ -825,7 +968,25 @@ def try_translate_language_fallback(gdf_file, best_nomin, best_result, adm_lev):
         return None
 
 def try_geojson_fallback(gdf_file, best_nomin, best_result, location):
-    """Fallback using Nominatim's geojson geometry data"""
+    """
+    Fallback strategy using Nominatim's geojson geometry data.
+
+    Parameters
+    ----------
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each admin level.
+    best_nomin : geopy.location.Location
+        Best Nominatim location found.
+    best_result : dict
+        Info about best matching location.
+    location : str
+        Original location string.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame or None
+        GeoDataFrame corresponding to the matched polygon, or None if not found.
+    """
     if "geojson" not in best_nomin.raw.keys():
         return None
 
@@ -852,7 +1013,28 @@ def try_geojson_fallback(gdf_file, best_nomin, best_result, location):
         return None
 
 def prepare_result_df(df_gpd, best_result, location, country_flag=0, osm_flag=0):
-    """Enrich a matched polygon GeoDataFrame row with geocoding metadata and location info."""
+    """
+    Enrich a matched polygon GeoDataFrame row with geocoding metadata 
+    and original location information.
+
+    Parameters
+    ----------
+    df_gpd : geopandas.GeoDataFrame
+        GeoDataFrame containing the polygon to enrich.
+    best_result : dict
+        Info about best matching location.
+    location : str
+        Original location string.
+    country_flag : int, optional
+        Flag indicating if country-level geocoding was used (default: 0).
+    osm_flag : int, optional
+        Flag indicating if OSM-based geocoding was used (default: 0).
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        Enriched GeoDataFrame with metadata columns added.
+    """
     return df_gpd.assign(
         finest_level=best_result["admin_level"],
         locationOsm=best_result["name"],
@@ -863,8 +1045,32 @@ def prepare_result_df(df_gpd, best_result, location, country_flag=0, osm_flag=0)
     )
 
 def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best_result, countries, iso_countries, print_info=False):
-    """Match a Nominatim geocoding result to the best administrative boundary polygon,
-    using fallbacks when necessary, and return the corresponding GeoDataFrame row."""
+    """
+    Match a Nominatim geocoding result to the best administrative boundary polygon,
+    using fallback strategies when necessary.
+
+    Parameters
+    ----------
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each administrative level (e.g., ADM_0, ADM_1, ADM_2).
+    location : str
+        Original location string.
+    best_nomin : geopy.location.Location
+        The Nominatim query result.
+    best_result : dict
+        Dictionary containing best match info from Nominatim.
+    countries : list of str
+        Candidate countries for the location.
+    iso_countries : list of str
+        ISO3 codes corresponding to the candidate countries.
+    print_info : bool, optional
+        Whether to log detailed info (default: False).
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        Single row GeoDataFrame corresponding to the matched polygon, enriched with metadata.
+    """
     try:
         step = "top"
         if not best_result:
@@ -898,7 +1104,6 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
             if df_gpd is None:
                 step = "try_fallback_strategies"
                 df_gpd = try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev)
-                # df_gpd = try_nominatim_key_fallback(gdf_file, best_nomin, best_result, adm_lev)
 
             # If still not found → try geojson fallback
             if df_gpd is None:
@@ -924,8 +1129,29 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
         return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
 
 def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gdf_file, print_info=False, max_workers=None):
-    """Run geocoding for multiple locations in parallel using ThreadPoolExecutor,
-    combining results into a single DataFrame."""
+    """
+    Run geocoding for multiple locations in parallel using ThreadPoolExecutor.
+
+    Parameters
+    ----------
+    nom_loc_dict : dict
+        Mapping of (location, country) → (best_nomin, best_result).
+    unique_locations_countries : dict
+        Mapping of (location, country) → list of candidate countries.
+    unique_locations_countries_iso : dict
+        Mapping of (location, country) → list of ISO3 codes.
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each administrative level.
+    print_info : bool, optional
+        Whether to log detailed info (default: False).
+    max_workers : int or None, optional
+        Number of parallel threads to use (default: None, uses system default).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Combined DataFrame of geocoded locations.
+    """
     results = []
 
     # run in parallel
@@ -945,7 +1171,7 @@ def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locati
         }
 
         # for future in futures:
-        for future in tqdm(futures, desc="Geocoding locations"): # Version with prints from the function called
+        for future in tqdm(futures, desc="Geocoding locations"):
             #location = futures[future]
             try:
                 df = future.result()
@@ -963,9 +1189,28 @@ def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locati
 
 ##### Associate rows with multiple locations to unique polygons
 def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split_lowest_levels=True, polygon_source="GAUL") :
-    """Associate one row of locations with administrative boundary polygons,
-    merging geometries to the lowest (or multiple) admin levels and returning
-    a GeoDataFrame row with enriched metadata."""
+    """
+    Associate one row of locations with administrative boundary polygons,
+    merging geometries to the lowest (or multiple) admin levels.
+
+    Parameters
+    ----------
+    row : pandas.Series
+        A row containing location and country information.
+    df_geo_individual_locs : geopandas.GeoDataFrame
+        Individual geocoded location polygons.
+    gdf_file : dict
+        Dictionary of GeoDataFrames for each administrative level.
+    split_lowest_levels : bool, optional
+        Whether to split geometries across all admin levels from lowest to highest (default: True).
+    polygon_source : str, optional
+        Source of administrative polygons (default: "GAUL").
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        GeoDataFrame with merged geometries, enriched metadata, and impact fields.
+    """
     if row["location"]:  # check if list is non-empty
         df_locations = df_geo_individual_locs.loc[
             df_geo_individual_locs["location"].isin(row["location"])
@@ -1020,7 +1265,6 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         layer_name = f"ADM_{merge_level}"
         df_location_subset = df_locations.loc[df_locations["finest_level"]>=merge_level]
         merged_geometry = sanitize_and_merge_geometries(df_location_subset["geometry"])
-        # merged_geometry, location_names = gather_to_lowest_admin(df_location_subset, gdf_file, merge_level)
 
         flag_country_count = (
             df_location_subset
@@ -1041,7 +1285,6 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_row_append["flag_geocoding_country"] = flag_country_count
         df_row_append["flag_geocoding_osm"] = flag_osm_count
         df_row_append["locationOsm"] = [df_location_subset["locationOsm"].unique().tolist()]
-        # df_row_append["locationPolygon"] = [location_names]#[df_location_subset["locationPolygon"].unique().tolist()]
         df_row_append["locationPolygon"] = [df_location_subset["locationPolygon"].tolist()]
 
         # For the codes, take the list
@@ -1098,7 +1341,7 @@ def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowes
         }
 
         # for future in futures:
-        for future in tqdm(futures, desc="Merging locations"): ### VERSION WITH TRACKING PRINT INFORMATIONS
+        for future in tqdm(futures, desc="Merging locations"):
             i = futures[future]
             try:
                 df = future.result()
