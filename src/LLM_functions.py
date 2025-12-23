@@ -62,18 +62,6 @@ def add_key_value_pairs(data, new_pairs):
 
     return data
 
-#def check_result_json(result_json, label=None):
-#    try:
-#        answer = json.loads(result_json.replace("\n", ""))
-#        if label:
-#            answer = answer[label]
-#    except Exception as e:
-#        LOGGER.error("An unexpected error occurred: %s", e)
-#        return None
-#    if not answer:
-#        LOGGER.info("JSON is empty: %s", result_json)
-#    return answer
-
 def build_messages(prompt, prompt_system=None, prompt_assistant=None):
     """Build messages for OpenAI API based on (user) prompt, system prompt and assistant prompt"""
 
@@ -150,7 +138,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
         LOGGER.error("[JSON_REPAIR ERROR] Falling back to raw content. Error: %s", e)
         # Try a simpler parse: extract JSON substring or force minimal cleanup
         try:
-            json_str = extract_json_block(raw_text)  # custom helper to extract {...} or [...]
+            json_str = extract_json_block(raw_text) 
             response_content = json.loads(json_str)
         except Exception as e2:
             LOGGER.error("[SECONDARY JSON LOAD FAILURE] %s", e2)
@@ -159,7 +147,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
     #response_content = json_repair.loads(response.choices[0].message.content)
     try:
         structured_response = output_model.model_validate(response_content)
-        return response, structured_response.model_dump(), nb_valid_error  # Return as Python object
+        return response, structured_response.model_dump(), nb_valid_error 
     except ValidationError as e:
         nb_valid_error += 1
         LOGGER.info("Validation Error: %s", e)
@@ -180,7 +168,6 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
             return get_model_response_retry(messages, output_model, nb_valid_error, trials, trials_limit, **kwargs)
         else:
             return response, response_content, nb_valid_error
-
 
 def get_model_response_retry_continue(prompt_user, output_model, prompt_system=None, prompt_assistant=None, max_rounds=5, **groq_kwargs):
     """Get continued model response reprompting the model with the previous response. Stops when max_rounds is reached or now new (not duplicate)
@@ -215,7 +202,7 @@ def get_model_response_retry_continue(prompt_user, output_model, prompt_system=N
         else:
             nb_extracted_impacts[i] = 0
             break
-        full_response_raw+=raw_response.choices[0].message.content#keep raw output so it does not mess with formating instructions
+        full_response_raw+=raw_response.choices[0].message.content #keep raw output so it does not mess with formating instructions
         full_response_formatted.extend(structured_response)
 
         # Add assistant message and user prompt for continuation
