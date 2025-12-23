@@ -30,11 +30,22 @@ mapping_impact_type = {"Affected People" : {"ifrc_monty" : "affected_total", "if
 ### LABELLED AND LLM DATAFRAMES
 def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Consolidates impact values into a single column 'impactValue_final' with priority:
-    1. impactValue
-    2. impactValueMin
-    3. impactValueMax
-    Drops rows where all three are missing.
+    Consolidate quantitative impact values into a single column.
+
+    Combines the columns `impactValue`, `impactValueMin`, and `impactValueMax`
+    into a single column `impactValue_final`, using a priority order.
+    Rows without any available impact value are removed.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing impact value columns.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with a consolidated `impactValue_final` column and
+        rows with missing values removed.
     """
     df = df.copy()
 
@@ -51,7 +62,19 @@ def consolidate_impact_value(df: pd.DataFrame) -> pd.DataFrame:
 
 def consolidate_startYear(row):
     """
-    If no startYear has been detected, take the year of the report
+    Ensure a valid start year for an impact record.
+
+    If `startYear` is missing, the year is inferred from the report date.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a DataFrame containing date information.
+
+    Returns
+    -------
+    int
+        Start year of the impact event.
     """
     # Check if 'startYear' exists in row
     if 'startYear' in row and pd.isna(row['startYear']):
@@ -64,8 +87,20 @@ def consolidate_startYear(row):
 
 def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Converts the 'locationLowestAdmin' column (format 'ADM_0')
-    into a numeric column 'locationLowestAdminNum'.
+    Convert administrative level identifiers to numeric values.
+
+    Extracts the numeric administrative level from the
+    `locationLowestAdmin` column (e.g. 'ADM_0') and stores it as a float.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing a `locationLowestAdmin` column.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with an additional `locationLowestAdminNum` column.
     """
     df = df.copy()
     df["locationLowestAdminNum"] = (
@@ -78,17 +113,24 @@ def add_location_admin_num(df: pd.DataFrame) -> pd.DataFrame:
 
 def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
     """
-    Groups quantitative impacts at the country level.
+    Aggregate quantitative impacts at the country or coarser admin level.
 
-    Rules:
-    - If rows exist with locationLowestAdminNum == 0:
-        * Sum impactValue_final
-        * Concatenate unique values of location, locationOsm, locationGaul
-        * Union geometries
-        * Keep other columns constant (take first non-null)
-    - Other wise : 
-        * Take the highest reported value 
-        * Add other impacts if the the intersection of the polygons is null 
+    Groups impact records by appeal and subtype, prioritizing country-level
+    reports (ADM 0). If unavailable, subnational data are aggregated based
+    on the specified coarser administrative level.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing quantitative impact records.
+    ADM_min : int, default=0
+        Coarser administrative level allowed for aggregation.
+
+    Returns
+    -------
+    pd.DataFrame
+        Aggregated DataFrame with merged impact values, locations,
+        and geometries.
     """
     df_output = []
 
@@ -165,16 +207,53 @@ def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
     return pd.DataFrame(df_output)
 
 def clean_group(df_impact, ADM_min=0) :
+    """
+    Clean and aggregate impact data into a standardized format.
+
+    Applies date normalization, administrative level parsing, value
+    consolidation, and spatial aggregation to produce a clean,
+    country-level quantitative impact dataset.
+
+    Parameters
+    ----------
+    df_impact : pd.DataFrame
+        Raw impact DataFrame from labelled or LLM-generated outputs.
+    ADM_min : int, default=0
+        Minimum administrative level allowed for aggregation.
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned and aggregated impact DataFrame.
+    """
     df_output = df_impact.copy()
     df_output['startYear'] = df_output.apply(consolidate_startYear, axis=1)
     df_output = add_location_admin_num(df_output)
     df_output = consolidate_impact_value(df_output)
-    df_output = group_quanti_country_level(df_output, ADM_min=0)
+    df_output = group_quanti_country_level(df_output, ADM_min=ADM_min)
     return df_output
 
 ## IFRC_GO
 
 def clean_impact_values(row):
+    """
+    Extract and harmonize impact values from IFRC GO source columns.
+
+    Iterates over predefined impact types and data sources to identify
+    the first available IFRC GO impact value in a row. The extracted
+    value is assigned to the standardized impact type column, and the
+    corresponding source is recorded.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of the IFRC GO DataFrame containing raw impact value columns.
+
+    Returns
+    -------
+    pd.Series
+        Row with standardized impact values and source annotations.
+    """
     for impact_type, mapping in mapping_impact_type.items():
         for impact_source, prefix in ifrc_go_impact_source.items():
             if mapping["ifrc_go"] : 
@@ -187,17 +266,26 @@ def clean_impact_values(row):
     return row
 
 def open_clean_ifrc_go() :
+    """
+    Load and clean IFRC GO impact data.
+
+    Reads the IFRC GO dataset, harmonizes impact values, standardizes
+    column names and types, and filters the data to include only DREF
+    reports related to natural disasters.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned IFRC GO DataFrame with standardized impact information.
+    """
     df_ifrc_go = pd.read_csv(DATA_EXTERNAL_SOURCE / 'ifrc_go_all.csv')
 
     #Retrieve impact value
     df_ifrc_go = df_ifrc_go.apply(clean_impact_values, axis=1)
-
-    # #Remove extra row
-    # raw_cols = [
-    # prefix + mapping["ifrc_go"]
-    # for prefix in ifrc_go_impact_source.values()
-    # for mapping in mapping_impact_type.values()]
-    # df_ifrc_go = df_ifrc_go.drop(columns=[c for c in raw_cols if c in df_ifrc_go.columns])
 
     #Rename columns
     df_ifrc_go = df_ifrc_go.rename({"appeals_code" : "appealCode"}, axis=1)
@@ -214,6 +302,24 @@ def open_clean_ifrc_go() :
 ## IFRC_MONTY
 
 def open_clean_ifrc_monty(df_ifrc_go) :
+    """
+    Load and clean IFRC Monty impact data and link it to IFRC GO appeals.
+
+    Reads the IFRC Monty dataset, extracts and matches event identifiers
+    to IFRC GO records to recover appeal codes, and harmonizes impact
+    type labels using a predefined mapping.
+
+    Parameters
+    ----------
+    df_ifrc_go : pd.DataFrame
+        Cleaned IFRC GO DataFrame containing appeal identifiers.
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned IFRC Monty DataFrame with standardized impact types and
+        associated appeal codes.
+    """
     df_ifrc_monty = pd.read_csv(DATA_EXTERNAL_SOURCE / 'ifrc_monty_all.csv')
 
     #Use id and df_ifrc_go to fing appealCode
@@ -241,6 +347,24 @@ def open_clean_ifrc_monty(df_ifrc_go) :
 ## EMDAT 
 
 def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
+    """
+    Load and preprocess EM-DAT disaster records.
+
+    Reads an EM-DAT Excel extract, filters disasters to the hazards of
+    interest, and constructs start and end dates from year, month, and
+    day components, filling missing months and days with January 1st.
+
+    Parameters
+    ----------
+    file_name : str, optional
+        Name of the EM-DAT Excel file to load, by default
+        'public_emdat_custom_request_2025-08-19.xlsx'.
+
+    Returns
+    -------
+    pd.DataFrame
+        Preprocessed EM-DAT DataFrame with parsed start and end dates.
+    """
     #Open EM-DAT
     df_em_dat = pd.read_excel(DATA_EXTERNAL_SOURCE / file_name)
     df_em_dat = df_em_dat.loc[df_em_dat["Disaster Type"].isin(hazard_mapping_emdat.keys())]
@@ -265,36 +389,40 @@ def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
     return df_em_dat
 
 def choose_unique_disno(df_llm_em_dat, column_minimize):
+    """
+    Select a unique EM-DAT disaster number (DisNo.) for a given appeal.
+
+    When multiple EM-DAT events are associated with the same appeal,
+    the function selects the DisNo. with the largest number of linked
+    impacts. In case of ties, it minimizes the specified distance
+    metric (e.g., temporal distance).
+
+    Parameters
+    ----------
+    df_llm_em_dat : pd.DataFrame
+        DataFrame containing candidate EM-DAT matches for a single appeal.
+    column_minimize : str
+        Column used to minimize the selection criterion (e.g., date
+        difference).
+
+    Returns
+    -------
+    str
+        Selected EM-DAT disaster number.
+    """
     # Count number of impacts per DisNo
     if df_llm_em_dat["DisNo."].nunique() == 1:
         return df_llm_em_dat["DisNo."].iloc[0]
 
-    # print(top_disnos)
-    # # Tie case: pick closest EntryDate to reportDate
-    # tied = group[group["DisNo."].isin(top_disnos)].copy()
-    # tied["date_diff"] = (tied["EntryDate"] - tied["reportDate"]).abs()
-    # return tied.loc[tied["date_diff"].idxmin(), "DisNo."]
-    # print(group)
-
     # Filter over impact with a Glide number 
     df_llm_em_dat_glide = df_llm_em_dat.copy()
-    # df_llm_em_dat_glide = df_llm_em_dat_glide.dropna(subset=["External IDs"])
 
-    # if df_llm_em_dat_glide.empty:
-    #     df_llm_em_dat_filtered = df_llm_em_dat.copy()
-    # else : 
-    #     df_llm_em_dat_filtered = df_llm_em_dat_glide
     df_llm_em_dat_filtered = df_llm_em_dat_glide
 
     # Select the DisNo. with the most numerous number of associated impact 
-    counts = df_llm_em_dat_filtered["DisNo."].value_counts()  # assuming you have an "impact_id" col
+    counts = df_llm_em_dat_filtered["DisNo."].value_counts()
     max_count = counts.max()
     top_disnos = counts[counts == max_count].index
-
-    # # Minimize distance in declaration date 
-    # df_llm_em_dat_filtered["date_diff"] = (df_llm_em_dat_filtered['Entry Date'] - df_llm_em_dat_filtered["reportDate"]).abs()
-    # min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.")["date_diff"].min()
-    # chosen_disno = min_diff.idxmin()
 
     #Minimize the distance between start dates
     min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.", group_keys=False)[column_minimize].min()
@@ -303,12 +431,34 @@ def choose_unique_disno(df_llm_em_dat, column_minimize):
 
 def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) : 
     """
-    df1 : DataFrame with the llm output 
-    df2 : DataFrame with the emdat data 
+    Match LLM-extracted disaster impacts to EM-DAT events.
+
+    Links LLM-derived disaster reports to EM-DAT records using country
+    codes, hazard type harmonization, and temporal proximity. Matching
+    is constrained by a maximum allowable date difference threshold and
+    resolved to a single EM-DAT disaster number per appeal.
+
+    Parameters
+    ----------
+    df_llm : pd.DataFrame
+        DataFrame containing LLM-extracted disaster and impact information.
+    df_em_dat : pd.DataFrame
+        Preprocessed EM-DAT disaster DataFrame.
+    date_diff_th : datetime.timedelta
+        Maximum allowed difference between LLM and EM-DAT start/end dates.
+    column_minimize : str
+        Column used to select the closest EM-DAT event when multiple
+        candidates exist.
+
+    Returns
+    -------
+    tuple of pd.DataFrame
+        - df_matched : LLM DataFrame enriched with matched EM-DAT records.
+        - df_llm_em_dat : Intermediate DataFrame containing all candidate
+          LLM–EM-DAT matches and distance metrics.
     """
     df1 = cp.deepcopy(df_llm)
     df1_no_split = cp.deepcopy(df_llm)
-    # df1["_row_id"] = np.arange(len(df1))
     df2 = cp.deepcopy(df_em_dat)
 
     # Map the hazard to emdat type 
@@ -322,7 +472,6 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df2 = df2.rename({'ISO' : 'iso_emdat'}, axis=1)
 
     ## First occurence year
-    # df_llm_em_dat = df2.merge(df1, left_on='Start Year', right_on = 'startYear', how='inner')
     df_llm_em_dat = df2.merge(
         df1,
         left_on="iso_emdat",
@@ -330,20 +479,10 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         how="inner"
     )
 
-    # df_llm_em_dat = (
-    #     df2.merge(df1, how="cross")  # every combination
-    #     .query("abs(`Start Year` - startYear) <= 1")
-    # )
-
     ## Keep only rows where Disaster Type is inside hazards list
     df_llm_em_dat = df_llm_em_dat[
         df_llm_em_dat.apply(lambda row: row["Disaster Type"] in row["hazards_reclass"], axis=1)
     ].reset_index(drop=True)
-
-    # ## Macth with countries 
-    # df_llm_em_dat = df_llm_em_dat[
-    #     df_llm_em_dat.apply(lambda row: row["country_emdat"] in row["country"], axis=1)
-    # ].reset_index(drop=True)
 
     # Create date columns 
     df_llm_em_dat["Start Month"] = df_llm_em_dat["Start Month"].fillna(1).astype("Int64")
@@ -383,13 +522,13 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     )
 
     # # Keep only the ones with a difference of starting date smaller than a threshold 
-    # date_diff_th = datetime.timedelta(days=6*30) ## Verify how to define the timedelta
     df_llm_em_dat["date_diff_start"] = (df_llm_em_dat['Start Date'] - df_llm_em_dat["startDate"]).abs()
     df_llm_em_dat["date_diff_end"] = (df_llm_em_dat['End Date'] - df_llm_em_dat["endDate"]).abs()
     df_llm_em_dat = df_llm_em_dat.loc[df_llm_em_dat["date_diff_start"]<date_diff_th]
     df_llm_em_dat = df_llm_em_dat.loc[df_llm_em_dat["date_diff_end"]<date_diff_th]
 
     df_llm_em_dat["date_diff_mean"] = (df_llm_em_dat["date_diff_start"] + df_llm_em_dat["date_diff_end"])/2
+
     # Match with GLIDE and closest date 
     df_llm_em_dat["DisNo."] = df_llm_em_dat["DisNo."].astype(str)
 
@@ -408,22 +547,30 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         right_on="DisNo.",
         how="left"
     )
-
-    # emdat_cols = df2.columns.tolist()  # or explicit list if you prefer
-
-    # # Group back the iso3_code
-    # group_cols = ["appealCode", "impactSubtype", "impactValue", 
-    #           "startYear", "startMonth", "startDay", 
-    #           "endYear", "endMonth", "endDay", ""]
-
-    # df_matched = (
-    #     df_matched
-    #     .groupby(group_cols, dropna=False, as_index=False)
-    #     .agg({"iso3_code": lambda x: sorted(set(x.dropna()))})
-    # )
     return df_matched, df_llm_em_dat
 
 def match_impact_values(df_llm_all_geo_linked, impactType): 
+    """
+    Compare LLM-extracted impact values with EM-DAT reported impacts.
+
+    Aggregates LLM-extracted impact values at the appeal level and
+    compares them with the corresponding EM-DAT impact values for a
+    given impact type.
+
+    Parameters
+    ----------
+    df_llm_all_geo_linked : pd.DataFrame
+        LLM DataFrame already linked to EM-DAT events and geographic data.
+    impactType : str
+        Standardized impact type to be compared (e.g., fatalities,
+        affected).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing LLM and EM-DAT impact values per appeal and
+        a boolean indicator of exact matches.
+    """
     appealCodelist = df_llm_all_geo_linked["appealCode"].unique()
     df_emdat_linked = df_llm_all_geo_linked.copy()
     emdat_col = mapping_impact_type[impactType]["emdat"]
@@ -450,5 +597,4 @@ def match_impact_values(df_llm_all_geo_linked, impactType):
     df_merge = pd.merge(df1, df3, on="appealCode", how='inner')
     df_merge["match"] = df_merge["LLM_extracted"] == df_merge["EM-DAT"]
 
-    # df_merge_uniquely_linked = df_merge.loc[df_merge["appealCode"].isin(appeal_uniquely_linked)]
     return df_merge
