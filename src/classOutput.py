@@ -96,57 +96,6 @@ class ImpactHazards(BaseModel):
 class ImpactDetail(ImpactValue, ImpactLocation, ImpactDates, ImpactHazards):
     pass
 
-
-#class ImpactDetail(BaseModel):
-#    impactSubtype: str
-#    impactValue: Optional[float] = None
-#    impactUnit: Optional[str] = None
-#    impactValuePrecision: Optional[str] = None
-#    country: List[str]
-#    location: Optional[List[str]] = None
-#    startYear: Optional[int] = None
-#    startMonth: Optional[int] = None
-#    startDay: Optional[int] = None
-#    endYear: Optional[int] = None
-#    endMonth: Optional[int] = None
-#    endDay: Optional[int] = None
-#    hazards: Optional[List[str]] = None
-#    impactsAnnotation: List[str]
-#
-#    # Dynamic constraints
-#    _impactSubtypes_list: List[str]
-#    _hazardTypes_list: Optional[List[str]] = None
-#
-#    #marker to do hazard validation or not
-#    _validate_hazards = True
-#
-#    @classmethod
-#    def turn_off_hazard_validation(cls):
-#        cls._validate_hazards = False
-#
-#    @classmethod
-#    def set_allowed_classes(cls, impact_subtypes: List[str], hazard_types: Union[None, List[str]]):
-#        cls._impactSubtypes_list = impact_subtypes
-#        cls._hazardTypes_list = hazard_types
-#
-#    @field_validator("impactSubtype")
-#    def validate_impact_subtype(cls, value):
-#        if value not in cls._impactSubtypes_list:
-#            raise ValueError(f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}")
-#        return value
-#
-#    @field_validator("hazards", mode="before")
-#    def validate_hazards(cls, value):
-#        if not isinstance(value, list):
-#            raise ValueError(f"Expected a list for hazards, got {type(value).__name__}")
-#        invalid_hazards = [hazard for hazard in value if hazard not in cls._hazardTypes_list]
-#        if invalid_hazards:
-#            if cls._validate_hazards:
-#                raise ValueError(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
-#            else:
-#                print(f"Invalid hazards: {invalid_hazards}. Must be one of {cls._hazardTypes_list}")
-#        return value
-
 class ImpactDetailTypeSubType(ImpactDetail):
     impactType: str
 
