@@ -1,16 +1,11 @@
 import regex as re
 import numpy as np
 import logging
-#import pandas as pd
-#import ast
 import spacy
 import spacy_fastlang
 import unicodedata
 from sympy import I
 from text_to_num import text2num
-#from number_spacy import find_numbers
-#from spacy.tokens import Span
-from pint import UnitRegistry
 
 import nltk
 from nltk.tokenize import sent_tokenize
@@ -218,49 +213,6 @@ def could_be_unit(text):
         return True
     return False
 
-#def text_standardize_metric_units(text):
-#    """Standardize units to a common baseline in text"""
-#
-#    ureg = UnitRegistry()
-#    nlp = spacy.load("en_core_web_sm")
-#    doc = nlp(text)
-#    new_text = text
-#
-#    for token in doc:
-#        # Check if token is a number followed by a unit
-#        if token.like_num:
-#            #if token can be converted to float, proceed to conversion else continue
-#            try :
-#                num = float(token.text)
-#            except ValueError:
-#                continue
-#            next_tokens = take_n_neighb_tokens(token, 2) # take next 2 tokens
-#
-#            if next_tokens:
-#                next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
-#                pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
-#                if len(pot_units) == 0:
-#                    continue
-#                elif len(pot_units) > 1:
-#                    raise ValueError(f"Multiple potential units found for token: {token.text} {next_tokens}")
-#
-#                unit = pot_units[0]
-#                si_unit = METRIC_UNIT_MAPPING[unit]
-#
-#                # Perform conversion
-#                quantity = num * ureg(unit)
-#                converted_quantity = quantity.to(si_unit)
-#                converted_value = converted_quantity.magnitude
-#                converted_unit = converted_quantity.units
-#
-#                # Replace in the text
-#                replacement = f"{converted_value:.8g} {converted_unit}"
-#                old = f"{token.text} {next_tokens}"
-#                new_text = new_text.replace(old, replacement)
-#
-#    return new_text
-
-
 def clean_text(text, remove_numbers=False, remove_stopwords=False):
     # Remove hyperlinks
     """
@@ -340,7 +292,6 @@ def select_hazard_description(text, match_above=True):
     id_end = None
     for id_s, sentence in enumerate(text) :
         sentence = sentence.lower()
-        #match_top = re.search(r"(?:situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event)\s*(.*)", sentence, re.IGNORECASE)#the situation|the disaster
         match_top = re.search(r"operation summary|situation analysis|background|description of the crisis|what happened, where and when|description of the disaster|description of the event", sentence, re.IGNORECASE)
         if match_above and match_top and (id_top==0):
             #Save where the text should begin
@@ -348,7 +299,6 @@ def select_hazard_description(text, match_above=True):
             continue
             #text[id_top] = match_top.group(1)
 
-        #match_end = re.search(r"^(.*?)(?=\s*(operational strategy|coordination and partnerships|red cross red crescent action|operational developments|the response so far|summary of|previous operations|current national society actions))", sentence, re.IGNORECASE)
         match_end = re.search(r"coordination and partnerships|operational strategy|red cross red crescent action|operational developments|summary of response|the response so far|previous operations|current national society actions|national society actions|Summary of measures taken by the National Society", sentence, re.IGNORECASE)#summary of
         if match_end and id_end==None:
             if id_s - id_top < 10:
@@ -362,6 +312,21 @@ def select_hazard_description(text, match_above=True):
 
 #function from tais
 def check_disaster_type_keyword(text):
+    """
+    Identify natural hazard keywords in a text.
+
+    Parameters
+    ----------
+    text : str
+        Input text, such as a disaster report title or snippet.
+
+    Returns
+    -------
+    str or list
+        - 'None' if no hazard keywords found
+        - single hazard string if only one detected
+        - list of hazards if multiple detected
+    """
     text = text.lower()
     hazards = []
 
@@ -393,6 +358,25 @@ def check_disaster_type_keyword(text):
 
 #function from tais
 def reclass_disaster_type(element):
+    """
+    Reclassify the disaster type of a report using the original type, title, and text content.
+
+    Parameters
+    ----------
+    element : dict
+        Dictionary containing report information:
+        - 'disasterType': original disaster type
+        - 'reportName': report title
+        - 'text' (optional): full report content
+
+    Returns
+    -------
+    element : dict
+        Updated dictionary with keys:
+        - 'disasterTypeReclassified'
+        - 'secondaryDisasterType' (if applicable)
+        - 'naturalHazard' (1 if hazard detected, 0 if not)
+    """
     initial_disaster_type = element['disasterType']
     disaster_type_reclassified = check_disaster_type_keyword(element['disasterType'] + ' ' + element['reportName'])
     disaster_type = disaster_type_reclassified
@@ -541,73 +525,3 @@ def check_hazard_type_keyword(text, hazard_patterns):
             hazards.append(hazard)
 
     return hazards
-
-#def extract_entities(text):
-#    # Process the text with spaCy
-#    """
-#    Extract named entities from a text.
-#
-#    The function takes a text as input and processes it with spaCy to extract named entities.
-#    The function returns a list of tuples, where each tuple contains the text of the entity and its label.
-#
-#    Parameters
-#    ----------
-#    text : str
-#        The text to be processed.
-#
-#    Returns
-#    -------
-#    entities : list of tuples
-#        The list of extracted entities, where each tuple contains the text of the entity and its label.
-#    """
-#    nlp = spacy.load("en_core_web_sm")
-#    doc = nlp(text)
-#    entities = [(ent.text, ent.label_) for ent in doc.ents]
-#    return entities
-
-#def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
-#    """
-#    Extract causal relationships from a sentence.
-#
-#    The function takes a sentence as input and processes it with spaCy to extract causal relationships.
-#    The function returns a list of tuples, where each tuple contains the cause, the relationship, and the effect.
-#
-#    Parameters
-#    ----------
-#    sentence : str
-#        The sentence to be processed.
-#    relationship_list : list of str
-#        The list of causal verbs to be considered.
-#    hazard_patterns : dict
-#        A dictionary of patterns to be used to check if a word is a hazard type.
-#
-#    Returns
-#    -------
-#    causes : list of tuples
-#        The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
-#    """
-#    nlp = spacy.load("en_core_web_sm")
-#    doc = nlp(sentence)
-#    causes = []
-#
-#    # Iterate over the tokens in the sentence
-#    for token in doc:
-#        #prev_token = doc[token.i - 1]
-#        #next_token = doc[token.i + 1]
-#        # Check if the token is a verb and in the list of causal verbs
-#        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
-#            # Find the subject (nsubj) and object (dobj) of the verb
-#            subject = None
-#            effect = None
-#
-#            for child in token.children:
-#                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
-#                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-#                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
-#                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-#            # If both subject and object (effect) are found, return the relationship
-#            if subject and effect:
-#                causes.append((subject, token.lemma_, effect))
-#
-#    return causes
-
