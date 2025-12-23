@@ -147,18 +147,74 @@ def calc_value_sim(v1, v2, clip=(0,1)):
 
     return 1 - np.clip(max_value_diff(v1, v2), 0, 1)
 
-def compute_weighted_sim(dist_mat, matching_cols, matching_cols_weights):
-    weights = np.array([matching_cols_weights[col] for col in matching_cols])
+def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights, valid_shape=True, valid_cols=True):
+    """
+    Compute weighted similarity aggregation across columns.
+
+    Parameters
+    ----------
+    dist_mat : np.ndarray
+        Similarity matrix of shape (n_extracted, n_labelled, n_cols)
+        where n_cols must match len(similarity_cols)
+    similarity_cols : list
+        Column names in the order they appear in dist_mat (3rd dimension).
+        Must be the same order and columns used to build dist_mat.
+    matching_cols_weights : dict
+        Dictionary mapping column names to their weights.
+
+    Returns
+    -------
+    weighted_sim : np.ndarray
+        Aggregated weighted similarity matrix of shape (n_extracted, n_labelled).
+
+    Raises
+    ------
+    ValueError
+        If dist_mat.shape[2] doesn't match len(similarity_cols) or
+        if similarity_cols contains columns not in matching_cols_weights.
+    """
+    # Validation: ensure dimensions match
+    if valid_shape and dist_mat.shape[2] != len(similarity_cols):
+        raise ValueError(
+            f"dist_mat has {dist_mat.shape[2]} columns but similarity_cols has {len(similarity_cols)} columns. "
+            f"These must match. Make sure dist_mat was built with similarity_cols in the same order."
+        )
+
+    # Validation: ensure all columns have weights
+    missing_cols = [col for col in similarity_cols if col not in matching_cols_weights]
+    if valid_cols and missing_cols:
+        raise ValueError(
+            f"The following columns in similarity_cols have no weights: {missing_cols}. "
+            f"Available weights: {list(matching_cols_weights.keys())}"
+        )
+
+    weights = np.array([matching_cols_weights[col] for col in similarity_cols])
     weights = weights.reshape((1,1,weights.size))
     return np.nansum(weights*dist_mat, axis=2) / np.nansum(weights)
 
-def find_match_sim(dist_mat, matching_cols, matching_cols_weights):
-    """Find best match between extracted and labelled dataframes by maxing weighted similarity"""
-    agg_sim  = compute_weighted_sim(dist_mat, matching_cols, matching_cols_weights) #aggregate score for all matching columns (#ext, #lab)
+def find_match_sim(dist_mat, similarity_cols, matching_cols_weights):
+    """
+    Find best match between extracted and labelled dataframes by maxing weighted similarity.
+
+    Parameters
+    ----------
+    dist_mat : np.ndarray
+        Similarity matrix of shape (n_extracted, n_labelled, n_cols).
+    similarity_cols : list
+        Column names in the order they appear in dist_mat (3rd dimension).
+        Must match the columns used to build dist_mat.
+    matching_cols_weights : dict
+        Dictionary mapping column names to their weights.
+
+    Returns
+    -------
+    id_match_ext, id_match_lab : np.ndarray
+        Indices of extracted and labelled rows that match.
+    """
+    agg_sim = compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights)
     max_sim = np.max(agg_sim, axis=1) #find max similarity value (#ext)
     tol = 1e-12
     candidates_id_sim = np.argwhere(np.abs(agg_sim - max_sim[:, None]) < tol)
-    #candidates_id_sim = np.argwhere(agg_sim == max_sim[:,None]) #possible candidates with max similarity
     id_match_ext, id_match_lab = candidates_id_sim[:,0], candidates_id_sim[:,1]
     return id_match_ext, id_match_lab
 
@@ -214,29 +270,73 @@ def split_nans_sim_matrix(dist_mat, nan_id_ext, nan_id_lab):
     return dist_mat_notna, dist_mat_na
 
 def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols, matching_cols_weights, geo_match=False, value_match=None):
-    """Match rows between extracted and labelled dataframes"""
+    """
+    Match rows between extracted and labelled dataframes.
+
+    Parameters
+    ----------
+    ext_df, lab_df : pd.DataFrame
+        Extracted and labelled dataframes.
+    ext_vec, lab_vec : pd.DataFrame
+        Vectorized versions of extracted and labelled dataframes.
+    matching_cols : list
+        Column names used for final weighting. Should contain similarity_cols
+        plus optional geo and value columns.
+    similarity_cols : list
+        Column names for cosine similarity calculation. Order matters!
+    matching_cols_weights : dict
+        Weights for columns in matching_cols.
+    geo_match : bool
+        Whether to include geometry (IoU) in matching.
+    value_match : str or None
+        'pre': include impactValue similarity before matching.
+        'post': refine matches by minimizing value difference after matching.
+        None: ignore value matching.
+
+    Returns
+    -------
+    reid_match_ext, reid_match_lab : np.ndarray
+        Original indices of matched rows.
+    accuracy_matrix : np.ndarray
+        Matrix of similarity values for all columns in matched pairs.
+    """
+    # Validation: similarity_cols should be subset of matching_cols for weighting
+    if not all(col in matching_cols for col in similarity_cols):
+        missing = [col for col in similarity_cols if col not in matching_cols]
+        raise ValueError(
+            f"All similarity_cols must be in matching_cols for proper weighting. "
+            f"Missing from matching_cols: {missing}"
+        )
+
+    # Track which columns are in dist_mat in order
+    dist_mat_cols = list(similarity_cols)  # These are built first
 
     #compute cosine distance
     dist_mat = make_cosine_matrix(ext_vec, lab_vec, similarity_cols)
+
     # geo matching
     if geo_match:
         #expand dist_mat to store results
         iou_mat = compute_iou(ext_df, lab_df)
         dist_mat = np.append(dist_mat, iou_mat[:,:, None], axis=2)
+        dist_mat_cols.append("geometry")
 
     #calculate diff
-    if value_match != "pre":
-        #be sure to remove impactValue from matching_cols
-        if "impactValue" in matching_cols:
-            matching_cols = matching_cols.copy()
-            matching_cols.remove("impactValue")
-    else:
+    if value_match == "pre":
         value_diff = calc_value_sim(ext_df["impactValue"].values.reshape(-1,1),
                                      lab_df["impactValue"].values.reshape(1,-1))
         dist_mat = np.append(dist_mat, value_diff[:,:, None], axis=2)
+        dist_mat_cols.append("impactValue")
+
+    # Validate that dist_mat_cols match what compute_weighted_sim will receive
+    if len(dist_mat_cols) != dist_mat.shape[2]:
+        raise ValueError(
+            f"Internal error: dist_mat_cols ({len(dist_mat_cols)} cols: {dist_mat_cols}) "
+            f"don't match dist_mat shape {dist_mat.shape}"
+        )
 
     #matching based on similarity only
-    id_match_ext, id_match_lab = find_match_sim(dist_mat, matching_cols, matching_cols_weights)
+    id_match_ext, id_match_lab = find_match_sim(dist_mat, dist_mat_cols, matching_cols_weights)
 
     # refine best candidates by minimizing value diff
     if value_match == "post":
@@ -248,6 +348,22 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
 
     #slice dist_mat only including best candidates to store accuracy results
     accuracy_matrix = dist_mat[id_match_ext, id_match_lab, :]
+
+    # Compute aggregated weighted similarity for each matched pair and append
+    #agg_sim = compute_weighted_sim(accuracy_matrix, dist_mat_cols, matching_cols_weights, valid_shape=False)
+    #accuracy_matrix = np.append(accuracy_matrix, agg_sim.reshape(-1, 1), axis=1)
+
+    try:
+        weights = np.array([matching_cols_weights[col] for col in dist_mat_cols], dtype=float)
+        sum_weights = np.nansum(weights)
+        if sum_weights == 0:
+            match_sim = np.full((accuracy_matrix.shape[0],), np.nan)
+        else:
+            match_sim = np.nansum(accuracy_matrix * weights, axis=1) / sum_weights
+        accuracy_matrix = np.append(accuracy_matrix, match_sim.reshape(-1, 1), axis=1)
+    except Exception:
+        # If weighting fails for any reason, append NaNs to keep shape consistent
+        accuracy_matrix = np.append(accuracy_matrix, np.full((accuracy_matrix.shape[0], 1), np.nan), axis=1)
 
     return reid_match_ext, reid_match_lab, accuracy_matrix
 

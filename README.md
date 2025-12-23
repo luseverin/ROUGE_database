@@ -12,20 +12,50 @@ To reproduce the analysis, run the scripts in the following order:
 3. postprocess_results.py
 
 ## Content
+
+### Notebooks 
+List of the following notebooks, for data validation, pre-processing, post-processing, results analysis : 
+- data_flag_checks.ipynb : Inspect the type and amount of flags raised
+- data_post_process.ipynb : Inspect post-processing of impact
+- download_external_sources.ipynb : Download IFRC Monty and IFRCGo data from API
+- gather_label_reports.ipynb : Gather manually labelled reports from several sources
+- gather_quanti_impact.ipynb : Inspect the gathering of quantitative impact
+- geocoding.ipynb : Inspect succesive steps of the geocoding
+- impact_postprocess.ipynb : Postprocess extracted impact
+- inspect_flags.ipynb : Inspect the type and amount of flags raised
+- inspect_header.ipynb : Inspect selection of header (impact text)
+- labelled_extracted_row_matching.ipynb : Matching of labelled and extracted impact data
+- preprocess_IFRC_reports.ipynb : Preprocess raw IFRC reports
+- result_data_overview.ipynb : Plots and overview of extracted impact
+- validation_accuracy.ipynb : Accuracy scores for validation
+- validation_coverage.ipynb : Coverage scores for validation
+- validation_external_sources.ipynb : Comparaison with external sources
+- validation_sensitivity_analysis.ipynb : Sensitivity analysis with other LLM models 
+
 ### src
 Source code. Contains:
-- data.py : path definitions
-- client.py : OpenAI and Groq API client set-up
+- accuracy.py : Accuracy calculation functions
+- classOutput.py : Validation classes for LLM extraction
+- client.py : OpenAI, Groq API and OpenStreetMap client set-up
+- data.py : Path definitions
+- external_comparaison.py : Text processing and aggregation functions (for comparaison with EMDAT, IFRCGo and IFRCMonty external data)
+- geocoding.py : Pipeline of geocoding functions
+- geocoding_utils.py : Geocoding utils functions 
+- hazard_def.py : Definition of hazard classes and categories
+- impact_def.py : Definition of impact classes and categories
+- ImpactRegistry.py : Class for impact types
+- labelling_helpers.py : Helpers functions for manual labelling
+- LLM_functions : Prompt and LLM query functions 
+- logger_setup.py : Logger setup to track potential errors 
+- post_processing_functions.py : Impact post-processing functions
+- prompt_examples.py : Examples of prompts for the LLM
+- prompt_hazards.py : 
+- prompt_impact.py : Prompt function to extract impacts
+- sanity_checks.py : Postprocessing check of extracted impact
 - text_processing_functions.py : text processing and pre-processing functions
-- LLM_functions.py : functions related to LLM extraction
-- prompts_impacts.py : prompt definition to extract impacts
-- impact_def.py : definition of impact classes and categories
-- hazard_def.py : definition of hazard classes and categories
-- units.py : impact units definition
-- classOutput.py : validation classes for LLM extraction
-- post_processing_functions.py : post-processing functions
-- geocoding.py : geocoding functions
-- accuracy.py : accuracy calculation functions
+- units.py : Definition of units per impact classes and categories
+- utils.py : Usefull functions for navigation the data
+
 ### scripts
 - preproces_reports.py : script to pre-process raw reports (formating, text selection)
 - llm_extraction.py : script to extract data using LLMs

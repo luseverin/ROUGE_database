@@ -18,7 +18,7 @@ from copy import deepcopy
 from src.hazard_def import *
 from src.impact_def import *
 from src.data import *
-from src.prompts_hazards import *
+# from src.prompts_hazards import *
 from src.prompts_impacts import *
 from src.client import CLIENT, CONTEXT_WINDOW, MODEL_NAME, MAX_COMPLETION_TOKENS
 from src.classOutput import *
@@ -62,17 +62,17 @@ def add_key_value_pairs(data, new_pairs):
 
     return data
 
-def check_result_json(result_json, label=None):
-    try:
-        answer = json.loads(result_json.replace("\n", ""))
-        if label:
-            answer = answer[label]
-    except Exception as e:
-        LOGGER.error("An unexpected error occurred: %s", e)
-        return None
-    if not answer:
-        LOGGER.info("JSON is empty: %s", result_json)
-    return answer
+#def check_result_json(result_json, label=None):
+#    try:
+#        answer = json.loads(result_json.replace("\n", ""))
+#        if label:
+#            answer = answer[label]
+#    except Exception as e:
+#        LOGGER.error("An unexpected error occurred: %s", e)
+#        return None
+#    if not answer:
+#        LOGGER.info("JSON is empty: %s", result_json)
+#    return answer
 
 def build_messages(prompt, prompt_system=None, prompt_assistant=None):
     """Build messages for OpenAI API based on (user) prompt, system prompt and assistant prompt"""
@@ -139,7 +139,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
     #get model response
     response = get_model_response(messages, **kwargs)
     if response is None:
-        return None, None, None
+        return None, None, 1
 
     # Parse the response content into a list of ImpactDetail objects
     raw_text = response.choices[0].message.content
@@ -154,7 +154,7 @@ def get_model_response_retry(messages, output_model, nb_valid_error=0, trials=0,
             response_content = json.loads(json_str)
         except Exception as e2:
             LOGGER.error("[SECONDARY JSON LOAD FAILURE] %s", e2)
-            return None, None, None
+            return None, None, 1
 
     #response_content = json_repair.loads(response.choices[0].message.content)
     try:
@@ -361,7 +361,7 @@ def extract_impact_value(impact):
     Extracts the impact value from the impact dictionary.
     """
     impact_cols = [col for col in impact if col in ["impactValue", "impactValueMin", "impactValueMax"]]
-    return impact[impact_cols].max()
+    return impact[impact_cols].max().max()
 
 def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes=True, validate_hazards=True, max_rounds=5, **groq_kwargs):
     """
@@ -392,8 +392,6 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
 
     ## Localize, date and find hazards of each impact value
     for i, impact in enumerate(answer_impact_values):
-        #track errors in impact extraction
-        impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
 
         # normalize list structure
         if isinstance(impact, list):
@@ -411,6 +409,9 @@ def extraction_chain(text, impact_types_dict, hazards_list, validate_impSubtypes
         if "impactValue" not in impact:
             LOGGER.info("discarding impact (missing 'impactValue'): %s", impact)
             continue
+
+        #track errors in impact extraction
+        impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
 
         # extract impact value
         impact_value = extract_impact_value(pd.DataFrame([impact]))

@@ -20,6 +20,8 @@ from src.units import *
 from src.impact_def import *
 from src.hazard_def import *
 
+#load spacy nlp
+nlp = spacy.load("en_core_web_sm")
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
@@ -75,84 +77,6 @@ def remove_startspace(loc_list):
     else:
         return [loc.strip() for loc in loc_list]
 
-def delistify_cols(df):
-    """
-    Convert list columns to string columns
-
-    This function takes a DataFrame as argument and iterates over all columns.
-    If a column contains any list elements, it converts the whole column to string
-    by applying a lambda function to each element. If the element is a list,
-    it converts it to string, otherwise it leaves it as is.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to be formatted
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with list columns converted to string columns
-    """
-    for col in df.columns:
-        if np.any([isinstance(cell, list) for cell in df[col]]):
-            df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
-    return df
-def listify_strings(x):
-    """
-    Convert strings to lists if possible
-
-    If a string can be parsed as a list, it is converted to a list. If not,
-    the string is wrapped in a list. If the input is already a list, it is
-    returned as is. If the input is None or NaN, an empty list is returned.
-
-    Parameters
-    ----------
-    x : str or list or None or numpy.nan
-        Element to be converted
-
-    Returns
-    -------
-    list
-        The converted element
-    """
-    if isinstance(x, str):
-        try :
-            #x = json.loads(x.replace("'", '"'))
-            x = json_repair.loads(x)
-        except :
-            x = [x]
-        return x
-    elif isinstance(x, list):
-        return x
-    elif pd.isna(x) or x is None:
-        return []
-    else:
-        return x
-def format_output(df, num_cols=None, list_cols=None):
-    """
-    Format output of the final report
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to be formatted
-    num_cols : list
-        List of columns to be converted to float
-
-    Returns
-    -------
-    pd.DataFrame
-        Formatted DataFrame
-    """
-    if num_cols:
-        #df = df.replace(["null", "None", None], np.nan)
-        #df[num_cols] = df[num_cols].astype(float)
-        df[num_cols] =df[num_cols].apply(pd.to_numeric, errors='coerce')
-
-    if list_cols:
-        df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
-    return df
 
 def parse_impact_value_precision(x):
     """Parse impact values given precision levels.
@@ -201,21 +125,25 @@ def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     """
     if x["impactSubtype"] in list(impact_kw_reclass.keys()):
         x["flag_impactSubtype_reclass"] = False
+        x["flag_unknown_subtype"] = False
         return x
     candidates = []
     for key, value in impact_kw_reclass.items():
         if re.search(value, x["impactSubtype"], re.IGNORECASE):
             candidates.append(key)
     if len(candidates) == 1:
+        unknown_subtype = False
         new_subtype = candidates[0]
     else:
+        unknown_subtype = True
         new_subtype = "Unknown"
     x["impactSubtype"] = new_subtype
     x["flag_impactSubtype_reclass"] = True
+    x["flag_unknown_subtype"] = unknown_subtype
     return x
 
 
-def reclassify_hazard(x, hazard_kw_reclass):
+def reclassify_hazard(x, hazard_kw_reclass=hazard_kw_reclass):
     """
     Reclassify a hazard type using a dictionary of regular expressions.
 
@@ -341,26 +269,35 @@ def harmonize_units(x, harmonize_units_kw=HARMONIZE_UNITS_KW):
         x["flag_unit_harmonization"] = True
     return x
 
-def convert_unit(x, unit_converter=UNIT_CONVERTER):
+def convert_unit(x, unit_converter=UNIT_CONVERTER, default_unit_dict=IMPACT_DEFAULT_UNITS):
     """Convert units that can be converted e.g. families => people"""
 
     unit = x['impactUnit']
     x["flag_unit_conversion"] = False
+    x["flag_unit_conversion_error"] = False
     if not isinstance(unit, str):
         return x  # skip if unit is None or not a string
-    unit = unit.strip()
-    if unit == "":
-        return x
+    elif pd.isnull(unit) or unit in ["", "null"]:
+        return x  # skip if unit is null or empty
+    default_unit_subtype = default_unit_dict.get(x["impactSubtype"], None)
+
+    if default_unit_subtype != "people":
+        return x  # skip conversion if default unit for subtype is not people
+    conv_val = {}
     for old_unit_pattern, (conv_fact, new_unit) in unit_converter.items():
         if re.search(old_unit_pattern, unit, re.IGNORECASE) and not re.search(r"\b(people)\b", unit, re.IGNORECASE): #avoid conversion when people already in unit e.g. people per household
             x["flag_unit_conversion"] = True
-            for key in ["impactValueMin", "impactValueMax", "impactValue"]:
-                try:
-                    x[key] = float(x[key]) #force conversion to float
-                    x[key] = conv_fact*x[key]
-                    x["impactUnit"] = re.sub(old_unit_pattern, new_unit, unit) #replace unit with new_unit
-                except Exception as e:
-                    LOGGER.error("Skipping unit conversion for row due to error: %s", e)
+            try:
+                for key in ["impactValueMin", "impactValueMax", "impactValue"]:
+                    conv_val[key] = float(x[key]) #force conversion to float
+                    conv_val[key] = conv_fact*conv_val[key]
+                x["impactUnit"] = re.sub(old_unit_pattern, new_unit, unit) #replace unit with new_unit
+                for key in ["impactValueMin", "impactValueMax", "impactValue"]:#do assignement after all conversions to avoid partial conversion
+                    x[key] = conv_val[key]
+                x["flag_unit_conversion_error"] = False
+            except Exception as e:
+                LOGGER.error("Skipping unit conversion for row due to error: %s", e)
+                x["flag_unit_conversion_error"] = True
     return x
 
 ## assign_unit_type is redundant with standardize_metric_units, could simplified and removed
@@ -382,7 +319,11 @@ def assign_unit_type(x, unit_type_kw_reclass=UNIT_TYPE_KW_RECLASS):
     x["flag_unit_type"] = flag
     return x
 
-def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=IMPACT_EXPECTED_UNITS, default_subtype_unit=IMPACT_DEFAULT_UNITS, force_unit_to_subtype=True, reclass_subtype=True):
+def re_match_overlaps(m1, m2):
+    a_start, a_end = m1.span()
+    b_start, b_end = m2.span()
+    return max(a_start, b_start) < min(a_end, b_end)  # strict overlap
+def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS):
     """
     Reclassify units based on keywords
 
@@ -392,10 +333,6 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
         row of pandas dataframe
     unit_kw_reclass : dict
         dictionary of unit keywords and corresponding unit strings
-    default_subtype_unit : dict
-        dictionary of default subtype units
-    force_unit_to_subtype : bool
-        whether or not to force unit to default unit of subtype when unknown unit
 
     Returns
     -------
@@ -404,8 +341,7 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
     """
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     unit_type = x['unit_type']
-    flag_unit_nonstd = False
-    flag_reclass_subtype_from_unit = False
+    x["flag_non-SI_unit_standardization_error"] = False
     unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
     candidates = [unit_corr for unit_corr in unit_kw_reclass.keys() if re.search(unit_kw_reclass[unit_corr], unit, re.IGNORECASE)]
     if len(candidates) == 1:
@@ -413,30 +349,78 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS, expected_unit_subtype=I
     else:
         if len(candidates) > 1:
             LOGGER.warning("Multiple candidates found for %s: %s", unit, candidates)
-        flag_unit_nonstd = True
-        #no unit identified, infer unit from category
-        if force_unit_to_subtype and x["impactSubtype"] != "Unknown":
-            reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
-        else:
-            reclass_unit = unit
-    if reclass_subtype:
-        possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if reclass_unit == expected_unit_subtype[subtype]] #re.search(expected_unit_subtype[subtype], x["impactSubtype"], re.IGNORECASE)]
-        if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
-            flag_reclass_subtype_from_unit = True
-            LOGGER.info("Reclassified subtype from %s to %s with unit reclass %s and orig unit %s", x['impactSubtype'], possible_subtypes[0], reclass_unit, unit)
-            #print(x["valueAnnotation"])
-            x["impactSubtype"] = possible_subtypes[0]
+            x["flag_non-SI_unit_standardization_error"] = True
+        reclass_unit = unit
+    x["flag_non-SI_unit_standardization"] = (reclass_unit != unit)
     x["impactUnit"] = reclass_unit
-    x["flag_unit_nonstd"] = flag_unit_nonstd
-    x["flag_reclass_subtype_from_unit"] = flag_reclass_subtype_from_unit
+    return x
+def force_unit_to_subtype(x, default_subtype_unit=IMPACT_DEFAULT_UNITS):
+    """
+    Force unit to default unit of subtype when unknown unit
+
+    Parameters
+    ----------
+    x : pd.Series
+        row of pandas dataframe
+    expected_unit_subtype : dict
+        dictionary of expected unit for each subtype
+
+    Returns
+    -------
+    str
+        reclassified unit
+    """
+    unit = str(x["impactUnit"]).lower() #ensure unit is string
+    x["flag_force_unit_to_subtype"] = False
+    unit_type = x['unit_type']
+    no_reclass = ["null", "", "people"]
+    if pd.isnull(unit) or unit in no_reclass:
+        return x
+
+    unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
+    if x["impactSubtype"] != "Unknown":
+        reclass_unit = unit_prefix+default_subtype_unit[x["impactSubtype"]]
+        LOGGER.info("Forcing unit from %s to %s for subtype %s", unit, reclass_unit, x['impactSubtype'])
+        x["flag_force_unit_to_subtype"] = True
+    else:
+        reclass_unit = unit
+    x["impactUnit"] = reclass_unit
+    return x
+def reclass_subtype_from_unit(x, expected_unit_subtype=IMPACT_EXPECTED_UNITS):
+    """
+    Reclassify subtype based on unit
+
+    Parameters
+    ----------
+    x : pd.Series
+        row of pandas dataframe
+    expected_unit_subtype : dict
+        dictionary of expected unit for each subtype
+
+    Returns
+    -------
+    str
+        reclassified subtype
+    """
+    unit = str(x["impactUnit"]).lower() #ensure unit is string
+    no_reclass = ["null", "", "people"]
+    x["flag_reclass_subtype_from_unit"] = False
+    if pd.isnull(unit) or unit in no_reclass:
+        return x
+    possible_subtypes = [subtype for subtype in expected_unit_subtype.keys() if unit == expected_unit_subtype[subtype]]
+    if len(possible_subtypes) == 1 and (possible_subtypes[0] != x["impactSubtype"]):
+        x["flag_reclass_subtype_from_unit"] = True
+        LOGGER.info("Reclassified subtype from %s to %s with unit %s", x['impactSubtype'], possible_subtypes[0], unit)
+        x["impactSubtype"] = possible_subtypes[0]
     return x
 
 def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit_mapping=METRIC_UNIT_MAPPING):
     """Standardize units to a common baseline in text"""
-    values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
+    value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     unit = x["impactUnit"]
+    x["flag_SI_unit_standardization"] = False
+    x["flag_SI_unit_standardization_error"] = False
     if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
-        x["flag_unit_standardization"] = False
         return x
     ureg = UnitRegistry()
     #print(f"{value} {unit}")
@@ -449,27 +433,38 @@ def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit
                 identified_patterns.append(pattern)
     #matched = [(target_unit, unit_patterns) for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, unit, re.IGNORECASE) for pattern in unit_patterns])]
     if len(identified_units) == 0:
-        x["flag_unit_standardization"] = False
+        x["unit_type"] = "other"
         return x
     elif len(identified_units) > 1:
-        raise ValueError(f"Multiple potential units found for token: {unit}")
+        LOGGER.warning("Multiple potential units found for token %s, identified units %s. Not standardizing", unit, identified_units)
+        x["flag_SI_unit_standardization"] = True
+        x["flag_SI_unit_standardization_error"] = True
+        x["unit_type"] = "multiple"
+        return x
+
+    x["flag_SI_unit_standardization"] = True
     identified_unit = identified_units[0]
     identified_pattern = identified_patterns[0]
     si_unit = unit_mapping[identified_unit]
 
     # Perform conversion
     converted_unit = re.sub(identified_pattern, si_unit, unit)
-    converted_values = []
-    for value in values:
-        quantity = float(value) * ureg(identified_unit)
-        converted_quantity = quantity.to(si_unit)
-        converted_values.append(converted_quantity.magnitude)
-
-    x["impactValueMin"] = converted_values[0]
-    x["impactValue"] = converted_values[1]
-    x["impactValueMax"] = converted_values[2]
+    converted_values = {}
+    for value_label in value_labels:
+        try:
+            quantity = float(x[value_label]) * ureg(identified_unit)
+            converted_quantity = quantity.to(si_unit)
+            converted_values[value_label] = converted_quantity.magnitude
+        except Exception as e:
+            LOGGER.error("Unit conversion error: %s", e)
+            x["flag_SI_unit_standardization"] = True
+            converted_values[value_label] = x[value_label]
+    #assign values only if no error occured
+    if not x["flag_SI_unit_standardization_error"]:
+        for value_label in value_labels:
+            x[value_label] = converted_values[value_label]
+    x["unit_type"] = si_unit
     x["impactUnit"] = converted_unit
-    x["flag_unit_standardization"] = True
     return x
 
 def normalize_people_unit(x):
@@ -487,10 +482,12 @@ def normalize_people_unit(x):
         The series with the normalized unit
     """
     unit = x["impactUnit"]
+    x["flag_people_unit_normalization"] = False
     if not isinstance(unit, str):
         return x  # skip if unit is None or not a string
     if re.search(PEOPLE_NORMALIZER, unit, re.IGNORECASE):
         x["impactUnit"] = "people"
+        x["flag_people_unit_normalization"] = True
     return x
 
 def join_value_units(x):
@@ -499,7 +496,27 @@ def join_value_units(x):
 def split_value_units(x):
     return x["value_unit"].split(",")
 
-def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR"):
+def money_converter(value_parsed, unit_parsed, report_date, DEF_CUR="EUR"):
+    """
+    Convert a monetary value to a standard currency (DEF_CUR) at a given report date.
+
+    Parameters
+    ----------
+    value_parsed : float
+        The monetary value to convert
+    unit_parsed : str
+        The unit of the monetary value to convert
+    report_date : datetime
+        The report date at which to perform the conversion
+    DEF_CUR : str, optional
+        The default currency to convert to. Defaults to "EUR".
+
+    Returns
+    -------
+    tuple
+        A tuple containing the converted monetary value, the converted unit, and a flag indicating whether any errors occurred during the conversion.
+    """
+    flag = False
     try:
         value_parsed = CurrencyConverter().convert(value_parsed, unit_parsed, DEF_CUR, date=report_date)
         unit_parsed = DEF_CUR
@@ -516,7 +533,7 @@ def money_converter(value_parsed, unit_parsed, report_date, flag, DEF_CUR="EUR")
         flag = True
     return value_parsed, unit_parsed, flag
 
-def convert_monetary_units(x):
+def convert_monetary_units(x, currency_dict=CURRENCY_CONVERTER, DEF_CUR="EUR"):
     """
     Convert units that are currencies to a common baseline (EUR) by parsing the string
     and using a currency converter.
@@ -531,33 +548,42 @@ def convert_monetary_units(x):
     pd.Series
         modified row with converted value and unit
     """
-    DEF_CUR = "EUR"
     value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     unit_raw = x["impactUnit"]
     report_date = pd.to_datetime(x["reportDate"])
-    values_parsed = {}
-    units_parsed = []
+    x["flag_currency_conversion"] = False
+    x["flag_failed_currency_conversion"] = False
+    values_converted = {}
+    units_converted = []
+    #try to identify currency from impactUnit
+    id_currencies = [curr for curr, pattern in currency_dict.items() if re.search(pattern, unit_raw, re.IGNORECASE)]
+    if len(id_currencies) == 0:
+        return x
+    elif len(id_currencies) > 1:
+        LOGGER.warning("Multiple potential currencies found for token %s, identified currencies %s. Not converting", unit_raw, id_currencies)
+        x["flag_failed_currency_conversion"] = True
+        return x
+    else:
+        unit_parsed = id_currencies[0]
     flag_failed_conversion = False
     for value_label in value_labels:
         value_raw = x[value_label]
-        parsed_price = Price.fromstring(f'{value_raw} {unit_raw}')
-        unit_parsed = parsed_price.currency
-        value_parsed = parsed_price.amount_float
-        if unit_parsed and value_parsed:#if monetary unit is identified, try to convert it to default currency
-            values_parsed[value_label], unit_parsed, flag_failed_conversion = money_converter(value_parsed, unit_parsed, report_date, flag_failed_conversion, DEF_CUR)
-            units_parsed.append(unit_parsed)
+        if not pd.isnull(value_raw) and not pd.isna(value_raw):#if monetary unit is identified, try to convert it to default currency
+            values_converted[value_label], unit_converted, flag_failed_conversion = money_converter(value_raw, unit_parsed, report_date, DEF_CUR=DEF_CUR)
+            units_converted.append(unit_converted)
         else:
-            values_parsed[value_label] = value_raw
+            values_converted[value_label] = value_raw
 
-    if len(pd.unique(units_parsed)) > 1:#only do assignment if all units are the same
-        LOGGER.warning("Multiple units parsed: %s", units_parsed)
+    if len(pd.unique(units_converted)) > 1:#only do assignment if all units are the same
+        LOGGER.warning("Multiple units parsed: %s", units_converted)
         flag_failed_conversion = True
-    elif len(pd.unique(units_parsed)) == 1:
+    elif len(pd.unique(units_converted)) == 1:
         for value_label in value_labels:
-            x[value_label] = values_parsed[value_label]
-        x["impactUnit"] = units_parsed[0]
+            x[value_label] = values_converted[value_label]
+        x["impactUnit"] = units_converted[0]
 
-    x["flag_currency_conversion"] = flag_failed_conversion
+    x["flag_currency_conversion"] = True
+    x["flag_failed_currency_conversion"] = flag_failed_conversion
     return x
 
 def replace_numbers_unit(x):
@@ -570,10 +596,10 @@ def replace_numbers_unit(x):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.load("en_core_web_sm")
     unit = x["impactUnit"]
+    x["flag_remove_number_unit"] = False
+    x["flag_remove_number_unit_error"] = False
     if (pd.isna(unit) or unit is None):
-        x["flag_reformat_unit"] = False
         return x
 
     # Process the text
@@ -585,8 +611,21 @@ def replace_numbers_unit(x):
     last_token_modified = False
     for token in doc:
         #first replace written-out numbers
-        if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
-            id_number = float(text2num(token.text, "en"))
+        if (written_num(token.text) or token.is_digit) and not looks_like_proper_name(token): #must not be part of a proper noun
+            x["flag_remove_number_unit"] = True
+            try:
+                id_number = float(text2num(token.text, "en"))
+            except ValueError:
+                try:
+                    id_number = float(token.text)
+                except ValueError:
+                    LOGGER.warning("Failed to convert %s to number.", token.text)
+                    x["flag_remove_number_unit_error"] = True
+                    modified_tokens.append(token.text)
+                    last_token_modified = False
+                    if token.whitespace_:#keep whitespace
+                        modified_tokens.append(token.whitespace_)
+                    continue
             #if the previous token is a number replace by the multiple of the two numbers
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
@@ -606,21 +645,17 @@ def replace_numbers_unit(x):
 
     #join tokens back to unit
     cleaned_unit = "".join(modified_tokens)
+    cleaned_unit = cleaned_unit.strip()
 
     # try to parse new value
     #keep id_number first if there was no impactValue at first else keep impactValue if no id_number
-    impact_values = x[["impactValueMin", "impactValue", "impactValueMax"]].values.tolist()
+    value_labels = ["impactValueMin", "impactValue", "impactValueMax"]
     if id_number:
-        new_imp_values = [id_number*impact_value if not pd.isna(impact_value) else id_number for impact_value in impact_values]
-        flag_reformat_unit = True
-    else: #keep impactValue if no id_number
-        new_imp_values = impact_values
-        flag_reformat_unit = False
-    x["impactValueMin"] = new_imp_values[0]
-    x["impactValue"] = new_imp_values[1]
-    x["impactValueMax"] = new_imp_values[2]
+        for value_label in value_labels:
+            new_value = id_number * x[value_label] if not pd.isna(x[value_label]) else x[value_label]
+            x[value_label] = new_value
+
     x["impactUnit"] = cleaned_unit
-    x["flag_reformat_unit"] = flag_reformat_unit
     return x
 
 def label_quanti_quali(x):
@@ -677,3 +712,43 @@ def make_date(report_df):
     report_df["startDate"] = report_df.apply(lambda x: get_date(x, prefix='start'), axis=1)
     report_df["endDate"] = report_df.apply(lambda x: get_date(x, prefix='end'), axis=1)
     return report_df
+
+def merge_annotations(x, annotation_cols):
+    """
+    Merge multiple annotation columns into a single column.
+
+    Parameters
+    ----------
+    x : pd.Series
+        Row of the DataFrame containing the annotation columns.
+    annotation_cols : list
+        List of annotation column names to be merged.
+
+    Returns
+    -------
+    str
+        Merged annotations as a single string.
+    """
+    annotations = []
+    for col in annotation_cols:
+        if col not in x.index:
+            continue
+        val = x[col]
+        if val is None:
+            continue
+        # handle iterables (lists/arrays/Series) and scalars
+        if isinstance(val, (list, tuple, np.ndarray, pd.Series)):
+            for item in val:
+                if pd.notnull(item):
+                    annotations.append(str(item))
+        else:
+            if pd.notnull(val):
+                annotations.append(str(val))
+    # keep unique preserving order
+    seen = set()
+    unique_ann = []
+    for a in annotations:
+        if a not in seen:
+            seen.add(a)
+            unique_ann.append(a)
+    return unique_ann

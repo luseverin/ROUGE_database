@@ -26,8 +26,8 @@ nltk.download('punkt')  # Download sentence tokenizer
 nltk.download('stopwords') # Download stopwords
 
 ## load spacy nlp
-#nlp = spacy.load("en_core_web_sm")#en_core_web_sm
-#nlp.add_pipe("language_detector")
+nlp = spacy.load("en_core_web_sm")#en_core_web_sm
+nlp.add_pipe("language_detector")
 #nlp.add_pipe('find_numbers')
 
 ## Detect language
@@ -42,8 +42,8 @@ def detect_language(text):
     Returns:
         str: Detected language.
     """
-    nlp = spacy.load("en_core_web_sm")
-    nlp.add_pipe("language_detector")
+    #nlp = spacy.load("en_core_web_sm")
+    #nlp.add_pipe("language_detector")
     doc = nlp(text)
     return doc._.language  # Check if detected language is English
 
@@ -74,6 +74,11 @@ def is_float_digit(text):
         return True
     except ValueError:
         return False
+def looks_like_proper_name(token):
+    # Protect capitalized number-words inside noun chunks
+    if token.text[0].isupper() and any(token in chunk for chunk in token.doc.noun_chunks):
+        return True
+    return False
 
 #format numbers
 def format_number(num):
@@ -96,7 +101,7 @@ def replace_numbers(text_in):
     Returns:
         str: The text with numbers replaced.
     """
-    nlp = spacy.load("en_core_web_sm")
+    #nlp = spacy.load("en_core_web_sm")
     # Process the text
     doc = nlp(text_in)
 
@@ -106,11 +111,22 @@ def replace_numbers(text_in):
     for token in doc:
 
         #first replace written-out numbers
-        if written_num(token.text) and token.pos_ != "PROPN": #must not be part of a proper noun
-            number = float(text2num(token.text, "en"))
+        if (written_num(token.text) or token.is_digit) and not looks_like_proper_name(token): #must not be part of a proper noun
+            try:
+                number = float(text2num(token.text, "en"))
+            except ValueError:
+                try:
+                    number = float(token.text)
+                except ValueError:
+                    LOGGER.warning("Failed to convert %s to number.", token.text)
+                    modified_tokens.append(token.text)
+                    last_token_modified = False
+                    if token.whitespace_:#keep whitespace
+                        modified_tokens.append(token.whitespace_)
+                    continue
             #if the next tokens could be a unit and if the previous token is a number replace by the multiple of the two numbers
-            next_tokens = take_n_neighb_tokens(token, 2)
-            next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
+            #next_tokens = take_n_neighb_tokens(token, 2)
+            #next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens]) if next_tokens else ""
             prev_token = take_n_neighb_tokens(token, -1) #nlp.tokenizer(modified_tokens[-1])[0] if len(modified_tokens) > 0 else None
             prev_token = prev_token[0] if prev_token else None
             if last_token_modified or (prev_token and is_float_digit(prev_token.text)):#and could_be_unit(next_tokens) do not necessarily ask to be a unit?
@@ -170,55 +186,79 @@ def take_n_neighb_tokens(token, n):
 
 def could_be_unit(text):
     """
-    Check if a given string could be a unit.
+    Check if a given text string could potentially be a unit.
 
-    Return True if any of the regex patterns in std_unit_kw_reclass
-    match the given string, else False.
+    Args:
+        text (str): The text to check.
+
+    Returns:
+        bool: True if the text could be a unit, False otherwise.
+
+    This function checks if the given text string contains any of the known unit patterns.
+    If a match is found, the function returns True. Otherwise, it returns False.
     """
-    pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if any([re.search(pattern, text, re.IGNORECASE) for pattern in unit_patterns])]
-    return len(pot_units) > 0
+    if not text or not isinstance(text, str):
+        return False
+    pot_units = []
+    for target_unit, unit_patterns in ALL_POSSIBLE_UNITS.items():
+        if not isinstance(unit_patterns, list):
+            unit_patterns = [unit_patterns]
+        for pattern in unit_patterns:
+            try:
+                if re.search(pattern, text, re.IGNORECASE):
+                    pot_units.append(target_unit)
+                    break
+            except re.error:
+                # If the pattern is an invalid regex, treat it as a literal string
+                if re.search(re.escape(pattern), text, re.IGNORECASE):
+                    pot_units.append(target_unit)
+                    break
+    print(pot_units)
+    if pot_units:
+        return True
+    return False
 
-def text_standardize_metric_units(text):
-    """Standardize units to a common baseline in text"""
-
-    ureg = UnitRegistry()
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    new_text = text
-
-    for token in doc:
-        # Check if token is a number followed by a unit
-        if token.like_num:
-            #if token can be converted to float, proceed to conversion else continue
-            try :
-                num = float(token.text)
-            except ValueError:
-                continue
-            next_tokens = take_n_neighb_tokens(token, 2) # take next 2 tokens
-
-            if next_tokens:
-                next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
-                pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
-                if len(pot_units) == 0:
-                    continue
-                elif len(pot_units) > 1:
-                    raise ValueError(f"Multiple potential units found for token: {token.text} {next_tokens}")
-
-                unit = pot_units[0]
-                si_unit = unit_mapping[unit]
-
-                # Perform conversion
-                quantity = num * ureg(unit)
-                converted_quantity = quantity.to(si_unit)
-                converted_value = converted_quantity.magnitude
-                converted_unit = converted_quantity.units
-
-                # Replace in the text
-                replacement = f"{converted_value:.8g} {converted_unit}"
-                old = f"{token.text} {next_tokens}"
-                new_text = new_text.replace(old, replacement)
-
-    return new_text
+#def text_standardize_metric_units(text):
+#    """Standardize units to a common baseline in text"""
+#
+#    ureg = UnitRegistry()
+#    nlp = spacy.load("en_core_web_sm")
+#    doc = nlp(text)
+#    new_text = text
+#
+#    for token in doc:
+#        # Check if token is a number followed by a unit
+#        if token.like_num:
+#            #if token can be converted to float, proceed to conversion else continue
+#            try :
+#                num = float(token.text)
+#            except ValueError:
+#                continue
+#            next_tokens = take_n_neighb_tokens(token, 2) # take next 2 tokens
+#
+#            if next_tokens:
+#                next_tokens = " ".join([next_token.text.lower() for next_token in next_tokens])
+#                pot_units = [target_unit for target_unit, unit_patterns in std_unit_kw_reclass.items() if np.any([re.search(pattern, next_tokens, re.IGNORECASE) for pattern in unit_patterns])]
+#                if len(pot_units) == 0:
+#                    continue
+#                elif len(pot_units) > 1:
+#                    raise ValueError(f"Multiple potential units found for token: {token.text} {next_tokens}")
+#
+#                unit = pot_units[0]
+#                si_unit = METRIC_UNIT_MAPPING[unit]
+#
+#                # Perform conversion
+#                quantity = num * ureg(unit)
+#                converted_quantity = quantity.to(si_unit)
+#                converted_value = converted_quantity.magnitude
+#                converted_unit = converted_quantity.units
+#
+#                # Replace in the text
+#                replacement = f"{converted_value:.8g} {converted_unit}"
+#                old = f"{token.text} {next_tokens}"
+#                new_text = new_text.replace(old, replacement)
+#
+#    return new_text
 
 
 def clean_text(text, remove_numbers=False, remove_stopwords=False):
@@ -417,11 +457,13 @@ def select_impact_description(report, buffer=1):
         "detailed operation plan", "summary of the current response",
         "Overview of Operating National Society Response Action"
     ]
-    text = report[["sentences"]]
+    text = report["sentences"]
     # Precompile regex patterns
     keep_pattern = re.compile("|".join(re.escape(h) for h in headers_keep), re.IGNORECASE)
     drop_pattern = re.compile("|".join(re.escape(h) for h in headers_drop), re.IGNORECASE)
 
+    for i, s in enumerate(text):
+        print(s)
     ids_keep = [i for i, s in enumerate(text) if keep_pattern.search(s)]
     ids_drop = [i for i, s in enumerate(text) if drop_pattern.search(s)]
 
@@ -500,72 +542,72 @@ def check_hazard_type_keyword(text, hazard_patterns):
 
     return hazards
 
-def extract_entities(text):
-    # Process the text with spaCy
-    """
-    Extract named entities from a text.
+#def extract_entities(text):
+#    # Process the text with spaCy
+#    """
+#    Extract named entities from a text.
+#
+#    The function takes a text as input and processes it with spaCy to extract named entities.
+#    The function returns a list of tuples, where each tuple contains the text of the entity and its label.
+#
+#    Parameters
+#    ----------
+#    text : str
+#        The text to be processed.
+#
+#    Returns
+#    -------
+#    entities : list of tuples
+#        The list of extracted entities, where each tuple contains the text of the entity and its label.
+#    """
+#    nlp = spacy.load("en_core_web_sm")
+#    doc = nlp(text)
+#    entities = [(ent.text, ent.label_) for ent in doc.ents]
+#    return entities
 
-    The function takes a text as input and processes it with spaCy to extract named entities.
-    The function returns a list of tuples, where each tuple contains the text of the entity and its label.
-
-    Parameters
-    ----------
-    text : str
-        The text to be processed.
-
-    Returns
-    -------
-    entities : list of tuples
-        The list of extracted entities, where each tuple contains the text of the entity and its label.
-    """
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
-    return entities
-
-def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
-    """
-    Extract causal relationships from a sentence.
-
-    The function takes a sentence as input and processes it with spaCy to extract causal relationships.
-    The function returns a list of tuples, where each tuple contains the cause, the relationship, and the effect.
-
-    Parameters
-    ----------
-    sentence : str
-        The sentence to be processed.
-    relationship_list : list of str
-        The list of causal verbs to be considered.
-    hazard_patterns : dict
-        A dictionary of patterns to be used to check if a word is a hazard type.
-
-    Returns
-    -------
-    causes : list of tuples
-        The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
-    """
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(sentence)
-    causes = []
-
-    # Iterate over the tokens in the sentence
-    for token in doc:
-        #prev_token = doc[token.i - 1]
-        #next_token = doc[token.i + 1]
-        # Check if the token is a verb and in the list of causal verbs
-        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
-            # Find the subject (nsubj) and object (dobj) of the verb
-            subject = None
-            effect = None
-
-            for child in token.children:
-                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
-                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
-                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
-            # If both subject and object (effect) are found, return the relationship
-            if subject and effect:
-                causes.append((subject, token.lemma_, effect))
-
-    return causes
+#def extract_causal_relationships(sentence, relationship_list ,hazard_patterns):
+#    """
+#    Extract causal relationships from a sentence.
+#
+#    The function takes a sentence as input and processes it with spaCy to extract causal relationships.
+#    The function returns a list of tuples, where each tuple contains the cause, the relationship, and the effect.
+#
+#    Parameters
+#    ----------
+#    sentence : str
+#        The sentence to be processed.
+#    relationship_list : list of str
+#        The list of causal verbs to be considered.
+#    hazard_patterns : dict
+#        A dictionary of patterns to be used to check if a word is a hazard type.
+#
+#    Returns
+#    -------
+#    causes : list of tuples
+#        The list of extracted causal relationships, where each tuple contains the cause, the relationship, and the effect.
+#    """
+#    nlp = spacy.load("en_core_web_sm")
+#    doc = nlp(sentence)
+#    causes = []
+#
+#    # Iterate over the tokens in the sentence
+#    for token in doc:
+#        #prev_token = doc[token.i - 1]
+#        #next_token = doc[token.i + 1]
+#        # Check if the token is a verb and in the list of causal verbs
+#        if token.lemma_ in relationship_list and token.pos_ == 'VERB':
+#            # Find the subject (nsubj) and object (dobj) of the verb
+#            subject = None
+#            effect = None
+#
+#            for child in token.children:
+#                if child.dep_ == 'nsubj' and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Subject (the cause)
+#                    subject = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+#                if child.dep_ in ['dobj', 'pobj'] and len(check_hazard_type_keyword(child.text, hazard_patterns)) > 0:  # Object (the effect)
+#                    effect = child.text #check_hazard_type_keyword(child.text, hazard_patterns)
+#            # If both subject and object (effect) are found, return the relationship
+#            if subject and effect:
+#                causes.append((subject, token.lemma_, effect))
+#
+#    return causes
 

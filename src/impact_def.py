@@ -143,7 +143,7 @@ Impacts.register(
     description="Number of education infrastructures such as schools, universities, etc. impacted by a hazard.",
     keyword=r"\bEducation Infrastructure\b",
     expected_unit="education structures",
-    default_unit="schools"
+    default_unit="education structures"
 )
 
 Impacts.register(
@@ -184,7 +184,7 @@ Impacts.register(
 
 Impacts.register(
     key="Recreation, Tourism, and Culture",
-    main_type="Economic Activity and Livelihood Production",
+    main_type="Economy & Culture",
     description="Tourist attractions and cultural sites impacted by a hazard.",
     keyword=r"\bRecreation, Tourism, and Culture\b",
     expected_unit="unknown",
@@ -192,8 +192,8 @@ Impacts.register(
 )
 
 Impacts.register(
-    key="Economic and Livelihood",
-    main_type="Economic Activity and Livelihood Production",
+    key="Economy and Livelihood",
+    main_type="Economy & Culture",
     description="Any identified impact on the economy which cannot be associated with the previous impactSubtypes.",
     keyword=r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
     expected_unit="businesses",
@@ -241,7 +241,7 @@ Impacts.register(
     main_type="Service access",
     description="People losing safe, clean, and consistent supply of water for drinking, sanitation, and other essential uses.",
     keyword=r"\bWater Quality and Availability\b",
-    expected_unit="unknown",
+    expected_unit="water points",
     default_unit="unknown"
 )
 
@@ -314,10 +314,10 @@ Impacts.register(
 
 Impacts.register(
     key="DREF Allocation",
-    main_type="Economic Activity and Livelihood Production",
+    main_type="Economy & Culture",
     description="The DREF allocation for the event in CHF or other currency.",
     keyword=r"\bDREF Allocation\b",
-    expected_unit="CHF",
+    expected_unit=None,#"CHF", ! None to avoid automatic conversion
     default_unit="CHF"
 )
 
@@ -382,14 +382,14 @@ IMPACT_SUBTYPES_MERGED = [el for el in IMPACT_SUBTYPES if el not in ["Road Infra
 
 IMPACT_SUBTYPES_MERGED += [k for k in IMPACT_SUBTYPE_MERGER.keys()]
 
-# Update impact main type 
-IMPACT_TYPES_MERGER = {"Transportation" : "Infrastructure and Service access", 
-                       "TranspoWater, Sanitation, and Hygienertation" : "Infrastructure and Service access", 
-                       "Healthcare" : "Infrastructure and Service access", 
-                       "IT and Communication" : "Infrastructure and Service access", 
-                       "Education" : "Infrastructure and Service access", 
-                       "Agriculture and Access to Food" : "Infrastructure and Service access", 
-                       "Power and Energy" : "Infrastructure and Service access", 
+# Update impact main type
+IMPACT_TYPES_MERGER = {"Transportation" : "Infrastructure and Service access",
+                       "Water, Sanitation, and Hygiene" : "Infrastructure and Service access",
+                       "Healthcare" : "Infrastructure and Service access",
+                       "IT and Communication" : "Infrastructure and Service access",
+                       "Education" : "Infrastructure and Service access",
+                       "Agriculture and Access to Food" : "Infrastructure and Service access",
+                       "Power and Energy Production" : "Infrastructure and Service access",
                        "Undefined Infrastructure and Service Access" : "Infrastructure and Service access"}
 
 IMPACT_TYPES_MERGED = {}
@@ -397,6 +397,6 @@ for subtype in IMPACT_SUBTYPES_MERGED:
     main_type = IMPACT_TYPES.get(subtype, None)  # get main type only for this subtype
     if main_type in ["Infrastructure", "Service access"]:
         main_type = "Infrastructure and Service access"
-    elif subtype in IMPACT_TYPES_MERGER.keys() : 
+    elif subtype in IMPACT_TYPES_MERGER.keys() :
         main_type = IMPACT_TYPES_MERGER[subtype]
     IMPACT_TYPES_MERGED[subtype] = main_type
