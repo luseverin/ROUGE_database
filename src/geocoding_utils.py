@@ -70,7 +70,6 @@ LOCATION_LEVEL_MAPPING = {
     'admin1': {'admin_level': 1, 'nominatim_keys': ['state', 'province', 'region', 'county', 'territory', 'department', 'governorate', 'autonomous_region', 'state_district', 'district', 'metropolitan_area', 'subregion', 'zone']},
     'admin0': {'admin_level': 0, 'nominatim_keys': ['country']}
 }
-"""XX"""
 
 LIST_ADMIN_WORDS = [
     "Regency", "Province", "State", "Department", "Region", "River",
@@ -82,6 +81,24 @@ LIST_ADMIN_WORDS = [
 ]
 
 def fuzzy_country_match(query):
+    """
+    Perform fuzzy matching of a country name against ISO 3 country names.
+
+    Uses fuzzy string matching to identify the closest matching country
+    name from the pycountry database and returns both the matched country
+    object and the similarity score.
+
+    Parameters
+    ----------
+    query : str
+        Country name or identifier to be matched.
+
+    Returns
+    -------
+    tuple
+        - pycountry.db.Country or None : Best matching country object.
+        - int : Fuzzy matching score (0–100). Returns 0 if no match is found.
+    """
     choices = {c.name: c for c in pycountry.countries}
     result = process.extractOne(
         query,
@@ -265,7 +282,6 @@ def clean_geometry(geom):
     if geom is None or geom.is_empty:
         return None
     try:
-        # buffer(0) fixes many geometric issues AND implicitly checks validity
         cleaned = geom.buffer(0)
         return cleaned
 
@@ -275,6 +291,30 @@ def clean_geometry(geom):
     return geom
 
 def to_flat_multipolygon(geometries):
+    """
+    Flatten a list of geometries into a single MultiPolygon.
+
+    Iterates through a list of Shapely geometries, converting all
+    Polygon and MultiPolygon objects into a single flat MultiPolygon.
+    GeometryCollections are recursively flattened. Returns None if
+    no valid polygons are found.
+
+    Parameters
+    ----------
+    geometries : list of shapely.geometry.base.BaseGeometry
+        List of Shapely geometries to flatten.
+
+    Returns
+    -------
+    shapely.geometry.MultiPolygon or None
+        Flattened MultiPolygon containing all valid polygons, or None
+        if no valid geometries are present.
+
+    Raises
+    ------
+    ValueError
+        If an unsupported geometry type is encountered.
+    """
     flat_polys = []
 
     for geom in geometries:
@@ -303,12 +343,26 @@ def to_flat_multipolygon(geometries):
 
 def sanitize_and_merge_geometries(geometries):
     """
-    - Cleans individual geometries
-    - Flattens to Polygon level
-    - Keeps ALL polygons, even nested ones
-    - Do not union
-    """
+    Clean and flatten geometries, keeping all polygons without unioning.
 
+    Performs the following steps:
+    1. Cleans individual geometries using `clean_geometry`.
+    2. Flattens MultiPolygon and GeometryCollection objects to individual
+       Polygons.
+    3. Deduplicates polygons based on normalized WKB.
+    4. Returns a MultiPolygon of all unique polygons or None if empty.
+
+    Parameters
+    ----------
+    geometries : list of shapely.geometry.base.BaseGeometry
+        List of Shapely geometries to sanitize and merge.
+
+    Returns
+    -------
+    shapely.geometry.MultiPolygon or None
+        MultiPolygon of all unique polygons after cleaning and flattening,
+        or None if no valid polygons exist.
+    """
     polys = []
 
     for g in geometries:
@@ -346,12 +400,51 @@ def sanitize_and_merge_geometries(geometries):
     # return MultiPolygon(polys)
 
 def get_continent(iso_code, world):
+    """
+    Retrieve the continent for a given ISO-3166 alpha-3 country code.
+
+    Looks up the ISO code in a GeoDataFrame containing world geometry
+    data and returns the corresponding continent name. Returns None if
+    the ISO code is not found.
+
+    Parameters
+    ----------
+    iso_code : str
+        ISO-3166 alpha-3 country code.
+    world : geopandas.GeoDataFrame
+        GeoDataFrame containing at least the columns 'ISO_A3' and
+        'CONTINENT'.
+
+    Returns
+    -------
+    str or None
+        Continent name corresponding to the ISO code, or None if not found.
+    """
     try:
         return world[world['ISO_A3'] == iso_code]['CONTINENT'].values[0]
     except IndexError:
         return None
 
 def split_continents(df_geom, world) :
+    """
+    Split a GeoDataFrame into multiple GeoDataFrames by continent.
+
+    Adds a 'continent' column to each row based on the ISO-3166 alpha-3
+    code and returns a dictionary mapping continent names to GeoDataFrames.
+
+    Parameters
+    ----------
+    df_geom : geopandas.GeoDataFrame
+        GeoDataFrame containing a column 'country_iso3' with country ISO codes.
+    world : geopandas.GeoDataFrame
+        World GeoDataFrame containing 'ADM0_ISO' and 'CONTINENT' columns.
+
+    Returns
+    -------
+    dict
+        Dictionary where keys are continent names and values are
+        GeoDataFrames containing only the rows for that continent.
+    """
     iso_to_continent = (
         world[["ADM0_ISO", "CONTINENT"]]
         .dropna()
