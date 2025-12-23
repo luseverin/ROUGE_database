@@ -14,16 +14,27 @@ from src.geocoding_utils import split_continents
 from src.logger_setup import set_logger
 
 ## Parameters
-dedup_cols = ["appealCode","impactSubtype", "impactValue", "impactUnit", "country",
+dedup_cols = ["appealCode","impactSubtype", "impactValue", "impactUnit", "iso3_code",
               "location", "startYear", "startMonth", "startDay","endYear", "endMonth",
               "endDay", "hazards"]
 
 ##load data (model)
-res_savename = "post_processed_geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v191225"
+res_savename = "post_processed_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v231225"
 #"post_processed_labelled_reports_fixed_impact_desc_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
 #"post_processed_new_unit_std_labelled_reports_impacts_all_v111025"
 suffix = ""
 res_savename_geo = res_savename + suffix
+
+# Set up final name
+filename_out = "filter_" + res_savename
+filename_out_geo = "filter_" + res_savename_geo
+
+#set up logger
+logger_name = "data_filter"
+log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
+LOGGER = set_logger(log_file, logger_name=logger_name)
+
+## Load data
 response_df = pd.read_csv(DATA_OUT_PROC / (res_savename + ".csv"))
 response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo+".gpkg"))
 
@@ -31,23 +42,14 @@ response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo+".gpkg"))
 response_df = format_output(response_df)
 response_df_geo = format_output(response_df_geo)
 
-for col in LIST_COLS : 
-    if col in response_df.columns : 
+for col in LIST_COLS :
+    if col in response_df.columns :
         response_df[col] = response_df[col].apply(sorted)
-    if col in response_df_geo.columns : 
+    if col in response_df_geo.columns :
         response_df_geo[col] = response_df_geo[col].apply(sorted)
 
 response_df = delistify_cols(response_df)
 response_df_geo = delistify_cols(response_df_geo)
-
-# Set up final name
-filename_out = "filt_" + res_savename
-filename_out_geo = "filt_" + res_savename_geo
-
-#set up logger
-logger_name = "data_filter"
-log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
-LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ## drop duplicates (needs to be done before formatting as lists dtypes cannot be dedup)
 init_len = len(response_df)
@@ -155,8 +157,8 @@ world = gpd.read_file(ADMIN_PATH / "ne_110m_admin_0_countries/ne_110m_admin_0_co
 response_df_geo_filtered_continent = split_continents(response_df_geo_filtered, world)
 for continent, df in response_df_geo_filtered_continent.items():
     continent = continent.replace(" ", "_")
-    if len(str(DATA_OUT_PROC / f"{filename_out_geo}_{continent}.parquet")) > 260 : 
-        LOGGER.info(f"More than 260 characters, Unable to save file to {str(DATA_OUT_PROC / f"{filename_out_geo}_{continent}.parquet")}")
-    else : 
+    if len(str(DATA_OUT_PROC / f"{filename_out_geo}_{continent}.parquet")) > 260 :
+        LOGGER.info(f'More than 260 characters, Unable to save file to {str(DATA_OUT_PROC / f"{filename_out_geo}_{continent}.parquet")}')
+    else :
         df.to_parquet(DATA_OUT_PROC / (f"{filename_out_geo}_{continent}"+".parquet"),compression="zstd", index=False)
     atomic_gpkg_save(df, DATA_OUT_PROC / (f"{filename_out_geo}_{continent}" + ".gpkg"))
