@@ -1,6 +1,4 @@
 # ROUGE
-[![DOI]()]()
-
 **A database of disaster impacts in the Global South using Red Cross reports and Large Language Models**
 
 Laura Hasbini<sup>1,2\*</sup>, Luca G. Severino<sup>3,4\*</sup>, Mariana Madruga de Brito<sup>5</sup>, Gabriela Gesualdo<sup>6</sup>, Ana Maria Rotaru<sup>7</sup>, David N. Bresch<sup>3,4</sup>,Evelyn Mühlhofer<sup>4</sup>, Jingxian Wang<sup>8,9</sup>  and Taís Maria Nunes Carvalho<sup>5,10</sup>
@@ -80,23 +78,15 @@ The core pipeline consists of three main steps.
 
 ## Repository content
 
-### Notebooks
+### Analysis
 
 Jupyter notebooks used for data inspection, validation, and analysis.
 
 | Notebook | Purpose |
 |--------:|:--------|
-| `data_flag_checks.ipynb` | Inspect the type and frequency of flags raised during extraction |
-| `data_post_process.ipynb` | Inspect and validate impact post processing steps |
 | `download_external_sources.ipynb` | Download IFRC Monty and IFRCGo data via APIs |
-| `gather_label_reports.ipynb` | Gather and harmonize manually labelled reports |
-| `gather_quanti_impact.ipynb` | Inspect extraction of quantitative impact information |
-| `geocoding.ipynb` | Inspect successive steps of the geocoding pipeline |
-| `impact_postprocess.ipynb` | Post process extracted impact data |
-| `inspect_flags.ipynb` | Detailed inspection of extraction and post processing flags |
-| `inspect_header.ipynb` | Inspect selection of impact relevant text sections |
 | `labelled_extracted_row_matching.ipynb` | Match manually labelled data with LLM extracted results |
-| `preprocess_IFRC_reports.ipynb` | Pre process raw IFRC operational reports |
+| `open_data.ipynb` | User guidelines to open the database from different formats |
 | `result_data_overview.ipynb` | Overview plots and summary statistics of extracted impacts |
 | `validation_accuracy.ipynb` | Accuracy evaluation of extracted impacts |
 | `validation_coverage.ipynb` | Coverage assessment across regions and hazards |
