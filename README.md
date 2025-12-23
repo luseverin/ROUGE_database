@@ -1,4 +1,4 @@
-# como_project4
+# ROUGE :  A database of disaster impacts in the Global South using Red Cross reports and Large Language Models 
 ## Instructions
 1. Clone the repo, go to branch main
 2. Install the environment using conda env create -f ifrc_llm_311.yml
