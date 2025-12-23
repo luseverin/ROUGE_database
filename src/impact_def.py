@@ -194,7 +194,7 @@ Impacts.register(
 Impacts.register(
     key="Economy and Livelihood",
     main_type="Economy & Culture",
-    description="Any identified impact on the economy which cannot be associated with the previous impactSubtypes.",
+    description="Any identified impact on the economy or living conditions resulting from a natural hazard.",
     keyword=r"\b(Other Economic(?: Activity)? (?:and|&) Livelihood (?:Production|Impact(?:s)?)|Economy and Market|Livelihood|employment|basic needs)\s*\b",
     expected_unit="businesses",
     default_unit="unknown"
