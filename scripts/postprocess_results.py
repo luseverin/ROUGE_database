@@ -33,7 +33,8 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v191225"
+filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
+#"geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v191225"
 #"labelled_reports_fixed_impact_desc3_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
 #"all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
 #"labelled_reports_turnoff_subtype_val_meta-llama_llama-4-scout-17b-16e-instruct_v131025"
@@ -43,8 +44,8 @@ filename_in = "geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-1
 #"monty_200rep_meta-llama_llama-4-scout-17b-16e-instruct_v190925"
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
-filename_out =  "post_processed_"+filename_in#+f"_v{dt.datetime.now().strftime('%d%m%y')}"#"post_processed_" + filename_in#post_processed_flags_
-data_path = DATA_OUT_PROC #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+filename_out =  "post_processed_"+filename_in+f"_v{dt.datetime.now().strftime('%d%m%y')}"#"post_processed_" + filename_in#post_processed_flags_
+data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
 check_flag_value_in_text = True #whether or not we want to check if the value is in the original text
@@ -57,8 +58,8 @@ merge_subtypes = False #whether or not we want to merge impact subtypes
 remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other Human Impacts", "Other Infrastructural Impacts", "Other Agricultural Impacts", "Other Service Access Impacts"] #list of impactSubtypes to remove
 
 #geocoding params
-geocode = False #whether or not we want to geocode
-geocode_load = True #set to True to load previously geocoded data
+geocode = True #whether or not we want to geocode
+geocode_load = False #set to True to load previously geocoded data
 similarity_th=0.2
 similarity_polygon = 0.6
 print_info=False
@@ -170,7 +171,7 @@ if geocode and not geocode_load:
         response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
     if "country_iso3_kw" not in response_df_proc.columns:
         response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None)
-    df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, save_path=DATA_OUT_PROC, res_savename=filename_out, polygon_source=polygon_source)
+    df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, polygon_source=polygon_source)
 
     # Post geocoding flags
     df_geo_output["flag_pop_cntry"] = df_geo_output.apply(pop_cntry_check, country_pop=country_pop, country_col="iso3_code",axis=1)
@@ -179,6 +180,10 @@ if geocode and not geocode_load:
     #save without geometry column
     df_geo_output.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + "_geo.csv"), index=False)
     df_geo_output_split.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + "_geo_split_lowest.csv"), index=False)
+
+    #save with geometry column
+    save_df_geo(df_geo_output, DATA_OUT_PROC, filename_out+"_geo")
+    save_df_geo(df_geo_output_split, DATA_OUT_PROC, filename_out+"_geo_split_lowest")
 
 end_time = time.time()
 
