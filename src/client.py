@@ -7,13 +7,11 @@ import getpass
 ##set groq api
 #set up api key
 API_KEY = os.getenv("GROQ_API_KEY")
-#"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" #Luca's
-#"os.getenv("GROQ_API_KEY")" Laura's
 
 #set up client
 CLIENT = OpenAI(
         api_key=API_KEY,
-        base_url="https://api.groq.com/openai/v1"  # <-- Groq’s OpenAI-compatible endpoint
+        base_url="https://api.groq.com/openai/v1" 
     )
 # Enables `response_model`
 CLIENT = instructor.patch(client=CLIENT)
