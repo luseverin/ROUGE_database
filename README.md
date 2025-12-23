@@ -1,31 +1,21 @@
 # como_project4
 ## Instructions
-1. Clone the repo, go to branch impact_extraction_multiprompt_clean
+1. Clone the repo, go to branch main
 2. Install the environment using conda env create -f ifrc_llm_311.yml
 3. Run pip install -e . to install src package
 4. Run python -m spacy download en_core_web_sm to install spacy model
 4. Set-up your paths by changing them in data.py
+5. Set-up your API keys by changing them in client.py
 
-To reproduce the analysis, run the scripts in the following order:
-1. preproces_reports.py
-2. llm_extraction.py
-3. postprocess_results.py
+To reproduce the analysis, run the scripts according to their numerical order. 
 
 ## Content
 
-### Notebooks 
+### Analysis 
 List of the following notebooks, for data validation, pre-processing, post-processing, results analysis : 
-- data_flag_checks.ipynb : Inspect the type and amount of flags raised
-- data_post_process.ipynb : Inspect post-processing of impact
 - download_external_sources.ipynb : Download IFRC Monty and IFRCGo data from API
-- gather_label_reports.ipynb : Gather manually labelled reports from several sources
-- gather_quanti_impact.ipynb : Inspect the gathering of quantitative impact
-- geocoding.ipynb : Inspect succesive steps of the geocoding
-- impact_postprocess.ipynb : Postprocess extracted impact
-- inspect_flags.ipynb : Inspect the type and amount of flags raised
-- inspect_header.ipynb : Inspect selection of header (impact text)
 - labelled_extracted_row_matching.ipynb : Matching of labelled and extracted impact data
-- preprocess_IFRC_reports.ipynb : Preprocess raw IFRC reports
+- open_data : User guidelines to open the database from different formats
 - result_data_overview.ipynb : Plots and overview of extracted impact
 - validation_accuracy.ipynb : Accuracy scores for validation
 - validation_coverage.ipynb : Coverage scores for validation
@@ -37,6 +27,7 @@ Source code. Contains:
 - accuracy.py : Accuracy calculation functions
 - classOutput.py : Validation classes for LLM extraction
 - client.py : OpenAI, Groq API and OpenStreetMap client set-up
+- data_format.py : User functions to open the database 
 - data.py : Path definitions
 - external_comparaison.py : Text processing and aggregation functions (for comparaison with EMDAT, IFRCGo and IFRCMonty external data)
 - geocoding.py : Pipeline of geocoding functions
@@ -49,7 +40,6 @@ Source code. Contains:
 - logger_setup.py : Logger setup to track potential errors 
 - post_processing_functions.py : Impact post-processing functions
 - prompt_examples.py : Examples of prompts for the LLM
-- prompt_hazards.py : 
 - prompt_impact.py : Prompt function to extract impacts
 - sanity_checks.py : Postprocessing check of extracted impact
 - text_processing_functions.py : text processing and pre-processing functions
@@ -57,7 +47,9 @@ Source code. Contains:
 - utils.py : Usefull functions for navigation the data
 
 ### scripts
-- preproces_reports.py : script to pre-process raw reports (formating, text selection)
-- llm_extraction.py : script to extract data using LLMs
-- postprocess_results.py : script to post-process extracted and labelled data (reclassification, standardization, geocoding)
+- 1_preproces_reports.py : script to pre-process raw reports (formating, text selection)
+- 2_llm_extraction.py : script to extract data using LLMs
+- 3_postprocess_results.py : script to post-process extracted and labelled data (reclassification, standardization, geocoding)
+- 4_subtypes_merger.py : script to merge the impactSubtypes
+- 5_final_data_filter.py : script to clean the database for final usage (Remove unwanted columns, remove duplicates...)
 
