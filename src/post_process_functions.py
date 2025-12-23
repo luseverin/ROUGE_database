@@ -1,17 +1,11 @@
 import pycountry
 import pandas as pd
-#import json
 import numpy as np
 import regex as re
 import copy as cp
-#import ast
 import regex as re
-import json_repair
 from pint import UnitRegistry
-#from collections import Counter
-from price_parser import Price
 from currency_converter import CurrencyConverter, RateNotFoundError
-#from shapely import equals
 import logging
 
 from src import units
@@ -423,7 +417,7 @@ def standardize_metric_units(x, std_unit_kw_reclass=METRIC_UNIT_KW_RECLASS, unit
     if (pd.isna(x["impactUnit"]) or x["impactUnit"] is None):
         return x
     ureg = UnitRegistry()
-    #print(f"{value} {unit}")
+    
     identified_units = []
     identified_patterns = []
     for target_unit, unit_patterns in std_unit_kw_reclass.items():
