@@ -8,7 +8,6 @@ from shapely.ops import unary_union
 import pandas as pd
 import copy as cp
 import datetime
-from src.LLM_functions import *
 from src.data import *
 from src.hazard_def import *
 from src.impact_def import *
@@ -466,7 +465,7 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df1["hazards_reclass"] = df1["hazards"].apply(lambda x: reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat)) ## ADD the reverse_haazrd_mapping
 
     # Explode countries 
-    df1 = df1.explode("iso3_code").reset_index(drop=True)
+    df1 = df1.explode("country_iso3").reset_index(drop=True)
 
     # Rename and add columns 
     df2 = df2.rename({'ISO' : 'iso_emdat'}, axis=1)
@@ -475,7 +474,7 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df_llm_em_dat = df2.merge(
         df1,
         left_on="iso_emdat",
-        right_on="iso3_code",
+        right_on="country_iso3",
         how="inner"
     )
 
