@@ -366,7 +366,7 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
         adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
         return adm2_match if not adm2_match.empty else None
 
-def fallback_country_union(gdf_file, countries, iso_countries):
+def fallback_country_union(gdf_file, location, countries, iso_countries):
     """Fallback: Combine polygons of all possible countries"""
     country_polygons = []
     for country, country_iso in zip(countries, iso_countries):
@@ -376,7 +376,12 @@ def fallback_country_union(gdf_file, countries, iso_countries):
             df_gpd["locationOsm"] = country
             df_gpd["locationPolygon"] = country
             df_gpd["flag_geocoding_osm"] = 0
-            df_gpd["flag_geocoding_country"] = 1
+            # Don't raise flag_geocoding_country if the location if the country
+            if location in countries : 
+                df_gpd["flag_geocoding_country"] = 0
+            else : 
+                df_gpd["flag_geocoding_country"] = 1
+
             country_polygons.append(df_gpd)
 
     if country_polygons:
@@ -385,7 +390,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
         # combined["geometry"] = MultiPolygon(combined["geometry"])
         # combined["geometry"] = GeometryCollection(combined["geometry"].tolist())
         combined = combined.iloc[[0]]
-        return combined
+        return combined.assign(location=location)
 
     # If no columns found
     empty_cols = [
@@ -402,7 +407,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
         {col: [None] for col in empty_cols}
     )
     LOGGER.error("[gather fallback_country_union fallback] Fail to find country's polygons, %s, %s", countries, iso_countries)
-    return empty_df
+    return empty_df.assign(location=location)
 
 # def gather_to_lowest_admin(df_locations, gpd_files, lowest_level):
 #     """
@@ -872,7 +877,7 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
         step = "top"
         if not best_result:
             step = "fallback_country_union"
-            return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
+            return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
         adm_lev = int(best_result["admin_level"])
 
@@ -924,12 +929,12 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
             best_result["admin_field"] = f"ADMIN_{adm_lev}"
 
         # If loop finishes without returning anything
-        return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
+        return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
     except Exception as e:
         print(step)
         LOGGER.warning("[geocode_from_nomin_output_optimized] %s. Falling back to country level.", e)
-        return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
+        return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
 def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gdf_file, print_info=False, max_workers=None):
     """Run geocoding for multiple locations in parallel using ThreadPoolExecutor,
