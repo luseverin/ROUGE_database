@@ -95,23 +95,19 @@ def normalize_to_list(x):
         return out
     return [x]
 
-def identify_robust_country(df_geo):
+def identify_robust_country(df_geo, ctr_col1, ctr_col2, output_col):
     df = df_geo.copy()
 
     # Normalize all columns
-    countries_main = df["country"].map(normalize_to_list)
-    countries_kw   = df["country_kw"].map(normalize_to_list)
-    isos_main      = df["country_iso3"].map(normalize_to_list)
-    isos_kw        = df["country_iso3_kw"].map(normalize_to_list)
+    countries_col1 = df[ctr_col1].map(normalize_to_list)
+    countries_col2 = df[ctr_col2].map(normalize_to_list) if ctr_col2 in df.columns else []
 
     # Union (vectorized using zip)
-    df["country_robust"] = [sorted(set(a) | set(b)) if (a or b) else None
-                             for a, b in zip(countries_main, countries_kw)]
-    df["country_robust_iso3"] = [sorted(set(a) | set(b)) if (a or b) else None
-                                 for a, b in zip(isos_main, isos_kw)]
+    df[output_col] = [sorted(set(a) | set(b)) if (a or b) else None
+                      for a, b in zip(countries_col1, countries_col2)]
 
     # Drop old columns
-    df = df.drop(columns=["country", "country_kw", "country_iso3", "country_iso3_kw"], errors="ignore")
+    df = df.drop(columns=[ctr_col1, ctr_col2], errors="ignore")
 
     return df
 
@@ -377,9 +373,9 @@ def fallback_country_union(gdf_file, location, countries, iso_countries):
             df_gpd["locationPolygon"] = country
             df_gpd["flag_geocoding_osm"] = 0
             # Don't raise flag_geocoding_country if the location if the country
-            if location in countries : 
+            if location in countries :
                 df_gpd["flag_geocoding_country"] = 0
-            else : 
+            else :
                 df_gpd["flag_geocoding_country"] = 1
 
             country_polygons.append(df_gpd)
@@ -461,7 +457,7 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
 
     if not location:
         query = f"{country}"
-    if not country : 
+    if not country :
         query = f"{location}"
     else:
         query = f"{location}, {country}"
@@ -710,7 +706,7 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
         if nom_result is None:
             nom_result = query_nominatim(location, None)
             if nom_result is not None:
-                # Change the country 
+                # Change the country
                 curr_country = nom_result.raw.get("address", {})["country"]
                 curr_iso2 = nom_result.raw.get("address", {})["country_code"]
                 curr_iso = pycountry.countries.get(alpha_2=curr_iso2.upper()).alpha_3
@@ -851,7 +847,7 @@ def try_geojson_fallback(gdf_file, best_nomin, best_result, location):
             return None
 
         df_gpd = get_polygon_for_geometry(geom, best_result["country"], gdf_file, level=best_result['admin_level'])
-    
+
         if df_gpd is not None:
             return df_gpd
 
@@ -913,8 +909,8 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
                 step = "try_geojson_fallback"
                 df_gpd = try_geojson_fallback(gdf_file, best_nomin, best_result, location)
                 osm_flag=1
-        
-            # Check that the geometry found is at the correct country     
+
+            # Check that the geometry found is at the correct country
             if df_gpd is not None:
                 df_gpd = df_gpd[df_gpd["iso3_code"].isin(iso_countries)]
 
@@ -981,7 +977,7 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
     a GeoDataFrame row with enriched metadata."""
     if row["location"]:  # check if list is non-empty
         df_locations = df_geo_individual_locs.loc[
-            (df_geo_individual_locs["location"].isin(row["location"])) & 
+            (df_geo_individual_locs["location"].isin(row["location"])) &
             (df_geo_individual_locs["iso3_code"].isin(row["country_robust_iso3"]))
         ]
         # print(len(df_locations))
@@ -1021,7 +1017,7 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
 
         return df_empty
 
-    # Clean to have a single admin level per location 
+    # Clean to have a single admin level per location
     max_level = df_locations.groupby("location")["finest_level"].transform("max")
     df_locations = df_locations[df_locations["finest_level"] == max_level].copy()
     df_locations.reset_index(drop=True, inplace=True)
@@ -1214,7 +1210,14 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
 
     # Collect unique locations and associated countries
     start = time.time()
-    df_geo = identify_robust_country(df_geo)
+    if "country_kw" in df_geo.columns :
+        df_geo = identify_robust_country(df_geo, ctr_col1="country", ctr_col2="country_kw", output_col="country_robust")
+    else:
+        df_geo["country_robust"] = df_geo["country"]
+    if "country_iso3_kw" in df_geo.columns :
+        df_geo = identify_robust_country(df_geo, ctr_col1="country_iso3", ctr_col2="country_iso3_kw",  output_col="country_robust_iso3")
+    else:
+        df_geo["country_robust_iso3"] = df_geo["country_iso3"]
     unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso = identify_unique_location_country(df_geo)
     end = time.time()
     time_open = (end - start) / 60
