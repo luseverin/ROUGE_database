@@ -86,9 +86,9 @@ def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
         * Concatenate unique values of location, locationOsm, locationGaul
         * Union geometries
         * Keep other columns constant (take first non-null)
-    - Other wise : 
-        * Take the highest reported value 
-        * Add other impacts if the the intersection of the polygons is null 
+    - Other wise :
+        * Take the highest reported value
+        * Add other impacts if the the intersection of the polygons is null
     """
     df_output = []
 
@@ -177,7 +177,7 @@ def clean_group(df_impact, ADM_min=0) :
 def clean_impact_values(row):
     for impact_type, mapping in mapping_impact_type.items():
         for impact_source, prefix in ifrc_go_impact_source.items():
-            if mapping["ifrc_go"] : 
+            if mapping["ifrc_go"] :
                 col = prefix + mapping["ifrc_go"]
                 # check if column exists and has a non-null value
                 if col in row and pd.notna(row[col]):
@@ -186,7 +186,7 @@ def clean_impact_values(row):
                     break  # stop once one source is found
     return row
 
-def open_clean_ifrc_go() :
+def open_clean_ifrc_go(appeal_filter=["DREF", "Emergency Appeal", "International Appeal"]) :
     df_ifrc_go = pd.read_csv(DATA_EXTERNAL_SOURCE / 'ifrc_go_all.csv')
 
     #Retrieve impact value
@@ -203,10 +203,10 @@ def open_clean_ifrc_go() :
     df_ifrc_go = df_ifrc_go.rename({"appeals_code" : "appealCode"}, axis=1)
     df_ifrc_go["id"] = df_ifrc_go["id"].astype("Int64")
 
-    #Select only DREF reports 
-    df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"]=="DREF"]
+    #Select only DREF reports
+    df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"].isin(appeal_filter)]
 
-    #Select only natural disaster events 
+    #Select only natural disaster events
     df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["dtype_name"].isin(hazard_ifrc_go)]
 
     return df_ifrc_go
@@ -238,7 +238,7 @@ def open_clean_ifrc_monty(df_ifrc_go) :
 
     return df_ifrc_monty
 
-## EMDAT 
+## EMDAT
 
 def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
     #Open EM-DAT
@@ -276,22 +276,22 @@ def choose_unique_disno(df_llm_em_dat, column_minimize):
     # return tied.loc[tied["date_diff"].idxmin(), "DisNo."]
     # print(group)
 
-    # Filter over impact with a Glide number 
+    # Filter over impact with a Glide number
     df_llm_em_dat_glide = df_llm_em_dat.copy()
     # df_llm_em_dat_glide = df_llm_em_dat_glide.dropna(subset=["External IDs"])
 
     # if df_llm_em_dat_glide.empty:
     #     df_llm_em_dat_filtered = df_llm_em_dat.copy()
-    # else : 
+    # else :
     #     df_llm_em_dat_filtered = df_llm_em_dat_glide
     df_llm_em_dat_filtered = df_llm_em_dat_glide
 
-    # Select the DisNo. with the most numerous number of associated impact 
+    # Select the DisNo. with the most numerous number of associated impact
     counts = df_llm_em_dat_filtered["DisNo."].value_counts()  # assuming you have an "impact_id" col
     max_count = counts.max()
     top_disnos = counts[counts == max_count].index
 
-    # # Minimize distance in declaration date 
+    # # Minimize distance in declaration date
     # df_llm_em_dat_filtered["date_diff"] = (df_llm_em_dat_filtered['Entry Date'] - df_llm_em_dat_filtered["reportDate"]).abs()
     # min_diff = df_llm_em_dat_filtered[df_llm_em_dat_filtered["DisNo."].isin(top_disnos)].groupby("DisNo.")["date_diff"].min()
     # chosen_disno = min_diff.idxmin()
@@ -301,24 +301,24 @@ def choose_unique_disno(df_llm_em_dat, column_minimize):
     chosen_disno = min_diff.idxmin()
     return chosen_disno
 
-def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) : 
+def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize, country_field='country_iso3'):
     """
-    df1 : DataFrame with the llm output 
-    df2 : DataFrame with the emdat data 
+    df1 : DataFrame with the llm output
+    df2 : DataFrame with the emdat data
     """
     df1 = cp.deepcopy(df_llm)
     df1_no_split = cp.deepcopy(df_llm)
     # df1["_row_id"] = np.arange(len(df1))
     df2 = cp.deepcopy(df_em_dat)
 
-    # Map the hazard to emdat type 
-    reverse_hazard_mapping_emdat = reverse_mapping(hazard_mapping_emdat) 
+    # Map the hazard to emdat type
+    reverse_hazard_mapping_emdat = reverse_mapping(hazard_mapping_emdat)
     df1["hazards_reclass"] = df1["hazards"].apply(lambda x: reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat)) ## ADD the reverse_haazrd_mapping
 
-    # Explode countries 
-    df1 = df1.explode("iso3_code").reset_index(drop=True)
+    # Explode countries
+    df1 = df1.explode(country_field).reset_index(drop=True)
 
-    # Rename and add columns 
+    # Rename and add columns
     df2 = df2.rename({'ISO' : 'iso_emdat'}, axis=1)
 
     ## First occurence year
@@ -326,7 +326,7 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df_llm_em_dat = df2.merge(
         df1,
         left_on="iso_emdat",
-        right_on="iso3_code",
+        right_on=country_field,
         how="inner"
     )
 
@@ -340,12 +340,12 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         df_llm_em_dat.apply(lambda row: row["Disaster Type"] in row["hazards_reclass"], axis=1)
     ].reset_index(drop=True)
 
-    # ## Macth with countries 
+    # ## Macth with countries
     # df_llm_em_dat = df_llm_em_dat[
-    #     df_llm_em_dat.apply(lambda row: row["country_emdat"] in row["country"], axis=1)
+    #     df_llm_em_dat.apply(lambda row: row["country_emdat"] in row[country_field], axis=1)
     # ].reset_index(drop=True)
 
-    # Create date columns 
+    # Create date columns
     df_llm_em_dat["Start Month"] = df_llm_em_dat["Start Month"].fillna(1).astype("Int64")
     df_llm_em_dat["Start Day"] = df_llm_em_dat["Start Day"].fillna(1).astype("Int64")
     df_llm_em_dat["Start Date"] = pd.to_datetime(
@@ -382,7 +382,7 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
         errors="coerce"
     )
 
-    # # Keep only the ones with a difference of starting date smaller than a threshold 
+    # # Keep only the ones with a difference of starting date smaller than a threshold
     # date_diff_th = datetime.timedelta(days=6*30) ## Verify how to define the timedelta
     df_llm_em_dat["date_diff_start"] = (df_llm_em_dat['Start Date'] - df_llm_em_dat["startDate"]).abs()
     df_llm_em_dat["date_diff_end"] = (df_llm_em_dat['End Date'] - df_llm_em_dat["endDate"]).abs()
@@ -390,7 +390,7 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df_llm_em_dat = df_llm_em_dat.loc[df_llm_em_dat["date_diff_end"]<date_diff_th]
 
     df_llm_em_dat["date_diff_mean"] = (df_llm_em_dat["date_diff_start"] + df_llm_em_dat["date_diff_end"])/2
-    # Match with GLIDE and closest date 
+    # Match with GLIDE and closest date
     df_llm_em_dat["DisNo."] = df_llm_em_dat["DisNo."].astype(str)
 
     appeal_to_disno = (
@@ -411,19 +411,19 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
 
     # emdat_cols = df2.columns.tolist()  # or explicit list if you prefer
 
-    # # Group back the iso3_code
-    # group_cols = ["appealCode", "impactSubtype", "impactValue", 
-    #           "startYear", "startMonth", "startDay", 
+    # # Group back the country_iso3
+    # group_cols = ["appealCode", "impactSubtype", "impactValue",
+    #           "startYear", "startMonth", "startDay",
     #           "endYear", "endMonth", "endDay", ""]
 
     # df_matched = (
     #     df_matched
     #     .groupby(group_cols, dropna=False, as_index=False)
-    #     .agg({"iso3_code": lambda x: sorted(set(x.dropna()))})
+    #     .agg({"country_iso3": lambda x: sorted(set(x.dropna()))})
     # )
     return df_matched, df_llm_em_dat
 
-def match_impact_values(df_llm_all_geo_linked, impactType): 
+def match_impact_values(df_llm_all_geo_linked, impactType):
     appealCodelist = df_llm_all_geo_linked["appealCode"].unique()
     df_emdat_linked = df_llm_all_geo_linked.copy()
     emdat_col = mapping_impact_type[impactType]["emdat"]
