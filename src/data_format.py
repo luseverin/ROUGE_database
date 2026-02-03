@@ -27,10 +27,10 @@ LIST_COLS = ['valueAnnotation',
              "hazardsAnnotation",
              "annotation",
              "sourceExcerpts",
-             "iso3_code",
+             "country_iso3",
              'nathaz_text',
              'locationOsm',
-             'locationPolygon', 
+             'locationPolygon',
              'continent']
 
 def delistify_cols(df):
