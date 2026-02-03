@@ -136,6 +136,7 @@ dependencies:
   - numpy=2.3.3=py311h8685306_0
   - openai=1.108.0=pyhd8ed1ab_0
   - openjpeg=2.5.3=h889cd5d_1
+  - openpyxl
   - openssl=3.5.3=h5503f6c_0
   - packaging=25.0=pyh29332c3_1
   - pandas=2.3.2=py311hff7e5bb_0
@@ -160,6 +161,7 @@ dependencies:
   - pyproj=3.7.2=py311h55f0a08_2
   - pyshp=3.0.1=pyhd8ed1ab_0
   - pysocks=1.7.1=pyha55dd90_7
+  - pystac-client
   - python=3.11.13=hc22306f_0_cpython
   - python-dateutil=2.9.0.post0=pyhe01879c_2
   - python-tzdata=2025.2=pyhd8ed1ab_0
@@ -228,6 +230,7 @@ dependencies:
       - number-spacy==0.0.1
       - price-parser==0.4.0
       - pybind11==3.0.1
+
       - spacy-fastlang==2.1.0
       - text2num==3.0.0
       - word2number==1.1
