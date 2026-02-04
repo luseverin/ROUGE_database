@@ -33,7 +33,7 @@ from src.sanity_checks import *
 #4. Geocoding
 
 ## Parameters
-filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
+filename_in = "labelled_reports_impacts_all_v121225"
 #"geocoded_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v191225"
 #"labelled_reports_fixed_impact_desc3_meta-llama_llama-4-scout-17b-16e-instruct_v271025"
 #"all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225"
@@ -45,10 +45,10 @@ filename_in = "all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instru
 #"labelled_reports_llama-3.1-8b-instant_v250925"
 #"labelled_reports_impacts_all_v111025"
 filename_out =  "post_processed_"+filename_in+f"_v{dt.datetime.now().strftime('%d%m%y')}"#"post_processed_" + filename_in#post_processed_flags_
-data_path = DATA_OUT_LLMS #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_LABELLED #DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 #postprocess params
 post_proc = True #whether or not we want to process the LLM output or the labelled data
-check_flag_value_in_text = True #whether or not we want to check if the value is in the original text
+check_flag_value_in_text = False #whether or not we want to check if the value is in the original text
 convert_to_people = True #whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False #whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = False #whether or not we want to force unit to null when impact is quali
@@ -98,6 +98,9 @@ else:
 
     #mark quanti and quali rows
     response_df_proc = response_df_proc.apply(label_quanti_quali, axis=1)
+
+    #parse nan or none unit to null string
+    response_df_proc = response_df_proc.apply(convert_null_unit, axis=1)
 
     #pre conversion flags
     if check_flag_value_in_text:
