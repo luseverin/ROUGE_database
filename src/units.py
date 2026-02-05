@@ -50,7 +50,7 @@ METRIC_UNIT_KW_RECLASS = {
 
 #reclassify units
 UNIT_CONVERTER = {
-    r"\b(families)\b" : (3, "people"),
+    r"\b(households)\b" : (3, "people"),
     r"\b(villages)\b": (1000, "people"),
     r"\b(communities)\b": (100, "people"),
     }
@@ -65,7 +65,7 @@ UNIT_TYPE_KW_RECLASS = {
 }
 HARMONIZE_UNITS_KW = {
     'people': r"\b(people|persons?|individuals?|residents?)\b",
-    'families' : r"\b(family|families|households?)\b",
+    'households' : r"\b(family|families|households?)\b",
     'communities' : r"\b(community|communities)\b",
     'villages' : r"\b(villages?|hamlets?)\b",
     'roads': r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
