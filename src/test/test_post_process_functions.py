@@ -202,7 +202,8 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(out["flag_hazards_reclass"])
 
     def test_convert_unit(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "families", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Affected People"})
+        # Note: In the full pipeline, 'families' is first harmonized to 'households' by harmonize_units()
+        x = pd.Series({"impactValue": 10, "impactUnit": "households", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Affected People"})
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "people")
         self.assertEqual(out["impactValue"], 30)
@@ -216,9 +217,9 @@ class TestImpactFunctions(unittest.TestCase):
 
     def test_convert_unit_non_people_subtype(self):
         # Test that conversion is skipped when default unit for subtype is not 'people'
-        x = pd.Series({"impactValue": 10, "impactUnit": "families", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Damaged Structures"})
+        x = pd.Series({"impactValue": 10, "impactUnit": "households", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Damaged Structures"})
         out = convert_unit(x.copy())
-        self.assertEqual(out["impactUnit"], "families")  # Should not convert
+        self.assertEqual(out["impactUnit"], "households")  # Should not convert
         self.assertEqual(out["impactValue"], 10)  # Should not multiply
         self.assertFalse(out["flag_unit_conversion"])
 
@@ -240,12 +241,12 @@ class TestImpactFunctions(unittest.TestCase):
                        "impactValueMin": [np.nan, np.nan],
                        "impactValueMax": [20, 20],
                        "unit_type": ["other", "km**2"],
-                       "impactUnit": ["families", "km**2 of banana plantations"],
+                       "impactUnit": ["households", "km**2 of banana plantations"],
                        "impactSubtype": ["Affected People", "agricultural infrastructure"]})
         xexp = pd.DataFrame({"impactValue": [10, 10],
                             "impactValueMin": [np.nan, np.nan],
                             "impactValueMax": [20, 20],
-                            "impactUnit": ["families", "km**2 of crop production and forestry"],
+                            "impactUnit": ["households", "km**2 of crop production and forestry"],
                             "impactSubtype": ["Affected People", "Crop Production and Forestry"]})
 
         for i in range(len(xin)):
@@ -257,12 +258,13 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertEqual(out["impactValueMax"], xexp_i["impactValueMax"])
 
     def test_reclassify_units_reclass_subtype(self):
+        # Note: In the full pipeline, 'families' would first be harmonized to 'households'
         # Unit contains 'idp' → reclassify to 'displaced', then subtype inferred to 'Displaced People'
         x = pd.Series({
             "impactValue": 10,
             "impactValueMin": np.nan,
             "impactValueMax": 20,
-            "impactUnit": "idp families",
+            "impactUnit": "idp households",
             "unit_type": "other",
             "impactSubtype": "Affected People"
         })
@@ -508,6 +510,20 @@ class TestAdditionalUnitFunctions(unittest.TestCase):
         x = pd.Series({"impactUnit": "individuals"})
         out = harmonize_units(x)
         self.assertEqual(out["impactUnit"], "people")
+        self.assertTrue(out["flag_unit_harmonization"])
+
+    def test_harmonize_units_families_to_households(self):
+        """Test that 'families' is harmonized to 'households'"""
+        x = pd.Series({"impactUnit": "families"})
+        out = harmonize_units(x)
+        self.assertEqual(out["impactUnit"], "households")
+        self.assertTrue(out["flag_unit_harmonization"])
+
+    def test_harmonize_units_family_to_households(self):
+        """Test that 'family' is harmonized to 'households'"""
+        x = pd.Series({"impactUnit": "family"})
+        out = harmonize_units(x)
+        self.assertEqual(out["impactUnit"], "households")
         self.assertTrue(out["flag_unit_harmonization"])
 
     def test_harmonize_units_no_match(self):
