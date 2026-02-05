@@ -121,6 +121,12 @@ def identify_unique_location_country(df_geo) :
         countries = row["country_robust"]
         isos      = row["country_robust_iso3"]
 
+        # Handle None values - convert to empty list
+        if countries is None:
+            countries = []
+        if isos is None:
+            isos = []
+
         # Handle locations
         locations = row["location"]
         if not locations:
@@ -1210,14 +1216,16 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
 
     # Collect unique locations and associated countries
     start = time.time()
-    if "country_kw" in df_geo.columns :
-        df_geo = identify_robust_country(df_geo, ctr_col1="country", ctr_col2="country_kw", output_col="country_robust")
-    else:
-        df_geo["country_robust"] = df_geo["country"]
-    if "country_iso3_kw" in df_geo.columns :
-        df_geo = identify_robust_country(df_geo, ctr_col1="country_iso3", ctr_col2="country_iso3_kw",  output_col="country_robust_iso3")
-    else:
-        df_geo["country_robust_iso3"] = df_geo["country_iso3"]
+    if "country_robust" not in df_geo.columns:
+        if "country_kw" in df_geo.columns :
+            df_geo = identify_robust_country(df_geo, ctr_col1="country", ctr_col2="country_kw", output_col="country_robust")
+        else:
+            df_geo["country_robust"] = df_geo["country"]
+    if "country_robust_iso3" not in df_geo.columns:
+        if "country_iso3_kw" in df_geo.columns :
+            df_geo = identify_robust_country(df_geo, ctr_col1="country_iso3", ctr_col2="country_iso3_kw",  output_col="country_robust_iso3")
+        else:
+            df_geo["country_robust_iso3"] = df_geo["country_iso3"]
     unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso = identify_unique_location_country(df_geo)
     end = time.time()
     time_open = (end - start) / 60
