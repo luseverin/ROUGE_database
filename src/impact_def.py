@@ -168,7 +168,7 @@ Impacts.register(
     key="Crop Production and Forestry",
     main_type="Agriculture",
     description="Number of crops, agricultural production and forest impacted by a hazard.",
-    keyword=r"\bCrop Production and Forestry\b",
+    keyword=r"\b(Crop Production and Forestry|Other Agricultural Impacts?|Agriculture|Other Agriculture Impacts?|Agricultural Infrastructure)\b",
     expected_unit="crop production and forestry",
     default_unit="crop production and forestry"
 )
@@ -283,7 +283,7 @@ Impacts.register(
     key="Undefined Infrastructure",
     main_type="Infrastructure",
     description="Any identified impact on infrastructure where the type of infrastructure impacted is not clearly defined, e.g. critical infrastructure, public infrastructure, etc.",
-    keyword=r"\b(Undefined Infrastructure)\b",
+    keyword=r"\b(Undefined Infrastructure|Other Infrastructur(al|e) impacts?)\b",
     expected_unit="undefined structures",
     default_unit="unknown"
 )
@@ -298,7 +298,7 @@ Impacts.register(
     key="Undefined Service Access",
     main_type="Service access",
     description="Any identified impact on service access where the type of service impacted is not clearly defined, e.g. access to basic services",
-    keyword=r"\bUndefined Service Access\b",
+    keyword=r"\b(Undefined Service Access|Other Service Access(?: Impacts?)?)\b",
     expected_unit="people",
     default_unit="people"
 )
