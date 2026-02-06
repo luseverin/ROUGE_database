@@ -25,6 +25,18 @@ nlp = spacy.load("en_core_web_sm")
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
+def consolidate_dates(df, date_field, fill_func):
+    """
+    Consolidate dates columns by filling None with statistic taken over the  same column
+
+    :param df: input dataframe
+    :param date_field: date column to consolidate
+    :param fill_func: function to use for consolidation
+    """
+    fill_value = fill_func(df[date_field].values)
+    df[date_field] = df[date_field].apply(lambda x: x if pd.notnull(x) else fill_value)
+    return df
+
 def country_name_to_iso3(name):
     """
     Convert a country name to its ISO 3 letter code.
