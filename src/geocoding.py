@@ -718,6 +718,8 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
                     curr_iso2 = address["country_code"]
                     country = pycountry.countries.get(alpha_2=curr_iso2.upper())
                     curr_iso = country.alpha_3 if country else None
+                else : 
+                    LOGGER.info("[find_best_nomin] Nominatim result has no country_code for location %s. Address: %s", location, address)
 
                 if "country" in address and address["country"]:
                     curr_country = address["country"]
