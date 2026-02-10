@@ -19,6 +19,18 @@ nlp = spacy.load("en_core_web_sm")
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
+def consolidate_dates(df, date_field, fill_func):
+    """
+    Consolidate dates columns by filling None with statistic taken over the  same column
+
+    :param df: input dataframe
+    :param date_field: date column to consolidate
+    :param fill_func: function to use for consolidation
+    """
+    fill_value = fill_func(df[date_field].values)
+    df[date_field] = df[date_field].apply(lambda x: x if pd.notnull(x) else fill_value)
+    return df
+
 def country_name_to_iso3(name):
     """
     Convert a country name to its ISO 3 letter code.
@@ -294,11 +306,23 @@ def convert_unit(x, unit_converter=UNIT_CONVERTER, default_unit_dict=IMPACT_DEFA
                 x["flag_unit_conversion_error"] = True
     return x
 
+def convert_null_unit(x):
+    """Convert null or empty units to "null" string for consistency"""
+    unit = x['impactUnit']
+    if pd.isnull(unit) or unit in ["", None, "nan", "none", "None"]:
+        x['impactUnit'] = "null"
+    return x
+
 ## assign_unit_type is redundant with standardize_metric_units, could simplified and removed
 def assign_unit_type(x, unit_type_kw_reclass=UNIT_TYPE_KW_RECLASS):
     """Detect if dimension of unit can be identified e.g. length, mass,...
        Default to "other"
     """
+    if pd.isnull(x["impactUnit"]) or x["impactUnit"] is None:
+        x["unit_type"] = "other"
+        x["flag_unit_type"] = False
+        x["impactUnit"] = "null"  # Convert NaN to "null" string
+        return x
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     flag = False
     candidates = [unit_type for unit_type in unit_type_kw_reclass.keys() if re.search(unit_type_kw_reclass[unit_type], unit, re.IGNORECASE)]
@@ -333,6 +357,8 @@ def reclassify_units(x, unit_kw_reclass=UNIT_KW_RECLASS):
     str
         reclassified unit
     """
+    if pd.isnull(x["impactUnit"]) or x["impactUnit"] is None:
+        return x
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     unit_type = x['unit_type']
     x["flag_non-SI_unit_standardization_error"] = False
@@ -364,11 +390,13 @@ def force_unit_to_subtype(x, default_subtype_unit=IMPACT_DEFAULT_UNITS):
     str
         reclassified unit
     """
+    if pd.isnull(x["impactUnit"]) or x["impactUnit"] is None:
+        return x
     unit = str(x["impactUnit"]).lower() #ensure unit is string
     x["flag_force_unit_to_subtype"] = False
     unit_type = x['unit_type']
     no_reclass = ["null", "", "people"]
-    if pd.isnull(unit) or unit in no_reclass:
+    if unit in no_reclass:
         return x
 
     unit_prefix = f"{unit_type} of " if unit_type != "other" else ""
@@ -547,6 +575,11 @@ def convert_monetary_units(x, currency_dict=CURRENCY_CONVERTER, DEF_CUR="EUR"):
     report_date = pd.to_datetime(x["reportDate"])
     x["flag_currency_conversion"] = False
     x["flag_failed_currency_conversion"] = False
+
+    # Check for null unit_raw before regex operations
+    if pd.isnull(unit_raw) or unit_raw is None or not isinstance(unit_raw, str):
+        return x
+
     values_converted = {}
     units_converted = []
     #try to identify currency from impactUnit

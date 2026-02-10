@@ -58,7 +58,30 @@ _conn.commit()
 _cache_lock = threading.Lock()
 
 #### Preprocessing of the location
-def identify_robust_country(df_geo) :
+def normalize_to_list(x):
+    if x is None:
+        return []
+    if isinstance(x, float) and pd.isna(x):
+        return []
+    if isinstance(x, str):
+        x = x.strip()
+        if x.lower() in {"none", "nan", ""}:
+            return []
+        return [x]
+    if isinstance(x, (list, tuple, set)):
+        out = []
+        for v in x:
+            if v is None:
+                continue
+            if isinstance(v, float) and pd.isna(v):
+                continue
+            if isinstance(v, str) and v.strip().lower() in {"none", "nan", ""}:
+                continue
+            out.append(v)
+        return out
+    return [x]
+
+def identify_robust_country(df_geo, ctr_col1, ctr_col2, output_col):
     """
     Identify unique location-country pairs and map them to country names and ISO codes.
 
@@ -88,48 +111,36 @@ def identify_robust_country(df_geo) :
         - unique_locations_countries_iso : defaultdict(set)
             Dictionary mapping each (location, country) pair to a set of ISO alpha-3 codes.
     """
+    df = df_geo.copy()
+
+    # Normalize all columns
+    countries_col1 = df[ctr_col1].map(normalize_to_list)
+    countries_col2 = df[ctr_col2].map(normalize_to_list) if ctr_col2 in df.columns else []
+
+    # Union (vectorized using zip)
+    df[output_col] = [sorted(set(a) | set(b)) if (a or b) else None
+                      for a, b in zip(countries_col1, countries_col2)]
+
+    # Drop old columns
+    df = df.drop(columns=[ctr_col1, ctr_col2], errors="ignore")
+
+    return df
+
+def identify_unique_location_country(df_geo) :
     unique_loc_with_country = {}
     unique_locations_countries = defaultdict(set)
     unique_locations_countries_iso = defaultdict(set)
 
     for _, row in df_geo.iterrows():
         # Handle countries
-        countries = row["country"]
-        isos = row["country_iso3"]
+        countries = row["country_robust"]
+        isos      = row["country_robust_iso3"]
 
-        isos_is_missing = (
-            isos is None or
-            (isinstance(isos, float) and pd.isna(isos)) or
-            (isinstance(isos, str) and isos.strip().lower() in {"none", "nan", ""}) or
-            (isinstance(isos, (list, tuple)) and (
-                len(isos) == 0 or
-                all(x is None or (isinstance(x, str) and x.strip().lower() in {"none", "nan", ""})
-                    for x in isos)
-            ))
-        )
-
-        countries_is_missing = (
-            countries is None or
-            (isinstance(countries, float) and pd.isna(countries)) or
-            (isinstance(countries, str) and countries.strip().lower() in {"none", "nan", ""}) or
-            (isinstance(countries, (list, tuple)) and (
-                len(countries) == 0 or
-                all(x is None or (isinstance(x, str) and x.strip().lower() in {"none", "nan", ""})
-                    for x in countries)
-            ))
-        )
-
-        if countries_is_missing :
-            countries = row["country_kw"]
-
-        if isos_is_missing:
-            isos = row["country_iso3_kw"]
-
-        # ensure iterable
-        if not isinstance(countries, (list, set, tuple)):
-            countries = [countries]
-        if not isinstance(isos, (list, set, tuple)):
-            isos = [isos]
+        # Handle None values - convert to empty list
+        if countries is None:
+            countries = []
+        if isos is None:
+            isos = []
 
         # Handle locations
         locations = row["location"]
@@ -369,7 +380,7 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
         adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
         return adm2_match if not adm2_match.empty else None
 
-def fallback_country_union(gdf_file, countries, iso_countries):
+def fallback_country_union(gdf_file, location, countries, iso_countries):
     """Fallback: Combine polygons of all possible countries"""
     country_polygons = []
     for country, country_iso in zip(countries, iso_countries):
@@ -379,7 +390,12 @@ def fallback_country_union(gdf_file, countries, iso_countries):
             df_gpd["locationOsm"] = country
             df_gpd["locationPolygon"] = country
             df_gpd["flag_geocoding_osm"] = 0
-            df_gpd["flag_geocoding_country"] = 1
+            # Don't raise flag_geocoding_country if the location if the country
+            if location in countries :
+                df_gpd["flag_geocoding_country"] = 0
+            else :
+                df_gpd["flag_geocoding_country"] = 1
+
             country_polygons.append(df_gpd)
 
     if country_polygons:
@@ -388,7 +404,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
         # combined["geometry"] = MultiPolygon(combined["geometry"])
         # combined["geometry"] = GeometryCollection(combined["geometry"].tolist())
         combined = combined.iloc[[0]]
-        return combined
+        return combined.assign(location=location)
 
     # If no columns found
     empty_cols = [
@@ -405,7 +421,7 @@ def fallback_country_union(gdf_file, countries, iso_countries):
         {col: [None] for col in empty_cols}
     )
     LOGGER.error("[gather fallback_country_union fallback] Fail to find country's polygons, %s, %s", countries, iso_countries)
-    return empty_df
+    return empty_df.assign(location=location)
 
 #### Queries nominatim and find best match
 
@@ -439,7 +455,7 @@ def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=1
 
     if not location:
         query = f"{country}"
-    if not country : 
+    if not country :
         query = f"{location}"
     else:
         query = f"{location}, {country}"
@@ -799,6 +815,18 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
 
         if nom_result is None:
             nom_result = query_nominatim(location, None)
+            if nom_result is not None:
+                # If a nominatim result is found, change the country with the actual country given by nominatim
+                address = nom_result.raw.get("address", {})
+                if "country_code" in address and address["country_code"]:
+                    curr_iso2 = address["country_code"]
+                    country = pycountry.countries.get(alpha_2=curr_iso2.upper())
+                    curr_iso = country.alpha_3 if country else None
+                else : 
+                    LOGGER.info("[find_best_nomin] Nominatim result has no country_code for location %s. Address: %s", location, address)
+
+                if "country" in address and address["country"]:
+                    curr_country = address["country"]
 
         if nom_result is None:
             return None, None
@@ -1075,7 +1103,7 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
         step = "top"
         if not best_result:
             step = "fallback_country_union"
-            return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
+            return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
         adm_lev = int(best_result["admin_level"])
 
@@ -1111,8 +1139,13 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
                 df_gpd = try_geojson_fallback(gdf_file, best_nomin, best_result, location)
                 osm_flag=1
 
-            # If something was found → prepare and return
+            # Check that the geometry found is at the correct country
             if df_gpd is not None:
+                df_gpd = df_gpd[df_gpd["iso3_code"].isin(iso_countries)]
+
+            # If something was found → prepare and return
+            # if df_gpd is not None:
+            if df_gpd is not None and not df_gpd.empty:
                 step = "prepare_result_df"
                 return prepare_result_df(df_gpd, best_result, location, osm_flag=osm_flag)
 
@@ -1121,12 +1154,12 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
             best_result["admin_field"] = f"ADMIN_{adm_lev}"
 
         # If loop finishes without returning anything
-        return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
+        return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
     except Exception as e:
         print(step)
         LOGGER.warning("[geocode_from_nomin_output_optimized] %s. Falling back to country level.", e)
-        return fallback_country_union(gdf_file, countries, iso_countries).assign(location=location)
+        return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
 def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gdf_file, print_info=False, max_workers=None):
     """
@@ -1213,16 +1246,19 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
     """
     if row["location"]:  # check if list is non-empty
         df_locations = df_geo_individual_locs.loc[
-            df_geo_individual_locs["location"].isin(row["location"])
+            (df_geo_individual_locs["location"].isin(row["location"])) &
+            (df_geo_individual_locs["iso3_code"].isin(row["country_robust_iso3"]))
         ]
-    elif row["country"]:
+        # print(len(df_locations))
+    elif row["country_robust"]:
+        # print(row["location"], row["country_robust"])
         df_locations = df_geo_individual_locs.loc[
-            df_geo_individual_locs["location"].isin(row["country"])
+            df_geo_individual_locs["location"].isin(row["country_robust"])
         ]
-    else :
-        df_locations = df_geo_individual_locs.loc[
-                    df_geo_individual_locs["location"].isin(row["country_kw"])
-                ]
+    # else :
+    #     df_locations = df_geo_individual_locs.loc[
+    #                 df_geo_individual_locs["location"].isin(row["country_kw"])
+    #             ]
 
     df_geo_output = pd.DataFrame()
 
@@ -1249,6 +1285,11 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_empty["impactValueApprox"] = np.nan
 
         return df_empty
+
+    # Clean to have a single admin level per location
+    max_level = df_locations.groupby("location")["finest_level"].transform("max")
+    df_locations = df_locations[df_locations["finest_level"] == max_level].copy()
+    df_locations.reset_index(drop=True, inplace=True)
 
     #Retrieve the lowest admin level
     lowest_level = df_locations["finest_level"].min()
@@ -1285,7 +1326,8 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_row_append["flag_geocoding_country"] = flag_country_count
         df_row_append["flag_geocoding_osm"] = flag_osm_count
         df_row_append["locationOsm"] = [df_location_subset["locationOsm"].unique().tolist()]
-        df_row_append["locationPolygon"] = [df_location_subset["locationPolygon"].tolist()]
+        # df_row_append["locationPolygon"] = [location_names]#[df_location_subset["locationPolygon"].unique().tolist()]
+        df_row_append["locationPolygon"] = [df_location_subset["locationPolygon"].unique().tolist()]
 
         # For the codes, take the list
         df_row_append["iso3_code"] = [df_location_subset["iso3_code"].unique().tolist()]
@@ -1351,7 +1393,7 @@ def run_parallel_associate(df_geo, df_geo_individual_locs, gdf_file, split_lowes
                 row = rows[i]
                 debug_subset = {
                     key: row.get(key, "MISSING")
-                    for key in ["location", "country", "country_kw", "country_iso", "country_iso3_kw"]
+                    for key in ["location", "country_robust", "country_robust_iso3"]
                 }
                 LOGGER.error("Error processing row %i: %s", i, e)
                 LOGGER.error("Type of row: %s", type(row))
@@ -1427,19 +1469,26 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
 
     if "country_kw" in df_geo.columns :
         col_to_list = ["location", "country", "country_kw", "country_iso3"]
-        df_type = "llm"
     else :
         col_to_list = ["location", "country", "country_iso3"]
-        df_type = "labelled"
     df_geo[col_to_list] = df_geo[col_to_list].map(lambda x: listify_strings(x))
-
 
     # Open Polygons
     gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
 
     # Collect unique locations and associated countries
     start = time.time()
-    unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso = identify_robust_country(df_geo)
+    if "country_robust" not in df_geo.columns:
+        if "country_kw" in df_geo.columns :
+            df_geo = identify_robust_country(df_geo, ctr_col1="country", ctr_col2="country_kw", output_col="country_robust")
+        else:
+            df_geo["country_robust"] = df_geo["country"]
+    if "country_robust_iso3" not in df_geo.columns:
+        if "country_iso3_kw" in df_geo.columns :
+            df_geo = identify_robust_country(df_geo, ctr_col1="country_iso3", ctr_col2="country_iso3_kw",  output_col="country_robust_iso3")
+        else:
+            df_geo["country_robust_iso3"] = df_geo["country_iso3"]
+    unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso = identify_unique_location_country(df_geo)
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Number of unique locations : %s", len(unique_locations_countries))

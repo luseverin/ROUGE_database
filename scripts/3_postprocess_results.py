@@ -99,6 +99,19 @@ else:
     #mark quanti and quali rows
     response_df_proc = response_df_proc.apply(label_quanti_quali, axis=1)
 
+    #parse nan or none unit to null string
+    response_df_proc = response_df_proc.apply(convert_null_unit, axis=1)
+
+    #consolidate dates
+    for col in ["startYear", "startMonth", "startDay"]:
+        response_df_proc = consolidate_dates(response_df_proc, col, np.nanmin)
+
+    for col in ["endYear", "endMonth", "endDay"]:
+        response_df_proc = consolidate_dates(response_df_proc, col, np.nanmax)
+
+    response_df_proc["startDate"] = response_df_proc.apply(lambda x: pd.to_datetime(f"{int(x.startYear)}-{int(x.startMonth)}-{int(x.startDay)}"),axis=1)
+    response_df_proc["endDate"] = response_df_proc.apply(lambda x: pd.to_datetime(f"{int(x.endYear)}-{int(x.endMonth)}-{int(x.endDay)}"),axis=1)
+
     #pre conversion flags
     if check_flag_value_in_text:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(flag_value_in_text, axis=1)

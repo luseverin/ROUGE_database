@@ -20,6 +20,7 @@ from shapely.ops import unary_union
 import shapely
 import logging
 from rapidfuzz import fuzz, process
+import country_converter as coco
 
 import geopandas as gpd
 
@@ -103,121 +104,126 @@ def fuzzy_country_match(query):
     result = process.extractOne(
         query,
         choices.keys(),
-        scorer=fuzz.WRatio
+        # scorer=fuzz.WRatio
+        scorer = lambda q, c, **_: rotated_levenshtein_similarity(q, c)
     )
     if result:
         best_name, score, _ = result
         return choices[best_name], score
     return None, 0
 
-def country_to_iso(countries, representation="alpha3", fillvalue=None, fuzzy_threshold=60):
-    """Determine ISO 3166 representation of countries
+import re
+import numpy as np
+import pycountry
+import country_converter as coco
 
-    Example
-    -------
-    >>> country_to_iso(840)
-    'USA'
-    >>> country_to_iso("United States", representation="alpha2")
-    'US'
-    >>> country_to_iso(["United States of America", "SU"], "numeric")
-    [840, 810]
 
-    Some geopolitical areas that are not covered by ISO 3166 are added in the "user-assigned"
-    range of ISO 3166-compliant values:
-
-    >>> country_to_iso(["XK", "Dhekelia"], "numeric")  # XK for Kosovo
-    [983, 907]
-
-    Parameters
-    ----------
-    countries : one of str, int, list of str, list of int
-        Country identifiers: name, official name, alpha-2, alpha-3 or numeric ISO codes.
-        Numeric representations may be specified as str or int.
-    representation : str (one of "alpha3", "alpha2", "numeric", "name"), optional
-        All countries are converted to this representation according to ISO 3166.
-        Default: "alpha3".
-    fillvalue : str or int or None, optional
-        The value to assign if a country is not recognized by the given identifier. By default,
-        a LookupError is raised. Default: None
-
-    Returns
-    -------
-    iso_list : one of str, int, list of str, list of int
-        ISO 3166 representation of countries. Will only return a list if the input is a list.
-        Numeric representations are returned as integers.
-    """
+def country_to_iso(
+    countries,
+    representation="alpha3",
+    fillvalue=None,
+    fuzzy_threshold=80,
+):
     return_single = np.isscalar(countries)
     countries = [countries] if return_single else countries
 
     if not re.match(r"(alpha[-_]?[23]|numeric|name)", representation):
         raise ValueError(f"Unknown ISO representation: {representation}")
+
     representation = re.sub(r"alpha-?([23])", r"alpha_\1", representation)
 
     iso_list = []
-    for country in countries:
 
-        # Check if the country is not already an ISO-CODE
+    for country in countries:
+        match = None
+
+        # --------------------
+        # Already ISO code
+        # --------------------
         if isinstance(country, str):
-            c_up = country.upper()
+            c_up = country.strip().upper()
+
             if len(c_up) == 2:
                 obj = pycountry.countries.get(alpha_2=c_up)
                 if obj:
                     iso_list.append(getattr(obj, representation))
                     continue
 
-            # alpha-3
             if len(c_up) == 3:
                 obj = pycountry.countries.get(alpha_3=c_up)
                 if obj:
                     iso_list.append(getattr(obj, representation))
                     continue
 
-        # Numeric ISO codes (passed as int or numeric-string)
-        if isinstance(country, (int, str)):
-            try:
-                num = int(country)
-                if num in pycountry.countries.by_numeric:
-                    iso_list.append(
-                        getattr(pycountry.countries.by_numeric[num], representation)
-                    )
-                    continue
-            except ValueError:
-                pass
-
-        # Otherwise look for the iso corresponding to the country name
-        country = country if isinstance(country, str) else f"{int(country):03d}"
+        # --------------------
+        # Numeric ISO
+        # --------------------
         try:
-            match = pycountry.countries.lookup(country)
+            num = int(country)
+            num_str = f"{num:03d}"
+            obj = pycountry.countries.by_numeric.get(num_str)
+            if obj:
+                iso = getattr(obj, representation)
+                iso_list.append(int(iso) if representation == "numeric" else iso)
+                continue
+        except Exception:
+            pass
+
+        # --------------------
+        # Lookup by name
+        # --------------------
+        country_str = str(country).strip()
+
+        try:
+            match = pycountry.countries.lookup(country_str)
         except LookupError:
             try:
-                match = pycountry.historic_countries.lookup(country)
+                match = pycountry.historic_countries.lookup(country_str)
             except LookupError:
-                match = next(
-                    filter(lambda c: country in c.values(), NONISO_REGIONS), None
+                # NON ISO REGIONS
+                region = next(
+                    (c for c in NONISO_REGIONS if country_str in c.values()),
+                    None,
                 )
-                if match is not None:
-                    match = pycountry.db.Data(**match)
-                elif fillvalue is not None:
-                    match = pycountry.db.Data({representation: fillvalue})
+                if region:
+                    match = pycountry.db.Data(**region)
                 else:
-                    # raise LookupError(
-                    #     f"Unknown country identifier: {country}"
-                    # ) from None
-                    best, score = fuzzy_country_match(country)
-                    if best and score >= fuzzy_threshold:
-                        match = best
-                    elif fillvalue is not None:
-                        match = pycountry.db.Data({representation: fillvalue})
-                    else:
-                        # raise LookupError(
-                        #     f"Unknown country identifier: {country}. "
-                        #     f"Best fuzzy match={getattr(best,'name',None)}, score={score}"
-                        # )
-                        iso_list.append(None)
-                        continue
+                    # --------------------
+                    # country_converter (coco)
+                    # --------------------
+                    try:
+                        iso = coco.convert(
+                            names=country_str,
+                            to="ISO3",
+                            not_found=None,
+                            quiet=True
+                        )
+                        if iso:
+                            match = pycountry.db.Data(alpha_3=iso)
+                        else:
+                            raise ValueError
+                    except Exception:
+                        # --------------------
+                        # Fuzzy fallback
+                        # --------------------
+                        best, score = fuzzy_country_match(country_str)
+                        if best and score >= fuzzy_threshold:
+                            match = best
+                        elif fillvalue is not None:
+                            match = pycountry.db.Data(
+                                **{representation: fillvalue}
+                            )
+                        else:
+                            iso_list.append(None)
+                            continue
+
+        # --------------------
+        # Extract ISO
+        # --------------------
         iso = getattr(match, representation)
         if representation == "numeric":
             iso = int(iso)
+
         iso_list.append(iso)
 
     return iso_list[0] if return_single else iso_list

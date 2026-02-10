@@ -20,10 +20,10 @@ dedup_cols = ["appealCode","impactSubtype", "impactValue", "impactUnit", "iso3_c
               "endDay", "hazards"]
 
 ##load data (model)
-res_savename = "post_processed_all_appeals_longest_1-717_meta-llama_llama-4-scout-17b-16e-instruct_v121225_geo_v231225"
+res_savename = "merged_subtypespost_processed_labelled_reports_impacts_all_v111025_v030226_geo"
 
 # Set up final name
-filename_out = "filter_" + res_savename
+filename_out = "filter_" + "post_processed_labelled_reports_impacts_all_v111025_v030226_geo"
 
 #set up logger
 logger_name = "data_filter"
@@ -36,9 +36,9 @@ response_df = gpd.read_file(DATA_OUT_PROC / (res_savename+".gpkg"))
 # Sort list columns
 response_df = format_output(response_df)
 
-for col in LIST_COLS :
-    if col in response_df.columns :
-        response_df[col] = response_df[col].apply(sorted)
+#for col in LIST_COLS :
+#    if col in response_df.columns :
+#        response_df[col] = response_df[col].apply(sorted)
 
 response_df = delistify_cols(response_df)
 
@@ -117,7 +117,7 @@ columns_flags_final = ['valid_errors_impactValue',
          'flag_geocoding_osm']
 
 response_df_filtered = response_df.copy()
-response_df_filtered = response_df_filtered[columns_data_final + columns_flags_final]
+response_df_filtered = response_df_filtered[[col for col in columns_data_final + columns_flags_final if col in response_df_filtered.columns]]
 
 ## Rename cols
 col_rename = {

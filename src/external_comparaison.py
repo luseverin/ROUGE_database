@@ -117,6 +117,16 @@ def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
     Groups impact records by appeal and subtype, prioritizing country-level
     reports (ADM 0). If unavailable, subnational data are aggregated based
     on the specified coarser administrative level.
+    
+    Rules:
+    - If rows exist with locationLowestAdminNum == 0:
+        * Sum impactValue_final
+        * Concatenate unique values of location, locationOsm, locationGaul
+        * Union geometries
+        * Keep other columns constant (take first non-null)
+    - Other wise :
+        * Take the highest reported value
+        * Add other impacts if the the intersection of the polygons is null
 
     Parameters
     ----------
@@ -255,7 +265,7 @@ def clean_impact_values(row):
     """
     for impact_type, mapping in mapping_impact_type.items():
         for impact_source, prefix in ifrc_go_impact_source.items():
-            if mapping["ifrc_go"] : 
+            if mapping["ifrc_go"] :
                 col = prefix + mapping["ifrc_go"]
                 # check if column exists and has a non-null value
                 if col in row and pd.notna(row[col]):
@@ -264,7 +274,7 @@ def clean_impact_values(row):
                     break  # stop once one source is found
     return row
 
-def open_clean_ifrc_go() :
+def open_clean_ifrc_go(appeal_filter=["DREF", "Emergency Appeal", "International Appeal"]) :
     """
     Load and clean IFRC GO impact data.
 
@@ -290,10 +300,10 @@ def open_clean_ifrc_go() :
     df_ifrc_go = df_ifrc_go.rename({"appeals_code" : "appealCode"}, axis=1)
     df_ifrc_go["id"] = df_ifrc_go["id"].astype("Int64")
 
-    #Select only DREF reports 
-    df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"]=="DREF"]
+    #Select only DREF reports
+    df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["appeals_atype_display"].isin(appeal_filter)]
 
-    #Select only natural disaster events 
+    #Select only natural disaster events
     df_ifrc_go = df_ifrc_go.loc[df_ifrc_go["dtype_name"].isin(hazard_ifrc_go)]
 
     return df_ifrc_go
@@ -343,7 +353,7 @@ def open_clean_ifrc_monty(df_ifrc_go) :
 
     return df_ifrc_monty
 
-## EMDAT 
+## EMDAT
 
 def open_emdat(file_name='public_emdat_custom_request_2025-08-19.xlsx'):
     """
@@ -428,7 +438,7 @@ def choose_unique_disno(df_llm_em_dat, column_minimize):
     chosen_disno = min_diff.idxmin()
     return chosen_disno
 
-def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) : 
+def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize, country_field='country_iso3'):
     """
     Match LLM-extracted disaster impacts to EM-DAT events.
 
@@ -460,21 +470,21 @@ def matching_emdat(df_llm, df_em_dat, date_diff_th, column_minimize) :
     df1_no_split = cp.deepcopy(df_llm)
     df2 = cp.deepcopy(df_em_dat)
 
-    # Map the hazard to emdat type 
-    reverse_hazard_mapping_emdat = reverse_mapping(hazard_mapping_emdat) 
+    # Map the hazard to emdat type
+    reverse_hazard_mapping_emdat = reverse_mapping(hazard_mapping_emdat)
     df1["hazards_reclass"] = df1["hazards"].apply(lambda x: reclassify_hazard_emdat(x, reverse_hazard_mapping_emdat)) ## ADD the reverse_haazrd_mapping
 
-    # Explode countries 
-    df1 = df1.explode("country_iso3").reset_index(drop=True)
+    # Explode countries
+    df1 = df1.explode(country_field).reset_index(drop=True)
 
-    # Rename and add columns 
+    # Rename and add columns
     df2 = df2.rename({'ISO' : 'iso_emdat'}, axis=1)
 
     ## First occurence year
     df_llm_em_dat = df2.merge(
         df1,
         left_on="iso_emdat",
-        right_on="country_iso3",
+        right_on=country_field,
         how="inner"
     )
 
