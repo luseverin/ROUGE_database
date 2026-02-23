@@ -712,10 +712,17 @@ def find_best_nomin(location, countries, countries_iso, similarity_th, print_inf
         if nom_result is None:
             nom_result = query_nominatim(location, None)
             if nom_result is not None:
-                # Change the country
-                curr_country = nom_result.raw.get("address", {})["country"]
-                curr_iso2 = nom_result.raw.get("address", {})["country_code"]
-                curr_iso = pycountry.countries.get(alpha_2=curr_iso2.upper()).alpha_3
+                # If a nominatim result is found, change the country with the actual country given by nominatim
+                address = nom_result.raw.get("address", {})
+                if "country_code" in address and address["country_code"]:
+                    curr_iso2 = address["country_code"]
+                    country = pycountry.countries.get(alpha_2=curr_iso2.upper())
+                    curr_iso = country.alpha_3 if country else None
+                else : 
+                    LOGGER.info("[find_best_nomin] Nominatim result has no country_code for location %s. Address: %s", location, address)
+
+                if "country" in address and address["country"]:
+                    curr_country = address["country"]
 
         if nom_result is None:
             return None, None
