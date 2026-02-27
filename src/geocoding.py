@@ -993,16 +993,12 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
             (df_geo_individual_locs["location"].isin(row["location"])) &
             (df_geo_individual_locs["iso3_code"].isin(row["country_robust_iso3"]))
         ]
-        # print(len(df_locations))
     elif row["country_robust"]:
         # print(row["location"], row["country_robust"])
         df_locations = df_geo_individual_locs.loc[
-            df_geo_individual_locs["location"].isin(row["country_robust"])
+            df_geo_individual_locs["location"].isin(row["country_robust"]) & 
+            df_geo_individual_locs["iso3_code"].isin(row["country_robust_iso3"])
         ]
-    # else :
-    #     df_locations = df_geo_individual_locs.loc[
-    #                 df_geo_individual_locs["location"].isin(row["country_kw"])
-    #             ]
 
     df_geo_output = pd.DataFrame()
 
