@@ -469,11 +469,13 @@ def select_impact_description(report, buffer=1):
 
     # Default: whole text or to first drop occurence
     if not ids_keep:
-        if not ids_drop:
-            LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
-            return []
-        else:
-            return text[0:ids_drop[0]]
+        LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
+        return []
+        #if not ids_drop:
+        #    LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
+        #    return []
+        #else:
+        #    return text[0:ids_drop[0]]
 
 
     last_drop = ids_drop[0] if len(ids_drop) else len(text)
