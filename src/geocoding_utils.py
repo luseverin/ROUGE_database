@@ -75,11 +75,11 @@ LOCATION_LEVEL_MAPPING = {
 
 LIST_ADMIN_WORDS = [
     "Regency", "Province", "State", "Department", "Region", "River",
-    "Territory", "County", "District", "Municipality", "Prefecture",
+    "Territory", "County", "Sub-County", "Sub Country", "District", "Municipality", "Prefecture",
     "Canton", "Commune", "Borough", "Parish", "Metropolitan Area",
     "Subregion", "Zone", "Subdivision", "Ward", "Township", "City",
     "Village", "Hamlet", "Municipality", "Governorate", "Autonomous Region",
-    "County Borough", "Council Area", "Federal District", "Locality"
+    "County Borough", "Council Area", "Federal District", "Locality", "Town", "Communities"
 ]
 
 def fuzzy_country_match(query):
@@ -246,8 +246,10 @@ def rotated_levenshtein_similarity(str1, str2):
 
 def remove_admin_words(location_str):
     """Remove predefined administrative words from a location string without affecting substrings."""
+    location_str = location_str.lower()
+
     # Create a regex pattern that matches whole words only, case-insensitive
-    pattern = r'\b(?:' + '|'.join(re.escape(word) for word in LIST_ADMIN_WORDS) + r')\b'
+    pattern = r'\b(?:' + '|'.join(re.escape(word.lower()) for word in LIST_ADMIN_WORDS) + r')\b'
     # Substitute matches with empty string
     location_str = re.sub(pattern, '', location_str, flags=re.IGNORECASE)
     # Remove extra spaces
