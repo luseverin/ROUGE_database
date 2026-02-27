@@ -471,7 +471,7 @@ def select_impact_description(report, buffer=1):
     if not ids_keep:
         if not ids_drop:
             LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
-            return text
+            return []
         else:
             return text[0:ids_drop[0]]
 
