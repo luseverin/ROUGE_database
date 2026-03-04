@@ -28,15 +28,19 @@ from src.logger_setup import set_logger
 ## Parameters
 filter_types = ['Emergency Appeal','Emergency Appeal Revision', 'Operations Update', 'Final Report','DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']
 headers_keep = [
-        "operation summary", "A. situation analysis",
+        "operation summary",
+        "scope and scale",
+        "A. situation analysis",
         "description of the crisis",
         "what happened, where and when",
+        "what happened, where and when?",
         "description of the emergency",
         "description of the disaster",
         "description of disaster",
         "description of the event",
         "the situation",
         "summary", "the disaster", "situation overview",
+        #"needs (gaps) identified",
     ]
 headers_drop = [
     "coordination and partnerships", "operational strategy", "red cross red crescent action",
@@ -44,7 +48,7 @@ headers_drop = [
     "operational developments", "summary of response", "summary of the response","the response so far",
     "previous operations", "current national society actions",
     "national society actions", "summary of measures taken by the national society",
-    "detailed operation plan", "summary of the current response",
+    "detailed operation plan", "summary of the current response", "summary of current response",
     "Overview of the host National Society and ongoing response",
     "Overview of Operating National Society Response Action",
     "financial status", "appeal history", "targeting", "planned operations",
@@ -64,9 +68,16 @@ headers_drop = [
     "Narrative description of achievements",
     "Lessons Learnt",
     "National Society Strengthening",
-    "Financial Report"
+    "Financial Report",
+    "About Support Services",
+    "How many staff and volunteers will be involved in this operation. Briefly describe their role.",
+    "If there is procurement, will it be done by National Society or IFRC?",
+    "How will this operation be monitored?",
+    "Please briefly explain the National Societies communication strategy for this operation",
+    #"Community Engagement And Accountability",
+    #"Any identified gaps/limitations in the assessment"
 ]
-id_language = True #identify language and get rid of reports not in english
+id_language = False #identify language and get rid of reports not in english
 format_numbers = False
 std_units = False
 match_above = False #whether to select natural hazard impact text from keywords at the top or from the start of the text
@@ -76,7 +87,7 @@ outformat = 'csv' #csv json
 ## Select data
 fname_in = "all_ifrc_reports_info_unnested_with_text_v181125"#'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'preproc_no_gaps_head_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_text_sel_nogaps_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -100,7 +111,6 @@ with open(DATA_IN_JSONS / (fname_in + '.json'), 'r') as json_file:
     reports_in_json = json.load(json_file)
 
 not_eng = []
-id_lang = 0
 filtered_reports = []
 filtered_reports_hazonly = []
 for report in reports_in_json:
@@ -113,8 +123,9 @@ for report in reports_in_json:
     if allowed_orig_type and report['appealType'] in filter_types and report['naturalHazard'] == 1:
         if id_language and "language" not in report.keys():
             report['language'] = detect_language(report['text'])
-            id_lang=1
-        if report["language"] == 'en':
+        else:
+            report['language'] = "unknown"
+        if report["language"] == 'en' or not id_language:
             report["iso_code"] = country_name_to_iso3(report.get("location"))
             #reformat time
             if format_report_date:
@@ -129,8 +140,8 @@ for report in reports_in_json:
                 report['text_processed'] = replace_numbers(report['text_processed'])
             #if std_units:
             #    report['text_processed'] = text_standardize_metric_units(report['text_processed'])
-            report['sentences'] = sent_tokenize(report['text_processed'])
             report = select_impact_description(report, headers_keep, headers_drop)
+            report['nathaz_text'] = sent_tokenize(report['nathaz_text'])
             report['nathaz_text'] = remove_newlines(report['nathaz_text'])
             report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)
             filtered_reports.append(report)
