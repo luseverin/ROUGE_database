@@ -450,7 +450,7 @@ def reclass_disaster_type(element):
         LOGGER.info("Final disaster type:%s ", final_disaster_type)
         LOGGER.info("----")
     return element
-def select_impact_description(report, buffer=1):
+def select_impact_description(report, headers_keep, headers_drop, buffer=1):
     """
     Selects a subset of text that describes the impacts of the hazard event, given a list of sentences.
 
@@ -467,45 +467,7 @@ def select_impact_description(report, buffer=1):
     dict        The input report dictionary with an added key "nathaz_text" containing the selected subset of sentences describing the impacts of the hazard event, and keys "keep_headers" and "drop_headers"
     containing the headers that were kept and dropped, respectively.
     """
-    headers_keep = [
-        "operation summary", "A. situation analysis",
-        "description of the crisis",
-        "what happened, where and when",
-        "description of the emergency",
-        "description of the disaster",
-        "description of disaster",
-        "description of the event",
-        "the situation",
-        "summary", "the disaster", "situation overview",
-    ]
-    headers_drop = [
-        "coordination and partnerships", "operational strategy", "red cross red crescent action",
-        "needs (gaps) identified",
-        "operational developments", "summary of response", "summary of the response","the response so far",
-        "previous operations", "current national society actions",
-        "national society actions", "summary of measures taken by the national society",
-        "detailed operation plan", "summary of the current response",
-        "Overview of the host National Society and ongoing response",
-        "Overview of Operating National Society Response Action",
-        "financial status", "appeal history", "targeting", "planned operations",
-        "IFRC Network Actions Related To The Current Event",
-        "ICRC Actions Related To The Current Event",
-        "Other Actors Actions Related To The Current Event",
-        "Overall objective of the operation",
-        "Operation strategy rationale",
-        "Targeting Strategy",
-        "Who was targeted by this operation?",
-        "Explain the selection criteria for the targeted population",
-        "Total Targeted Population",
-        "Risk and Security Considerations",
-        "Please indicate about potential operation risk for this operations and mitigation actions",
-        "Please indicate any security and safety concerns for this operation",
-        "Implementation",
-        "Narrative description of achievements",
-        "Lessons Learnt",
-        "National Society Strengthening",
-        "Financial Report"
-    ]
+
     text = report["sentences"]
     # Precompile regex patterns
     keep_pattern = re.compile("|".join(r"\n\s*" + re.escape(h) + r"\s*\n" for h in headers_keep), re.IGNORECASE)

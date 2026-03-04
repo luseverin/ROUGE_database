@@ -27,6 +27,45 @@ from src.logger_setup import set_logger
 
 ## Parameters
 filter_types = ['Emergency Appeal','Emergency Appeal Revision', 'Operations Update', 'Final Report','DREF Operation', 'DREF Operation Final Report', 'DREF Operation Update']
+headers_keep = [
+        "operation summary", "A. situation analysis",
+        "description of the crisis",
+        "what happened, where and when",
+        "description of the emergency",
+        "description of the disaster",
+        "description of disaster",
+        "description of the event",
+        "the situation",
+        "summary", "the disaster", "situation overview",
+    ]
+headers_drop = [
+    "coordination and partnerships", "operational strategy", "red cross red crescent action",
+    "needs (gaps) identified",
+    "operational developments", "summary of response", "summary of the response","the response so far",
+    "previous operations", "current national society actions",
+    "national society actions", "summary of measures taken by the national society",
+    "detailed operation plan", "summary of the current response",
+    "Overview of the host National Society and ongoing response",
+    "Overview of Operating National Society Response Action",
+    "financial status", "appeal history", "targeting", "planned operations",
+    "IFRC Network Actions Related To The Current Event",
+    "ICRC Actions Related To The Current Event",
+    "Other Actors Actions Related To The Current Event",
+    "Overall objective of the operation",
+    "Operation strategy rationale",
+    "Targeting Strategy",
+    "Who was targeted by this operation?",
+    "Explain the selection criteria for the targeted population",
+    "Total Targeted Population",
+    "Risk and Security Considerations",
+    "Please indicate about potential operation risk for this operations and mitigation actions",
+    "Please indicate any security and safety concerns for this operation",
+    "Implementation",
+    "Narrative description of achievements",
+    "Lessons Learnt",
+    "National Society Strengthening",
+    "Financial Report"
+]
 id_language = True #identify language and get rid of reports not in english
 format_numbers = False
 std_units = False
@@ -37,7 +76,7 @@ outformat = 'csv' #csv json
 ## Select data
 fname_in = "all_ifrc_reports_info_unnested_with_text_v181125"#'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'preproc_drop_all2_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_no_gaps_head_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -53,6 +92,8 @@ LOGGER = set_logger(log_file, logger_name=logger_name)
 start_time = time.time()
 LOGGER.info("Preprocessing %s...", fname_out)
 LOGGER.info("Filtering types %s", ", ".join(filter_types) if len(filter_types) > 1 else filter_types)
+LOGGER.info("Filtering headers to keep: %s", ", ".join(headers_keep) if len(headers_keep) > 1 else headers_keep)
+LOGGER.info("Filtering headers to drop: %s", ", ".join(headers_drop) if len(headers_drop) > 1 else headers_drop)
 
 # Open and read the JSON file
 with open(DATA_IN_JSONS / (fname_in + '.json'), 'r') as json_file:
@@ -89,7 +130,7 @@ for report in reports_in_json:
             #if std_units:
             #    report['text_processed'] = text_standardize_metric_units(report['text_processed'])
             report['sentences'] = sent_tokenize(report['text_processed'])
-            report = select_impact_description(report)
+            report = select_impact_description(report, headers_keep, headers_drop)
             report['nathaz_text'] = remove_newlines(report['nathaz_text'])
             report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)
             filtered_reports.append(report)
