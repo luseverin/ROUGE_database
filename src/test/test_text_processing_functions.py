@@ -21,6 +21,11 @@ class TestTextProcessing(unittest.TestCase):
         lang = detect_language("")
         self.assertEqual(lang, "en")  # spaCy fastlang defaults to English on empty
 
+    def test_remove_newlines(self):
+        text = ["This is a line. \n", "This is another line. \n", "And another one. \n \n\n"]
+        expected = ["This is a line.", "This is another line.", "And another one."]
+        self.assertEqual(remove_newlines(text), expected)
+
     def test_written_num_valid(self):
         self.assertTrue(written_num("three"))
 
