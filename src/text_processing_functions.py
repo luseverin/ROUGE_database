@@ -450,7 +450,83 @@ def reclass_disaster_type(element):
         LOGGER.info("Final disaster type:%s ", final_disaster_type)
         LOGGER.info("----")
     return element
-def select_impact_description(report, headers_keep, headers_drop, buffer=1):
+
+def select_impact_description(report, headers_keep, headers_drop, text_col="text_processed"):
+    """
+    Selects subsets of the report text that describe the impacts of the hazard event,
+    working directly on the full text string.
+
+    The function uses regex to locate keep/drop header positions in the text,
+    then extracts the text chunks between keep headers and the next drop header.
+    Text from the beginning up to the first drop header is always included.
+
+    Parameters
+    ----------
+    report : dict
+        A dictionary containing the report information, including the full text
+        under the key "sentences" (a single string).
+    headers_keep : list of str
+        List of header strings that indicate sections to keep.
+    headers_drop : list of str
+        List of header strings that indicate sections to drop.
+
+    Returns
+    -------
+    dict
+        The input report dictionary with added keys:
+        - "nathaz_text": the selected text (string) describing the impacts.
+        - "keep_headers": matched keep headers and their positions.
+        - "drop_headers": matched drop headers and their positions.
+    """
+    text = report[text_col]
+
+    # If stored as a list, join into a single string
+    if isinstance(text, list):
+        text = "\n".join(text)
+
+    # Patterns match headers at start of text or after a newline, with optional
+    # surrounding whitespace, followed by a newline or end of text
+    keep_pattern = re.compile(
+        "|".join(r"(?:^|\n)\s*" + re.escape(h) + r"\s*(?:\n|$)" for h in headers_keep),
+        re.IGNORECASE
+    )
+    drop_pattern = re.compile(
+        "|".join(r"(?:^|\n)\s*" + re.escape(h) + r"\s*(?:\n|$)" for h in headers_drop),
+        re.IGNORECASE
+    )
+
+    # Find all header positions (character offsets) in the text
+    keep_matches = {m.start(): m.group().strip() for m in keep_pattern.finditer(text)}
+    drop_matches = {m.start(): m.group().strip() for m in drop_pattern.finditer(text)}
+
+    keep_positions = sorted(keep_matches.keys())
+    drop_positions = sorted(drop_matches.keys())
+
+    # No keep headers found: return empty
+    if not keep_positions:
+        LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
+        report["nathaz_text"] = ""
+        report["keep_headers"] = str(keep_matches)
+        report["drop_headers"] = str(drop_matches)
+        return report
+
+    # Always keep text from beginning to first drop header
+    first_drop = drop_positions[0] if drop_positions else len(text)
+    selected_chunks = [text[0:first_drop]]
+
+    # For each keep header that appears after a drop, include text up to the next drop
+    next_drop = first_drop
+    for kp in keep_positions:
+        if kp > next_drop:
+            next_drop = min([d for d in drop_positions if d > kp], default=len(text))
+            selected_chunks.append(text[kp:next_drop])
+
+    report["nathaz_text"] = "\n".join(selected_chunks)
+    report["keep_headers"] = str(keep_matches)
+    report["drop_headers"] = str(drop_matches)
+    return report
+
+def select_impact_description_sentences(report, headers_keep, headers_drop, buffer=1):
     """
     Selects a subset of text that describes the impacts of the hazard event, given a list of sentences.
 
