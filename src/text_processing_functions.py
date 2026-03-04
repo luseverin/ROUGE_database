@@ -475,16 +475,17 @@ def select_impact_description(report, buffer=1):
         "description of the disaster",
         "description of disaster",
         "description of the event",
-        "needs (gaps) identified",
         "the situation",
         "summary", "the disaster", "situation overview",
     ]
     headers_drop = [
         "coordination and partnerships", "operational strategy", "red cross red crescent action",
+        "needs (gaps) identified",
         "operational developments", "summary of response", "summary of the response","the response so far",
         "previous operations", "current national society actions",
         "national society actions", "summary of measures taken by the national society",
         "detailed operation plan", "summary of the current response",
+        "Overview of the host National Society and ongoing response",
         "Overview of Operating National Society Response Action",
         "financial status", "appeal history", "targeting", "planned operations",
         "IFRC Network Actions Related To The Current Event",
@@ -518,11 +519,16 @@ def select_impact_description(report, buffer=1):
 
     # Default: whole text or to first drop occurence
     if not ids_keep:
-        if not ids_drop:
-            LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
-            return []
-        else:
-            return text[0:ids_drop[0]]
+        LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
+        report["nathaz_text"] = []
+        report["keep_headers"] = str(headers_keep)
+        report["drop_headers"] = str(headers_drop)
+        return report
+        #if not ids_drop:
+        #    LOGGER.warning("No headers found in text for %s (%s)", report["reportName"], report["appealType"])
+        #    return []
+        #else:
+        #    return text[0:ids_drop[0]]
 
     next_drop = ids_drop[0] if len(ids_drop) else len(text)
     selected_chunks = [text[0:next_drop+buffer]] #always keep start of text
