@@ -261,7 +261,7 @@ def could_be_unit(text):
 #    return new_text
 
 
-def clean_text(text, remove_numbers=False, remove_stopwords=False):
+def clean_text(text, remove_newlines=False, remove_numbers=False, remove_stopwords=False):
     # Remove hyperlinks
     """
     Clean the text by removing special characters, numbers, newlines, and multiple spaces.
@@ -283,11 +283,12 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False):
     if remove_numbers:
         text = re.sub(r'\d+', '', text)
 
-    # Remove newlines
-    text = text.replace('\n', ' ')
+    # Remove newlines if the option is enabled
+    if remove_newlines:
+        text = text.replace('\n', ' ')
 
-    # Remove multiple spaces
-    text = re.sub(r'\s+', ' ', text).strip()
+        # Remove multiple spaces
+        text = re.sub(r'\s+', ' ', text).strip()
 
     # Remove stopwords if the option is enabled
     if remove_stopwords:
@@ -295,6 +296,27 @@ def clean_text(text, remove_numbers=False, remove_stopwords=False):
         text = ' '.join([word for word in text.split() if word.lower() not in stop_words])
 
     return text
+
+def remove_newlines(sentences):
+    """
+    Remove newlines from the text and replace them with a single space.
+
+    The function takes a string as input and returns the modified string with newlines removed.
+
+    Parameters
+    ----------
+    text : str
+        The text from which to remove newlines.
+
+    Returns
+    -------
+    str
+        The modified text with newlines removed.
+    """
+    for id_s, sent in enumerate(sentences):
+        sentences[id_s] = sent.replace('\n', ' ')
+        sentences[id_s] = re.sub(r'\s+', ' ', sentences[id_s]).strip() #remove multiple spaces
+    return sentences
 
 def fix_pdf_text(text):
     """
@@ -436,18 +458,26 @@ def select_impact_description(report, buffer=1):
 
     Parameters
     ----------
-    text : list of str
-        List of sentences to be processed
-
+    report : dict
+        A dictionary containing the report information, including a list of sentences under the key "sentences".
+    buffer : int, optional
+        The number of sentences to include after the last matched sentence. Default is 1.
     Returns
     -------
-    list of str
-        A subset of the original text, describing the impacts of the hazard event
+    dict        The input report dictionary with an added key "nathaz_text" containing the selected subset of sentences describing the impacts of the hazard event, and keys "keep_headers" and "drop_headers"
+    containing the headers that were kept and dropped, respectively.
     """
     headers_keep = [
-        "operation summary", "situation analysis", "description of the crisis",
-        "what happened, where and when", "description of the disaster",
-        "description of the event", "needs (gaps) identified"
+        "operation summary", "A. situation analysis",
+        "description of the crisis",
+        "what happened, where and when",
+        "description of the emergency",
+        "description of the disaster",
+        "description of disaster",
+        "description of the event",
+        "needs (gaps) identified",
+        "the situation",
+        "summary", "the disaster", "situation overview",
     ]
     headers_drop = [
         "coordination and partnerships", "operational strategy", "red cross red crescent action",
@@ -455,17 +485,36 @@ def select_impact_description(report, buffer=1):
         "previous operations", "current national society actions",
         "national society actions", "summary of measures taken by the national society",
         "detailed operation plan", "summary of the current response",
-        "Overview of Operating National Society Response Action"
+        "Overview of Operating National Society Response Action",
+        "financial status", "appeal history", "targeting", "planned operations",
+        "IFRC Network Actions Related To The Current Event",
+        "ICRC Actions Related To The Current Event",
+        "Other Actors Actions Related To The Current Event",
+        "Overall objective of the operation",
+        "Operation strategy rationale",
+        "Targeting Strategy",
+        "Who was targeted by this operation?",
+        "Explain the selection criteria for the targeted population",
+        "Total Targeted Population",
+        "Risk and Security Considerations",
+        "Please indicate about potential operation risk for this operations and mitigation actions",
+        "Please indicate any security and safety concerns for this operation",
+        "Implementation",
+        "Narrative description of achievements",
+        "Lessons Learnt",
+        "National Society Strengthening",
+        "Financial Report"
     ]
     text = report["sentences"]
     # Precompile regex patterns
-    keep_pattern = re.compile("|".join(re.escape(h) for h in headers_keep), re.IGNORECASE)
-    drop_pattern = re.compile("|".join(re.escape(h) for h in headers_drop), re.IGNORECASE)
+    keep_pattern = re.compile("|".join(r"\n\s*" + re.escape(h) + r"\s*\n" for h in headers_keep), re.IGNORECASE)
+    drop_pattern = re.compile("|".join(r"\n\s*" + re.escape(h) + r"\s*\n" for h in headers_drop), re.IGNORECASE)
 
-    for i, s in enumerate(text):
-        print(s)
-    ids_keep = [i for i, s in enumerate(text) if keep_pattern.search(s)]
-    ids_drop = [i for i, s in enumerate(text) if drop_pattern.search(s)]
+    headers_keep = {i:s for i, s in enumerate(text) if keep_pattern.search(s)}
+    headers_drop = {i:s for i, s in enumerate(text) if drop_pattern.search(s)}
+
+    ids_keep = sorted(headers_keep.keys())
+    ids_drop = sorted(headers_drop.keys())
 
     # Default: whole text or to first drop occurence
     if not ids_keep:
@@ -475,17 +524,20 @@ def select_impact_description(report, buffer=1):
         else:
             return text[0:ids_drop[0]]
 
-
-    last_drop = ids_drop[0] if len(ids_drop) else len(text)
-    selected_chunks = [text[0:last_drop+buffer]] #always keep start of text
+    next_drop = ids_drop[0] if len(ids_drop) else len(text)
+    selected_chunks = [text[0:next_drop+buffer]] #always keep start of text
     #shorten text if possible
     for id_k in ids_keep:
-        if id_k > last_drop:
-            last_drop = min([d for d in ids_drop if d > id_k], default=len(text))
-            selected_chunks.append(text[id_k:last_drop+buffer])
+        if id_k > next_drop:
+            next_drop = min([d for d in ids_drop if d > id_k], default=len(text))
+            selected_chunks.append(text[id_k:next_drop+buffer])
 
     # Flatten chunks
-    return [sent for chunk in selected_chunks for sent in chunk]
+    target_sent = [sent for chunk in selected_chunks for sent in chunk]
+    report["nathaz_text"] = target_sent
+    report["keep_headers"] = str(headers_keep)
+    report["drop_headers"] = str(headers_drop)
+    return report
 
 # Change the type of hazard to the modified version
 # Caution, several hazards can be present in 'disasterTypeReclassified'

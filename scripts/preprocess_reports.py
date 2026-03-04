@@ -37,7 +37,7 @@ outformat = 'csv' #csv json
 ## Select data
 fname_in = "all_ifrc_reports_info_unnested_with_text_v181125"#'filtered_report_types_nat_hazards_bugfix'
 
-fname_out = f'preproc_extended_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
+fname_out = f'preproc_drop_all2_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
     fname_out = fname_out + '_format_nb'
@@ -81,7 +81,7 @@ for report in reports_in_json:
             else:
                 report["reportDate"] = report["date"]
             del report["date"]
-            report['text_processed'] = clean_text(report['text'])
+            report['text_processed'] = clean_text(report['text'], remove_newlines=False, remove_numbers=False, remove_stopwords=False)
             if format_numbers:
                 report['text_processed'] = replace_commas_in_numbers(report['text_processed'])
                 report['text_processed'] = replace_count_suffixes(report['text_processed'])
@@ -89,7 +89,8 @@ for report in reports_in_json:
             #if std_units:
             #    report['text_processed'] = text_standardize_metric_units(report['text_processed'])
             report['sentences'] = sent_tokenize(report['text_processed'])
-            report['nathaz_text'] = select_impact_description(report)
+            report = select_impact_description(report)
+            report['nathaz_text'] = remove_newlines(report['nathaz_text'])
             report['hazards_found_kw'] = check_hazard_type_keyword(report['text_processed'], hazard_kw_reclass)
             filtered_reports.append(report)
             if (len(report['hazards_found_kw']) > 0):# and (report['disasterTypeReclassified'] not in disasterType_nathaz)):
