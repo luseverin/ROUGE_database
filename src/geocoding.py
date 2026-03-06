@@ -35,7 +35,7 @@ import sqlite3
 import threading
 import time
 import geopy as gpy
-from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError, GeocoderRateLimited
 from joblib import dump
 
 # set up logger
@@ -50,6 +50,7 @@ from geopy.extra.rate_limiter import RateLimiter
 from rapidfuzz.distance import Levenshtein
 from src.client import NOMINATIM_USER_AGENT
 from src.geocoding_utils import *
+from filelock import FileLock
 
 # --- Create shared SQLite cache for back nominatim ---
 CACHE_DB = "reverse_geocode_cache.db"
@@ -69,7 +70,33 @@ CREATE TABLE IF NOT EXISTS reverse_cache (
 _conn.commit()
 
 # Lock guarantees safe concurrent writes
-_cache_lock = threading.Lock()
+# _cache_lock = threading.Lock()
+# _cache_lock = FileLock("reverse_geocode_cache.lock")
+_cache_lock = FileLock(f"{CACHE_DB}.lock")
+
+# Create geoolocator
+geolocator = gpy.geocoders.Nominatim(
+    user_agent=NOMINATIM_USER_AGENT,
+    timeout=10
+)
+
+# Global geolocator
+geocode = RateLimiter(
+    geolocator.geocode,
+    min_delay_seconds=1, 
+    max_retries=3, 
+    error_wait_seconds=2,
+    swallow_exceptions=False
+)
+
+# Rate limited reverse geocoder
+reverse_geocode = RateLimiter(
+    geolocator.reverse,
+    min_delay_seconds=1,
+    max_retries=3,
+    error_wait_seconds=2,
+    swallow_exceptions=False
+)
 
 #### Preprocessing of the location
 def normalize_to_list(x):
@@ -111,46 +138,32 @@ def identify_robust_country(df_geo, ctr_col1, ctr_col2, output_col):
 
     return df
 
-def identify_unique_location_country(df_geo) :
-    unique_loc_with_country = {}
-    unique_locations_countries = defaultdict(set)
-    unique_locations_countries_iso = defaultdict(set)
+def identify_unique_location_country(df_geo):
+    rows = {}  # key -> (location, country, iso3, iso2) — deduplicates automatically
 
     for _, row in df_geo.iterrows():
-        # Handle countries
-        countries = row["country_robust"]
-        isos      = row["country_robust_iso3"]
+        countries = row["country_robust"]   or []
+        iso3s     = row["country_robust_iso3"] or []
+        iso2s     = row["country_robust_iso2"] or []
 
-        # Handle None values - convert to empty list
-        if countries is None:
-            countries = []
-        if isos is None:
-            isos = []
-
-        # Handle locations
+        triplets  = list(itertools.zip_longest(countries, iso3s, iso2s, fillvalue=None))
         locations = row["location"]
+
         if not locations:
-            # No specific location → use country as both key and location
-            for c, iso in zip(countries, isos):
-                key = (c, c)
-                unique_loc_with_country[key] = True
-                unique_locations_countries[key].add(c)
-                unique_locations_countries_iso[key].add(iso)
+            for c, iso3, iso2 in triplets:
+                key = (c, c, iso3, iso2)
+                rows[key] = True
         else:
-            # Multiple locations in the row
             for loc in locations:
-                for c, iso in zip(countries, isos):
+                for c, iso3, iso2 in triplets:
+                    key = (loc, c, iso3, iso2)
+                    rows[key] = True
 
-                    # --- NEW KEY (loc, country) ---
-                    key = (loc, c)
-                    unique_loc_with_country[key] = True
-
-                    unique_locations_countries[key].add(c)
-                    unique_locations_countries_iso[key].add(iso)
-    # unique_locations_countries = dict(unique_locations_countries)
-    # unique_locations_countries_iso = dict(unique_locations_countries_iso)
-    unique_loc_with_country = list(unique_loc_with_country.keys())
-    return unique_loc_with_country, unique_locations_countries, unique_locations_countries_iso
+    df_unique = pd.DataFrame(
+        list(rows.keys()),
+        columns=["location", "country", "country_iso3", "country_iso2"]
+    )
+    return df_unique
 
 #### Function to Geocode one location
 def match_admin1_for_row(row, gpd_files):
@@ -453,79 +466,67 @@ def fallback_country_union(gdf_file, location, countries, iso_countries):
 
 #### Queries nominatim and find best match
 
-def query_nominatim(location, country, max_retries=2, initial_delay=1, timeout=10):
+def query_nominatim(location, country_iso2, max_retries=2, initial_delay=1):
     """
     Make nominatim query with robust error handling
     From location and country, return a OSM object
     """
-    # Initialize geolocator with longer timeout
-    geolocator = gpy.geocoders.Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=timeout)
-
     if not location:
-        query = f"{country}"
-    if not country :
-        query = f"{location}"
-    else:
-        query = f"{location}, {country}"
+        return None
 
     for attempt in range(max_retries):
         try:
-            result = geolocator.geocode(
-                query,
+            geocode_kwargs = dict(
                 exactly_one=True,
                 language="en",
                 addressdetails=True,
-                geometry="geojson"
+                geometry="geojson",
             )
+            if country_iso2:
+                geocode_kwargs["country_codes"] = country_iso2
+
+            result = geocode(location, **geocode_kwargs)
             return result
 
-        except (GeocoderTimedOut, GeocoderServiceError) as e:
-            if attempt == max_retries - 1:  # Last attempt
-                LOGGER.error("[query_nominatim] Failed after %i attempts: %s", max_retries, e)
-                return None
-
-            # Exponential backoff
+        except (GeocoderTimedOut, GeocoderServiceError, GeocoderRateLimited) as e:
             sleep_time = initial_delay * (2 ** attempt)
-            LOGGER.info("[query_nominatim] Attempt %i failed. Retrying in %.1f seconds...", attempt + 1, sleep_time)
+            LOGGER.warning("[query_nominatim] Attempt %i failed: %s. Retrying in %.1f s...",
+                           attempt + 1, e, sleep_time)
             time.sleep(sleep_time)
 
         except Exception as e:
             LOGGER.error("[query_nominatim] Unexpected error: %s", e)
             return None
+
+    LOGGER.error("[query_nominatim] All %i attempts failed for '%s'", max_retries, location)
     return None
 
-def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=10, zoom=13):
+def query_reverse_geocode(coords, lang="en", zoom=13, max_retries=2, initial_delay=1):
     """
-    Parallel-safe reverse geocode with SQLite caching.
+    Reverse geocode a coordinate with SQLite caching.
+    Safe for threads and multiple processes.
+    Returns a geopy Location object or None.
     """
+    lat = round(float(coords[0]), 5)
+    lon = round(float(coords[1]), 5)
 
-    lat, lon = float(coords[0]), float(coords[1])
-
-    # 1. Check cache first
-    with _cache_lock:  # Lock needed for SQLite SELECT when multiple writers exist
-        row = _cur.execute("""
-            SELECT result FROM reverse_cache
-            WHERE lat=? AND lon=? AND lang=? AND zoom=?
-        """, (lat, lon, lang, zoom)).fetchone()
-
-    if row:
-        # Reconstruct geopy Location object from stored JSON
-        try:
-            return gpy.location.Location(**json.loads(row[0]))
-        except Exception:
-            pass  # If reconstruction fails, fall back to Nominatim
-
-    # 2. Create geolocator
-    geolocator = gpy.geocoders.Nominatim(
-        user_agent=NOMINATIM_USER_AGENT,
-        timeout=timeout
-    )
-
-    # 3. Retry logic
     for attempt in range(max_retries):
-
         try:
-            reverse_result = geolocator.reverse(
+            with _cache_lock:
+                # 1️⃣ Check cache
+                row = _cur.execute("""
+                    SELECT result FROM reverse_cache
+                    WHERE lat=? AND lon=? AND lang=? AND zoom=?
+                """, (lat, lon, lang, zoom)).fetchone()
+
+                if row:
+                    try:
+                        return gpy.location.Location(**json.loads(row[0]))
+                    except Exception:
+                        pass  # corrupted cache → fallback
+
+            # 2️⃣ Not in cache → query Nominatim
+            reverse_result = reverse_geocode(
                 (lat, lon),
                 exactly_one=True,
                 addressdetails=True,
@@ -533,7 +534,7 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
                 zoom=zoom
             )
 
-            # 4. Cache result (serialize geopy Location object)
+            # 3️⃣ Store result in cache
             if reverse_result is not None:
                 loc_dict = {
                     "address": reverse_result.raw.get("address"),
@@ -553,19 +554,14 @@ def query_reverse_geocode(coords, lang, max_retries=2, initial_delay=1, timeout=
 
             return reverse_result
 
-        except (GeocoderTimedOut, GeocoderServiceError) as e:
-
-            if attempt == max_retries - 1:
-                LOGGER.error("[query_nominatim] Failed after %i attempts: %s", max_retries, e)
-                return None
-
+        except (GeocoderRateLimited, GeocoderTimedOut, GeocoderServiceError) as e:
+            # exponential backoff
             sleep_time = initial_delay * (2 ** attempt)
-            LOGGER.info("[query_nominatim] Attempt %i failed. Retrying in %.1fs...",
-                        attempt + 1, sleep_time)
+            print(f"[query_reverse_geocode] Attempt {attempt+1} failed: {e}. Retrying in {sleep_time:.1f}s...")
             time.sleep(sleep_time)
 
         except Exception as e:
-            LOGGER.error("[query_nominatim] Unexpected error: %s", e)
+            print(f"[query_reverse_geocode] Unexpected error: {e}")
             return None
 
     return None
@@ -696,54 +692,152 @@ def save_df_geo(df_geo, save_path, res_savename) :
 
 ##### Functions for nominatim
 
-def find_best_nomin(location, countries, countries_iso, similarity_th, print_info=False) :
+# def find_best_nomin(location, countries, countries_iso, similarity_th, print_info=False) :
+#     """Query Nominatim for a location across candidate countries and
+#     return the best matching result with similarity evaluation."""
+#     best_result = None
+#     best_sim = 0
+
+#     #If extracted location is too long and correspond to a sentence, return None, None
+#     if len(location) > 20 :
+#         return None, None
+
+#     for curr_country, curr_iso in zip(countries, countries_iso) :
+#         nom_result = query_nominatim(location, curr_country)
+
+#         # Try to query without the admin words 
+#         if nom_result is None:
+#             nom_result = query_nominatim(remove_admin_words(location), curr_country)
+
+#         # Try to query only with location
+#         if nom_result is None : 
+#             nom_result = query_nominatim(location, None)
+
+#             if nom_result is None:
+#                 nom_result = query_nominatim(remove_admin_words(location), None)
+
+#             if nom_result is not None:
+#                 # If a nominatim result is found, change the country with the actual country given by nominatim
+#                 address = nom_result.raw.get("address", {})
+#                 if "country_code" in address and address["country_code"]:
+#                     curr_iso2 = address["country_code"]
+#                     country = pycountry.countries.get(alpha_2=curr_iso2.upper())
+#                     curr_iso = country.alpha_3 if country else None
+#                 else : 
+#                     LOGGER.info("[find_best_nomin] Nominatim result has no country_code for location %s. Address: %s", location, address)
+
+#                 if "country" in address and address["country"]:
+#                     curr_country = address["country"]
+
+#         if nom_result is None:
+#             return None, None
+
+#         # Evaluate similarity
+#         loc_clean = remove_admin_words(location)
+#         coords = (nom_result.latitude, nom_result.longitude)
+#         address = nom_result.raw.get("address", {}) if nom_result and isinstance(nom_result.raw, dict) else {}
+
+#         match_info, sim = find_best_match(loc_clean, address, similarity_th, print_info)
+#         if sim > best_sim:
+#             best_sim = sim
+#             best_result = {
+#                 **match_info,
+#                 "coords": coords,
+#                 "country": curr_country,
+#                 "country_iso" : curr_iso
+#             }
+#         if sim == 1 :
+#             break
+#     return nom_result, best_result
+
+def find_best_nomin(row, similarity_th, print_info=False):
     """Query Nominatim for a location across candidate countries and
-    return the best matching result with similarity evaluation."""
+    return the best matching result with similarity evaluation.
+    
+    Args:
+        row: A row from the unique locations DataFrame with columns
+             'location', 'country', 'country_iso3', 'country_iso2'
+    """
     best_result = None
     best_sim = 0
 
-    #If extracted location is too long and correspond to a sentence, return None, None
-    if len(location) > 20 :
-        return None, None
+    # Default output
+    empty = pd.Series({
+        "nom_result"  : None,
+        "coords"      : None,
+        "match_info"  : None,
+        "country"     : row["country"],
+        "country_iso3": row["country_iso3"],
+        "country_iso2": row["country_iso2"],
+    })
 
-    for curr_country, curr_iso in zip(countries, countries_iso) :
-        nom_result = query_nominatim(location, curr_country)
+    location    = row["location"]
+    curr_country = row["country"]
+    curr_iso3   = row["country_iso3"]
+    curr_iso2   = row["country_iso2"]
+
+    # If extracted location is too long and corresponds to a sentence, return None, None
+    if len(location) > 30:
+        return empty
+
+    nom_result = query_nominatim(location, curr_iso2)
+
+    # Try to query without the admin words
+    if nom_result is None:
+        nom_result = query_nominatim(remove_admin_words(location), curr_iso2)
+
+    # Try to query only with location
+    if nom_result is None:
+        nom_result = query_nominatim(location, None)
 
         if nom_result is None:
-            nom_result = query_nominatim(location, None)
-            if nom_result is not None:
-                # If a nominatim result is found, change the country with the actual country given by nominatim
-                address = nom_result.raw.get("address", {})
-                if "country_code" in address and address["country_code"]:
-                    curr_iso2 = address["country_code"]
-                    country = pycountry.countries.get(alpha_2=curr_iso2.upper())
-                    curr_iso = country.alpha_3 if country else None
-                else : 
-                    LOGGER.info("[find_best_nomin] Nominatim result has no country_code for location %s. Address: %s", location, address)
+            nom_result = query_nominatim(remove_admin_words(location), None)
 
-                if "country" in address and address["country"]:
-                    curr_country = address["country"]
+        if nom_result is not None:
+            # If a nominatim result is found, update country info from Nominatim response
+            address = nom_result.raw.get("address", {})
+            if "country_code" in address and address["country_code"]:
+                curr_iso2 = address["country_code"]
+                country = pycountry.countries.get(alpha_2=curr_iso2.upper())
+                curr_iso3 = country.alpha_3 if country else None
+            else:
+                LOGGER.info(
+                    "[find_best_nomin] Nominatim result has no country_code for location %s. Address: %s",
+                    location, address
+                )
 
-        if nom_result is None:
-            return None, None
+            if "country" in address and address["country"]:
+                curr_country = address["country"]
 
-        # Evaluate similarity
-        loc_clean = remove_admin_words(location)
-        coords = (nom_result.latitude, nom_result.longitude)
-        address = nom_result.raw.get("address", {}) if nom_result and isinstance(nom_result.raw, dict) else {}
+    if nom_result is None:
+        # return None, None
+        return empty
 
-        match_info, sim = find_best_match(loc_clean, address, similarity_th, print_info)
-        if sim > best_sim:
-            best_sim = sim
-            best_result = {
-                **match_info,
-                "coords": coords,
-                "country": curr_country,
-                "country_iso" : curr_iso
-            }
-        if sim == 1 :
-            break
-    return nom_result, best_result
+    # Evaluate similarity
+    loc_clean = remove_admin_words(location)
+    coords    = (nom_result.latitude, nom_result.longitude)
+    address   = nom_result.raw.get("address", {}) if nom_result and isinstance(nom_result.raw, dict) else {}
+
+    match_info, sim = find_best_match(loc_clean, address, similarity_th, print_info)
+    if sim > best_sim:
+        best_sim = sim
+        best_result = {
+            **match_info,
+            "coords"      : coords,
+            "country"     : curr_country,
+            "country_iso3": curr_iso3,
+            "country_iso2": curr_iso2,
+        }
+
+    # return nom_result, best_result
+    return pd.Series({
+        "nom_result"  : nom_result,
+        "coords"      : best_result.get("coords") if best_result else None,
+        "match_info"  : best_result,
+        "country"     : best_result.get("country") if best_result else row["country"],
+        "country_iso3": best_result.get("country_iso3") if best_result else row["country_iso3"],
+        "country_iso2": best_result.get("country_iso2") if best_result else row["country_iso2"],
+    })
 
 ##### Convert individual locations to polygons
 
@@ -755,7 +849,7 @@ def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
         fallback_address = best_nomin.raw.get("address", {})
         for nomin_key_admin in LOCATION_LEVEL_MAPPING[f"admin{adm_lev}"]["nominatim_keys"]:
             if nomin_key_admin in fallback_address:
-                df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["country_iso"],
+                df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["country_iso3"],
                                 f"ADMIN_{adm_lev}", fallback_address[nomin_key_admin], adm_lev)
                 if df_gpd is not None:
                     return df_gpd
@@ -768,7 +862,7 @@ def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
                 address = query_reverse_geocode(coords, lang)
                 for nomin_key_admin in LOCATION_LEVEL_MAPPING[f"admin{adm_lev}"]["nominatim_keys"]:
                     if nomin_key_admin in address:
-                        df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["country_iso"],
+                        df_gpd = get_polygon(gdf_file[f"ADM_{adm_lev}"], best_result["country"], best_result["country_iso3"],
                                         best_result["admin_field"], address[nomin_key_admin], adm_lev)
                         if df_gpd is not None:
                             return df_gpd
@@ -787,7 +881,7 @@ def try_nominatim_key_fallback(gdf_file, best_nomin, best_result, adm_lev):
                 df_gpd = get_polygon(
                     gdf_file[f"ADM_{adm_lev}"],
                     best_result["country"],
-                    best_result["country_iso"],
+                    best_result["country_iso3"],
                     f"ADMIN_{adm_lev}",
                     fallback_address[nomin_key_admin],
                     adm_lev
@@ -827,7 +921,7 @@ def try_translate_language_fallback(gdf_file, best_nomin, best_result, adm_lev):
                     df_gpd = get_polygon(
                         gdf_file[f"ADM_{adm_lev}"],
                         best_result["country"],
-                        best_result["country_iso"],
+                        best_result["country_iso3"],
                         best_result["admin_field"],
                         address[nomin_key_admin],
                         adm_lev
@@ -879,11 +973,18 @@ def prepare_result_df(df_gpd, best_result, location, country_flag=0, osm_flag=0)
         location=location
     )
 
-def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best_result, countries, iso_countries, print_info=False):
+# def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best_result, countries, iso_countries, print_info=False):
+def geocode_from_nominatim_output_optimized(row, gdf_file, print_info=False):
     """Match a Nominatim geocoding result to the best administrative boundary polygon,
     using fallbacks when necessary, and return the corresponding GeoDataFrame row."""
     try:
-        step = "top"
+        # step = "top"
+        location     = row["location"]
+        best_nomin   = row["nom_result"]
+        best_result  = row["match_info"]
+        countries    = row["country"]    if isinstance(row["country"],    list) else [row["country"]]
+        iso_countries = row["country_iso3"] if isinstance(row["country_iso3"], list) else [row["country_iso3"]]
+
         if not best_result:
             step = "fallback_country_union"
             return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
@@ -899,7 +1000,7 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
                 df_gpd = get_polygon(
                     gdf_file[f"ADM_{adm_lev}"],
                     best_result["country"],
-                    best_result["country_iso"],
+                    best_result["country_iso3"],
                     best_result["admin_field"],
                     best_result["name"],
                     adm_lev
@@ -945,25 +1046,35 @@ def geocode_from_nominatim_output_optimized(gdf_file, location, best_nomin, best
         LOGGER.warning("[geocode_from_nomin_output_optimized] %s. Falling back to country level.", e)
         return fallback_country_union(gdf_file, location, countries, iso_countries)#.assign(location=location)
 
-def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gdf_file, print_info=False, max_workers=None):
+# def run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gdf_file, print_info=False, max_workers=None):
+def run_parallel_geocode(df_unique, gdf_file, print_info=False, max_workers=None):
     """Run geocoding for multiple locations in parallel using ThreadPoolExecutor,
     combining results into a single DataFrame."""
     results = []
 
     # run in parallel
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # futures = {
+        #     executor.submit(
+        #         geocode_from_nominatim_output_optimized,
+        #         gdf_file,
+        #         loc,
+        #         best_nomin,
+        #         best_result,
+        #         unique_locations_countries[(loc, country)],
+        #         unique_locations_countries_iso[(loc, country)],
+        #         print_info
+        #     ): (loc, country)
+        #     for (loc, country), (best_nomin, best_result) in nom_loc_dict.items()
+        # }
         futures = {
             executor.submit(
                 geocode_from_nominatim_output_optimized,
+                row,
                 gdf_file,
-                loc,
-                best_nomin,
-                best_result,
-                unique_locations_countries[(loc, country)],
-                unique_locations_countries_iso[(loc, country)],
                 print_info
-            ): (loc, country)
-            for (loc, country), (best_nomin, best_result) in nom_loc_dict.items()
+            ): (row["location"], row["country"])
+            for _, row in df_unique.iterrows()
         }
 
         # for future in futures:
