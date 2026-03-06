@@ -78,7 +78,7 @@ LIST_ADMIN_WORDS = [
     "Territory", "County", "Sub-County", "Sub County", "District", "Municipality", "Prefecture",
     "Canton", "Commune", "Borough", "Parish", "Metropolitan Area",
     "Subregion", "Zone", "Subdivision", "Ward", "Township", "City",
-    "Village", "Hamlet", "Governorate", "Autonomous Region",
+    "Village", "Hamlet", "Governorate", "Autonomous Region", "Council",
     "County Borough", "Council Area", "Federal District", "Locality", "Town", "Community"
 ]
 
