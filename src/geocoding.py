@@ -165,6 +165,88 @@ def identify_unique_location_country(df_geo):
     )
     return df_unique
 
+def identify_unique_locations_v2(df_geo):
+    rows = {}  # frozenset(countries) as key to deduplicate identical sets
+
+    for _, row in df_geo.iterrows():
+        countries = row["country_robust"]      or []
+        iso3s     = row["country_robust_iso3"] or []
+        iso2s     = row["country_robust_iso2"] or []
+
+        triplets  = list(itertools.zip_longest(countries, iso3s, iso2s, fillvalue=None))
+        locations = row["location"]
+
+        loc_list = [c for c, _, _ in triplets] if not locations else None
+
+        def add_entry(loc, triplets):
+            key = (loc, frozenset(c for c, _, _ in triplets))
+            if key not in rows:
+                rows[key] = {
+                    "location"    : loc,
+                    "country"     : [c    for c, _,    _ in triplets],
+                    "country_iso3": [iso3 for _, iso3, _ in triplets],
+                    "country_iso2": [iso2 for _, _,    iso2 in triplets],
+                }
+
+        if not locations:
+            for c, iso3, iso2 in triplets:
+                add_entry(c, [(c, iso3, iso2)])
+        else:
+            for loc in locations:
+                add_entry(loc, triplets)
+
+    return pd.DataFrame(list(rows.values()))
+
+# Version 3: Subset merging — if (loc, [c1, c2]) exists, don't add (loc, [c1]) or (loc, [c2])
+def identify_unique_locations_v3(df_geo):
+    # loc -> list of frozensets of countries (with their iso3/iso2 mappings)
+    loc_sets   = defaultdict(list)   # loc -> [frozenset(countries), ...]
+    loc_data   = {}                  # (loc, frozenset) -> {country, iso3, iso2 lists}
+
+    for _, row in df_geo.iterrows():
+        countries = row["country_robust"]      or []
+        iso3s     = row["country_robust_iso3"] or []
+        iso2s     = row["country_robust_iso2"] or []
+
+        triplets  = list(itertools.zip_longest(countries, iso3s, iso2s, fillvalue=None))
+        locations = row["location"]
+
+        def add_entry(loc, triplets):
+            fset = frozenset(c for c, _, _ in triplets)
+
+            # Check if this set is already a subset of an existing set for this loc
+            for existing_fset in loc_sets[loc]:
+                if fset <= existing_fset:
+                    # Already covered by a larger or equal set → skip
+                    return
+            
+            # Check if any existing sets are subsets of this new (larger) set
+            # If so, remove them as they are now covered by this new entry
+            loc_sets[loc] = [
+                existing_fset for existing_fset in loc_sets[loc]
+                if not existing_fset < fset  # remove strict subsets
+            ]
+            for obsolete_fset in [ef for ef in list(loc_data.keys()) if ef[0] == loc and ef[1] < fset]:
+                del loc_data[obsolete_fset]
+
+            # Add the new entry
+            loc_sets[loc].append(fset)
+            loc_data[(loc, fset)] = {
+                "location"    : loc,
+                "country"     : [c    for c, _,    _ in triplets],
+                "country_iso3": [iso3 for _, iso3, _ in triplets],
+                "country_iso2": [iso2 for _, _,    iso2 in triplets],
+            }
+
+        if not locations:
+            for c, iso3, iso2 in triplets:
+                add_entry(c, [(c, iso3, iso2)])
+        else:
+            for loc in locations:
+                add_entry(loc, triplets)
+
+    return pd.DataFrame(list(loc_data.values()))
+
 #### Function to Geocode one location
 def match_admin1_for_row(row, gpd_files):
     """ Given a row of df_geo and gpd_files, find the ADM1 boundary that contains/intersects the geometry."""
