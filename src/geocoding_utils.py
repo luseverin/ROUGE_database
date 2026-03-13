@@ -158,48 +158,58 @@ def country_to_iso(
         # --------------------
         country_str = str(country).strip()
 
-        try:
-            match = pycountry.countries.lookup(country_str)
-        except LookupError:
+        # Force some country with issues
+        if "democratic" in country_str.lower() and "congo" in country_str.lower():
+            match = pycountry.db.Data(alpha_3="COD")
+            iso_list.append(getattr(match, representation, None))
+            continue
+        elif "drc" in country_str.lower() :
+            match = pycountry.db.Data(alpha_3="COD")
+            iso_list.append(getattr(match, representation, None))
+            continue
+        else : 
             try:
-                match = pycountry.historic_countries.lookup(country_str)
+                match = pycountry.countries.lookup(country_str)
             except LookupError:
-                # NON ISO REGIONS
-                region = next(
-                    (c for c in NONISO_REGIONS if country_str in c.values()),
-                    None,
-                )
-                if region:
-                    match = pycountry.db.Data(**region)
-                else:
-                    # --------------------
-                    # country_converter (coco)
-                    # --------------------
-                    try:
-                        iso = coco.convert(
-                            names=country_str,
-                            to="ISO3",
-                            not_found=None,
-                            quiet=True
-                        )
-                        if iso:
-                            match = pycountry.db.Data(alpha_3=iso)
-                        else:
-                            raise ValueError
-                    except Exception:
+                try:
+                    match = pycountry.historic_countries.lookup(country_str)
+                except LookupError:
+                    # NON ISO REGIONS
+                    region = next(
+                        (c for c in NONISO_REGIONS if country_str in c.values()),
+                        None,
+                    )
+                    if region:
+                        match = pycountry.db.Data(**region)
+                    else:
                         # --------------------
-                        # Fuzzy fallback
+                        # country_converter (coco)
                         # --------------------
-                        best, score = fuzzy_country_match(country_str)
-                        if best and score >= fuzzy_threshold:
-                            match = best
-                        elif fillvalue is not None:
-                            match = pycountry.db.Data(
-                                **{representation: fillvalue}
+                        try:
+                            iso = coco.convert(
+                                names=country_str,
+                                to="ISO3",
+                                not_found=None,
+                                quiet=True
                             )
-                        else:
-                            iso_list.append(None)
-                            continue
+                            if iso:
+                                match = pycountry.db.Data(alpha_3=iso)
+                            else:
+                                raise ValueError
+                        except Exception:
+                            # --------------------
+                            # Fuzzy fallback
+                            # --------------------
+                            best, score = fuzzy_country_match(country_str)
+                            if best and score >= fuzzy_threshold:
+                                match = best
+                            elif fillvalue is not None:
+                                match = pycountry.db.Data(
+                                    **{representation: fillvalue}
+                                )
+                            else:
+                                iso_list.append(None)
+                                continue
 
         # --------------------
         # Extract ISO
