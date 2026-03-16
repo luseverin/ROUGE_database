@@ -74,11 +74,11 @@ LOCATION_LEVEL_MAPPING = {
 
 LIST_ADMIN_WORDS = [
     "Regency", "Province", "State", "Department", "Region", "River",
-    "Territory", "County", "District", "Municipality", "Prefecture",
+    "Territory", "County", "Sub-County", "Sub County", "District", "Municipality", "Prefecture",
     "Canton", "Commune", "Borough", "Parish", "Metropolitan Area",
     "Subregion", "Zone", "Subdivision", "Ward", "Township", "City",
-    "Village", "Hamlet", "Municipality", "Governorate", "Autonomous Region",
-    "County Borough", "Council Area", "Federal District", "Locality"
+    "Village", "Hamlet", "Governorate", "Autonomous Region", "Council",
+    "County Borough", "Council Area", "Federal District", "Locality", "Town", "Community"
 ]
 
 def fuzzy_country_match(query):
@@ -116,6 +116,7 @@ import re
 import numpy as np
 import pycountry
 import country_converter as coco
+import inflect
 
 
 def country_to_iso(
@@ -174,48 +175,58 @@ def country_to_iso(
         # --------------------
         country_str = str(country).strip()
 
-        try:
-            match = pycountry.countries.lookup(country_str)
-        except LookupError:
+        # Force some country with issues
+        if "democratic" in country_str.lower() and "congo" in country_str.lower():
+            match = pycountry.db.Data(alpha_3="COD")
+            iso_list.append(getattr(match, representation, None))
+            continue
+        elif "drc" in country_str.lower() :
+            match = pycountry.db.Data(alpha_3="COD")
+            iso_list.append(getattr(match, representation, None))
+            continue
+        else : 
             try:
-                match = pycountry.historic_countries.lookup(country_str)
+                match = pycountry.countries.lookup(country_str)
             except LookupError:
-                # NON ISO REGIONS
-                region = next(
-                    (c for c in NONISO_REGIONS if country_str in c.values()),
-                    None,
-                )
-                if region:
-                    match = pycountry.db.Data(**region)
-                else:
-                    # --------------------
-                    # country_converter (coco)
-                    # --------------------
-                    try:
-                        iso = coco.convert(
-                            names=country_str,
-                            to="ISO3",
-                            not_found=None,
-                            # quiet=True
-                        )
-                        if iso:
-                            match = pycountry.db.Data(alpha_3=iso)
-                        else:
-                            raise ValueError
-                    except Exception:
+                try:
+                    match = pycountry.historic_countries.lookup(country_str)
+                except LookupError:
+                    # NON ISO REGIONS
+                    region = next(
+                        (c for c in NONISO_REGIONS if country_str in c.values()),
+                        None,
+                    )
+                    if region:
+                        match = pycountry.db.Data(**region)
+                    else:
                         # --------------------
-                        # Fuzzy fallback
+                        # country_converter (coco)
                         # --------------------
-                        best, score = fuzzy_country_match(country_str)
-                        if best and score >= fuzzy_threshold:
-                            match = best
-                        elif fillvalue is not None:
-                            match = pycountry.db.Data(
-                                **{representation: fillvalue}
+                        try:
+                            iso = coco.convert(
+                                names=country_str,
+                                to="ISO3",
+                                not_found=None,
+                                quiet=True
                             )
-                        else:
-                            iso_list.append(None)
-                            continue
+                            if iso:
+                                match = pycountry.db.Data(alpha_3=iso)
+                            else:
+                                raise ValueError
+                        except Exception:
+                            # --------------------
+                            # Fuzzy fallback
+                            # --------------------
+                            best, score = fuzzy_country_match(country_str)
+                            if best and score >= fuzzy_threshold:
+                                match = best
+                            elif fillvalue is not None:
+                                match = pycountry.db.Data(
+                                    **{representation: fillvalue}
+                                )
+                            else:
+                                iso_list.append(None)
+                                continue
 
         # --------------------
         # Extract ISO
@@ -228,7 +239,37 @@ def country_to_iso(
 
     return iso_list[0] if return_single else iso_list
 
+def get_iso2_from_iso3(iso3):
+    """Convert ISO3 to ISO2, handling lists and single values."""
+    if iso3 is None:
+        return None
+    
+    # Handle list elements
+    if isinstance(iso3, list):
+        results = []
+        for code in iso3:
+            try:
+                country = pycountry.countries.get(alpha_3=str(code).upper())
+                results.append(country.alpha_2 if country else None)
+            except Exception:
+                results.append(None)
+        # Return list or single value depending on input
+        return results
+    
+    # Handle single value
+    try:
+        country = pycountry.countries.get(alpha_3=str(iso3).upper())
+        return country.alpha_2 if country else None
+    except Exception:
+        return None
+
 #### Helpers functions
+
+p = inflect.engine()
+
+def singularize_word(word):
+    singular = p.singular_noun(word)
+    return singular if singular else word
 
 def get_country_languages_dict():
     """Build a dictionary mapping each country name to its primary language code."""
@@ -263,8 +304,15 @@ def rotated_levenshtein_similarity(str1, str2):
 
 def remove_admin_words(location_str):
     """Remove predefined administrative words from a location string without affecting substrings."""
+
+    location_str = location_str.lower()
+
+    # singularize words
+    words = [singularize_word(w) for w in location_str.split()]
+    location_str = " ".join(words)
+
     # Create a regex pattern that matches whole words only, case-insensitive
-    pattern = r'\b(?:' + '|'.join(re.escape(word) for word in LIST_ADMIN_WORDS) + r')\b'
+    pattern = r'\b(?:' + '|'.join(re.escape(word.lower()) for word in LIST_ADMIN_WORDS) + r')\b'
     # Substitute matches with empty string
     location_str = re.sub(pattern, '', location_str, flags=re.IGNORECASE)
     # Remove extra spaces

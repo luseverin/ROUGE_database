@@ -31,7 +31,8 @@ LIST_COLS = ['valueAnnotation',
              'nathaz_text',
              'locationOsm',
              'locationPolygon',
-             'continent']
+             'continent',
+             'iso3_code']
 
 def delistify_cols(df):
     """

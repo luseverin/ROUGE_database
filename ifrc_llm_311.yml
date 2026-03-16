@@ -63,6 +63,7 @@ dependencies:
   - hyperframe=6.1.0
   - icu=75.1
   - idna=3.10
+  - inflect=7.0.0
   - instructor=1.11.3
   - jinja2=3.1.6
   - jiter=0.6.1
@@ -211,7 +212,6 @@ dependencies:
       - number-spacy==0.0.1
       - price-parser==0.4.0
       - pybind11==3.0.1
-
       - spacy-fastlang==2.1.0
       - text2num==3.0.0
       - word2number==1.1
