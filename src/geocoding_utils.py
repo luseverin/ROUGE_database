@@ -196,7 +196,7 @@ def country_to_iso(
                             names=country_str,
                             to="ISO3",
                             not_found=None,
-                            quiet=True
+                            # quiet=True
                         )
                         if iso:
                             match = pycountry.db.Data(alpha_3=iso)

@@ -57,6 +57,17 @@ _conn.commit()
 # Lock guarantees safe concurrent writes
 _cache_lock = threading.Lock()
 
+# Define the number of max_workers for parallelisation 
+def get_max_workers(default=1):
+    """
+    Return a safe number of workers depending on SLURM allocation.
+    Falls back gracefully when not running under SLURM.
+    """
+    try:
+        return int(os.environ.get("SLURM_CPUS_PER_TASK", default))
+    except (TypeError, ValueError):
+        return min(10, (os.cpu_count() or 1))
+
 #### Preprocessing of the location
 def normalize_to_list(x):
     if x is None:
@@ -1464,6 +1475,9 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
             df_geo_output_split — DataFrame with split lowest-level polygons.
             df_geo_output — DataFrame with complete polygon association results.
     """
+    #Define the max_workers for parallelisation 
+    max_workers = get_max_workers()
+
     # Prepare dataset
     df_geo = deepcopy(df)
 
@@ -1520,7 +1534,6 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
 
     # Convert nominatim output to polygons
     start = time.time()
-    max_workers = min(10, (os.cpu_count() or 1) + 2)
     df_geo_individual_locs = run_parallel_geocode(nom_loc_dict, unique_locations_countries, unique_locations_countries_iso, gpd_files, print_info=False, max_workers=max_workers)
     end = time.time()
     time_open = (end - start) / 60
@@ -1532,7 +1545,6 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.2, print_info=False,
     # Gather the polygons to df_row for 2 split options
     for split_lowest_levels in [True, False] :
         start = time.time()
-        max_workers = min(10, (os.cpu_count() or 1))
         df_geo_output = run_parallel_in_batches(df_geo, df_geo_individual_locs, gpd_files, split_lowest_levels=split_lowest_levels, polygon_source=polygon_source, max_workers=max_workers, batch_size=2000)
         end = time.time()
         time_open = (end - start) / 60

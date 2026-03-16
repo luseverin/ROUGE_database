@@ -6,6 +6,7 @@ import copy as cp
 import regex as re
 from pint import UnitRegistry
 from currency_converter import CurrencyConverter, RateNotFoundError
+import calendar
 import logging
 
 from src import units
@@ -19,16 +20,58 @@ nlp = spacy.load("en_core_web_sm")
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
-def consolidate_dates(df, date_field, fill_func):
+def consolidate_dates(df, date_field, kind='start'):
     """
-    Consolidate dates columns by filling None with statistic taken over the  same column
+    Consolidate a date column by filling 0/NaN with earliest/latest valid value
+    and ensuring the values are reasonable.
 
     :param df: input dataframe
-    :param date_field: date column to consolidate
-    :param fill_func: function to use for consolidation
+    :param date_field: column name (str)
+    :param kind: 'start' for start dates, 'end' for end dates
     """
-    fill_value = fill_func(df[date_field].values)
-    df[date_field] = df[date_field].apply(lambda x: x if pd.notnull(x) else fill_value)
+    # Replace 0s with NaN
+    df[date_field] = df[date_field].replace(0, np.nan)
+
+    # Fill missing Year/Month with min/max
+    if 'Year' in date_field or 'Month' in date_field:
+        if kind == 'start':
+            fill_value = np.nanmin(df[date_field].values)
+        else:
+            fill_value = np.nanmax(df[date_field].values)
+        df[date_field] = df[date_field].fillna(fill_value)
+
+    # Clip months to 1-12
+    if 'Month' in date_field:
+        df[date_field] = df[date_field].clip(1, 12)
+
+    # Clip years to reasonable range
+    if 'Year' in date_field:
+        df[date_field] = df[date_field].clip(1900, 2100)
+
+    # Adjust days
+    if 'Day' in date_field:
+        # Determine corresponding month/year
+        if 'start' in date_field:
+            month_col, year_col = 'startMonth', 'startYear'
+        else:
+            month_col, year_col = 'endMonth', 'endYear'
+
+        # Ensure month/year exist
+        months = df[month_col].fillna(1).astype(int)
+        years = df[year_col].fillna(1900).astype(int)
+
+        # Compute last day of month vectorized
+        last_days = np.array([calendar.monthrange(y, m)[1] for y, m in zip(years, months)])
+
+        # Replace missing days with 1 (start) or last day (end)
+        df[date_field] = df[date_field].combine_first(
+            pd.Series(1 if kind == 'start' else last_days, index=df.index)
+        )
+
+        # Clip days to valid range
+        df[date_field] = df[date_field].astype(int)
+        df[date_field] = df[date_field].clip(1, last_days)
+
     return df
 
 def country_name_to_iso3(name):

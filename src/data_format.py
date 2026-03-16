@@ -19,7 +19,7 @@ NUM_COLS = ["impactValue",
 
 LIST_COLS = ['valueAnnotation',
              "country",
-             'country_kw',
+             # 'country_kw',
              "location",
              "hazards",
              "locationAnnotation",
@@ -87,6 +87,12 @@ def listify_strings(x):
     else:
         return x
 
+def column_contains_list(col):
+    """
+    Verify that a column contains a list
+    """
+    return col.apply(lambda x: isinstance(x, list)).any()
+
 def format_output(df, num_cols=NUM_COLS, list_cols=LIST_COLS):
     """
     Format output of the final report
@@ -103,7 +109,7 @@ def format_output(df, num_cols=NUM_COLS, list_cols=LIST_COLS):
     pd.DataFrame
         Formatted DataFrame
     """
-    num_cols = [key for key in  df.columns if key in NUM_COLS]
+    num_cols = [key for key in df.columns if key in NUM_COLS]
     list_cols = [key for key in df.columns if key in LIST_COLS]
     #test that num and list do not overlap
     overlap = set(num_cols).intersection(set(list_cols))
@@ -113,5 +119,6 @@ def format_output(df, num_cols=NUM_COLS, list_cols=LIST_COLS):
         df[num_cols] =df[num_cols].apply(pd.to_numeric, errors='coerce')
 
     if list_cols:
-        df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
+        # df[list_cols] = df[list_cols].map(lambda x: listify_strings(x))
+        df[list_cols] = df[list_cols].apply(lambda col: col.map(listify_strings))
     return df
