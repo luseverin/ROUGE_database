@@ -1366,7 +1366,8 @@ def associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file, split
         df_row_append["iso3_code"] = [df_location_subset["iso3_code"].unique().tolist()]
         if polygon_source == "GAUL" :
             for code in ["gaul0_code", "gaul1_code", "gaul2_code"] :
-                df_row_append[code] = df_location_subset[code].unique().tolist()
+                # df_row_append[code] = df_location_subset[code].unique().tolist()
+                df_row_append[code] = [df_location_subset[code].unique().tolist()]
 
         # Remove the impact value if it's not the lowest admin level
         if merge_level != lowest_level :
@@ -1548,7 +1549,8 @@ def geocode_df_to_polygon_by_unique_loc(df, similarity_th=0.5, print_info=False,
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
     nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{res_savename}.csv")
-    atomic_gpkg_save(unique_loc, nominatim_save_path)
+    unique_loc.to_csv(nominatim_save_path, index=False)
+    # atomic_gpkg_save(unique_loc, nominatim_save_path)
     LOGGER.info("Nominatim output saved in %s", nominatim_save_path)
 
     # Convert nominatim output to polygons
