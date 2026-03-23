@@ -222,6 +222,17 @@ def country_to_iso(
 
     return iso_list[0] if return_single else iso_list
 
+def country_list_to_iso3(c):
+    if c is None:
+        return []
+    if not isinstance(c, list):
+        c = [c]
+    return [
+        country_to_iso(ci, representation="alpha3")
+        for ci in c
+        if country_to_iso(ci, representation="alpha3") is not None
+    ]
+
 def get_iso2_from_iso3(iso3):
     """Convert ISO3 to ISO2, handling lists and single values."""
     if iso3 is None:
