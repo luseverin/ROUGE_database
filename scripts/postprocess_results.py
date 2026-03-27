@@ -60,10 +60,10 @@ remove_cats = ["DREF Allocation", "Targeted People", "Assisted People", "Other H
 #geocoding params
 geocode = True #whether or not we want to geocode
 geocode_load = False #set to True to load previously geocoded data
-similarity_th=0.2
+similarity_th=0.5
 similarity_polygon = 0.6
 print_info=False
-polygon_source="geoBoundaries"
+polygon_source="GAUL"
 
 #set up logger
 logger_name = "postprocessing"
@@ -118,7 +118,7 @@ else:
 
     #add iso3
     if "country_iso3" not in response_df_proc.columns:
-        response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
+        response_df_proc["country_iso3"] = (response_df_proc["country"].apply(country_list_to_iso3))
     if "country_iso3_kw" not in response_df_proc.columns:
         response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None)
 
@@ -181,7 +181,8 @@ if geocode and not geocode_load:
     LOGGER.info("Geodecoding %s...", filename_in)
     #add iso3
     if "country_iso3" not in response_df_proc.columns:
-        response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
+        # response_df_proc["country_iso3"] = response_df_proc["country"].apply(lambda c: country_to_iso(c, representation="alpha3"))
+        response_df_proc["country_iso3"] = (response_df_proc["country"].apply(country_list_to_iso3))
     if "country_iso3_kw" not in response_df_proc.columns:
         response_df_proc["country_iso3_kw"] = (response_df_proc["country_kw"].apply(lambda c: country_to_iso(c, representation="alpha3")) if "country_kw" in response_df_proc.columns else None)
     df_geo_output_split, df_geo_output = geocode_df_to_polygon_by_unique_loc(response_df_proc, similarity_th=similarity_th, print_info=print_info, polygon_source=polygon_source)
