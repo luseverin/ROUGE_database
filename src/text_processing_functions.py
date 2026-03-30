@@ -29,7 +29,7 @@ nltk.download("stopwords")  # Download stopwords
 
 ## load spacy nlp
 nlp = spacy.load("en_core_web_sm")  # en_core_web_sm
-nlp.add_pipe("language_detector")
+# nlp.add_pipe("language_detector")  # Disabled: incompatible with NumPy 2.0
 # nlp.add_pipe('find_numbers')
 
 
