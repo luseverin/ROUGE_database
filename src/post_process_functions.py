@@ -107,8 +107,13 @@ def parse_impact_value_precision(x):
     # Convert all to floats, None → NaN
     all_values = pd.to_numeric(pd.Series(vals), errors="coerce").to_numpy(dtype=float)
 
-    min_value = np.nanmin(all_values)
-    max_value = np.nanmax(all_values)
+    # Check if all values are NaN before calling nanmin/nanmax
+    if np.all(np.isnan(all_values)):
+        min_value = np.nan
+        max_value = np.nan
+    else:
+        min_value = np.nanmin(all_values)
+        max_value = np.nanmax(all_values)
 
     x["impactValueMin"] = min_value if not pd.isna(vals[0]) else vals[0]
     x["impactValueMax"] = max_value if not pd.isna(vals[1]) else vals[1]
