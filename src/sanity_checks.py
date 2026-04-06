@@ -1,14 +1,21 @@
-#sanity checks for llm extraction
+# sanity checks for llm extraction
 import pandas as pd
 import numpy as np
 import logging
 import regex as re
-from src.text_processing_functions import replace_commas_in_numbers, replace_count_suffixes, replace_numbers, format_number
+from src.text_processing_functions import (
+    replace_commas_in_numbers,
+    replace_count_suffixes,
+    replace_numbers,
+    format_number,
+)
 from src.units import STANDARD_UNITS
+
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
 
-#value in original text
+
+# value in original text
 def flag_value_in_text(row):
     """
     Adds a column to the dataframe, "value_in_text", which is
@@ -25,6 +32,7 @@ def flag_value_in_text(row):
         text = replace_count_suffixes(text)
         text = replace_numbers(text)
     return format_number(row["impactValue"]) not in text
+
 
 def flag_value_no_unit(x):
     """
@@ -45,8 +53,8 @@ def flag_value_no_unit(x):
     """
     return not np.isnan(x["impactValue"]) and pd.isna(x["impactUnit"])
 
-def pop_cntry_check(x, country_pop, country_col="country_iso3"):
 
+def pop_cntry_check(x, country_pop, country_col="country_iso3"):
     """
     Checks if the impact value (and/or the impactValueMax and impactValueMin)
     is larger than the population of the country in the given year.
@@ -67,28 +75,53 @@ def pop_cntry_check(x, country_pop, country_col="country_iso3"):
         is larger than the population of the country in the given year
     """
     flag_pop = False
-    if not x["impactUnit"] == "people" or pd.isna(x[["impactValue", "impactValueMax", "impactValueMin"]]).values.all():
+    if (
+        not x["impactUnit"] == "people"
+        or pd.isna(x[["impactValue", "impactValueMax", "impactValueMin"]]).values.all()
+    ):
         return flag_pop
     year = str(pd.to_datetime(x["reportDate"]).year)
     population = 0
     countries = np.unique(x[country_col])
     for country in countries:
-        year_check = year if year in country_pop[country_pop["Country Code"] == country].columns else None
+        year_check = (
+            year
+            if year in country_pop[country_pop["Country Code"] == country].columns
+            else None
+        )
         if not year_check:
-            years_available = np.array([int(col) for col in country_pop[country_pop["Country Code"] == country].columns if col.isnumeric()])
-            year_check = str(int(years_available[np.argmin(np.abs(years_available - int(year)))]))
-            LOGGER.warning("Year %s not in population data for %s"
-                           "\n Defaulting to year %s",year, country, year_check)
-        if  country not in country_pop["Country Code"].unique():
+            years_available = np.array(
+                [
+                    int(col)
+                    for col in country_pop[
+                        country_pop["Country Code"] == country
+                    ].columns
+                    if col.isnumeric()
+                ]
+            )
+            year_check = str(
+                int(years_available[np.argmin(np.abs(years_available - int(year)))])
+            )
+            LOGGER.warning(
+                "Year %s not in population data for %s" "\n Defaulting to year %s",
+                year,
+                country,
+                year_check,
+            )
+        if country not in country_pop["Country Code"].unique():
             LOGGER.warning("Country %s not in population data", country)
             pop_year = np.nan
         else:
-            pop_year = country_pop[country_pop["Country Code"] == country][year_check].values[0]
+            pop_year = country_pop[country_pop["Country Code"] == country][
+                year_check
+            ].values[0]
         population += pop_year
     for impval in x[["impactValue", "impactValueMax", "impactValueMin"]].values:
         if impval > population:
             flag_pop = True
     return flag_pop
+
+
 def flag_partial_unit(x):
     """
     Adds a column to the dataframe, "flag_partial_unit", which is True if the impactUnit is equal to the unit_type, and False otherwise.
@@ -105,6 +138,7 @@ def flag_partial_unit(x):
     """
     return x["impactUnit"] == x["unit_type"]
 
+
 def flag_response_unit(x):
     """
     Adds a column to the dataframe, "flag_response_unit", which is True if the impactUnit is equal to "responses", and False otherwise.
@@ -119,8 +153,12 @@ def flag_response_unit(x):
     pandas.Series
         The series with the added column
     """
-    response_units = r"\b(volunteers?|staff|beneficiaries?|branches?|national socities?)\b"
+    response_units = (
+        r"\b(volunteers?|staff|beneficiaries?|branches?|national socities?)\b"
+    )
     return re.search(response_units, x["impactUnit"]) is not None
+
+
 def flag_unit_nonstd(x, standard_units=STANDARD_UNITS):
     """
     Adds a column to the dataframe, "flag_unit_nonstd", which is True if the impactUnit is not in the list of standard units, and False otherwise.
@@ -137,6 +175,8 @@ def flag_unit_nonstd(x, standard_units=STANDARD_UNITS):
     """
     std_units_pattern = "|".join([re.escape(unit) for unit in standard_units])
     return re.search(std_units_pattern, x["impactUnit"]) is None
+
+
 def flag_percent(x):
     """
     Adds a column to the dataframe, "flag_percent", which is True if the impactValue is a percent and the impactSubtype is not "Other Economic Activity & Livelihood Production", and False otherwise.
@@ -151,7 +191,10 @@ def flag_percent(x):
     pandas.Series
         The series with the added column
     """
-    return x["unit_type"] == "%"#(x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
+    return (
+        "%" in x["impactUnit"]
+    )  # (x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
+
 
 def flag_hazard(extracted_data, hazard_list):
     """
@@ -171,13 +214,18 @@ def flag_hazard(extracted_data, hazard_list):
     pandas.DataFrame
         The dataframe with the added column
     """
+
     def check_haz(x):
         return any(haz not in hazard_list for haz in x["hazards"])
+
     extracted_data["unknown_haz"] = np.nan
     extracted_data["unknown_haz"] = extracted_data.apply(check_haz, axis=1)
     return extracted_data
 
-def flag_remove_cat(x, remove_cats=["DREF Allocation", "Targeted People", "Assisted People"]):
+
+def flag_remove_cat(
+    x, remove_cats=["DREF Allocation", "Targeted People", "Assisted People"]
+):
     """
     Adds a column to the dataframe, "flag_remove_cat", which is True if the impactSubtype is in the list of categories to remove, and False otherwise.
 
@@ -194,6 +242,11 @@ def flag_remove_cat(x, remove_cats=["DREF Allocation", "Targeted People", "Assis
         The series with the added column
     """
     return x["impactSubtype"] in remove_cats
+
+
+def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):
+    return x["impactUnit"] in remove_units
+
 
 def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
     """
@@ -213,11 +266,13 @@ def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
     pandas.DataFrame
         The dataframe with the added column
     """
+
     def check_any_flag(x):
         return any(x[flag] for flag in flag_columns if flag in x.index)
+
     extracted_data[flag_name] = np.nan
     extracted_data[flag_name] = extracted_data.apply(check_any_flag, axis=1)
-    #drop individual flag columns
+    # drop individual flag columns
     flags_drop = [flag for flag in flag_columns if flag != flag_name]
     extracted_data = extracted_data.drop(columns=flags_drop)
     return extracted_data
