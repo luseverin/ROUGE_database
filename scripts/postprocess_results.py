@@ -33,9 +33,7 @@ from src.sanity_checks import *
 # 4. Geocoding
 
 ## Parameters
-filename_in = (
-    "labelled_reports_nogaps_meta-llama_llama-4-scout-17b-16e-instruct_v270326"
-)
+filename_in = "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
 # "labelled_reports_gaps_llama-3.3-70b-versatile_v270326"
 # "labelled_reports_gaps_meta-llama_llama-4-scout-17b-16e-instruct_v270326"
 # "labelled_reports_impacts_nogaps_v270326"
@@ -55,7 +53,7 @@ check_flag_value_in_text = (
 convert_to_people = True  # whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False  # whether or not we want to force unit to default unit of subtype when unknown unit
 force_no_unit_quali = (
-    False  # whether or not we want to force unit to null when impact is quali
+    True  # whether or not we want to force unit to null when impact is quali
 )
 infer_subtype_from_unit = (
     True  # whether or not we want to reclassify impact subtype in function of the unit
@@ -63,15 +61,13 @@ infer_subtype_from_unit = (
 filter_unknown_subtype = (
     False  # whether or not we want to filter out unknown impact subtype
 )
-merge_subtypes = False  # whether or not we want to merge impact subtypes
+merge_subtypes = True  # whether or not we want to merge impact subtypes
 remove_cats = [
     "DREF Allocation",
+    "DREF Allocation & Funding requirements",
     "Targeted People",
     "Assisted People",
     "Other Human Impacts",
-    "Other Infrastructural Impacts",
-    "Other Agricultural Impacts",
-    "Other Service Access Impacts",
 ]  # list of impactSubtypes to remove
 
 # geocoding params
@@ -212,6 +208,9 @@ else:
     response_df_proc["flag_percent"] = response_df_proc.apply(flag_percent, axis=1)
     response_df_proc["flag_remove_cat"] = response_df_proc.apply(
         flag_remove_cat, remove_cats=remove_cats, axis=1
+    )
+    response_df_proc["flag_remove_unit"] = response_df_proc.apply(
+        flag_remove_unit, axis=1
     )
     response_df_proc["flag_response_unit"] = response_df_proc.apply(
         flag_response_unit, axis=1
