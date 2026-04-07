@@ -245,7 +245,27 @@ def flag_remove_cat(
 
 
 def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):
-    return x["impactUnit"] in remove_units
+    """
+    Adds a column to the dataframe, "flag_remove_unit", which is True if the impact
+    unit contains any of the units in the list of units to remove, and False otherwise.
+    Additionally, if the impactSubtype contains "Education" and the impactUnit contains "children", the flag is also set to True.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+    remove_units : list (optional)
+        The list of units to remove (default is ["children", "women", "male", "female"])
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    if re.search(r"Education", x["impactSubtype"]) and "children" in x["impactUnit"]:
+        return False
+    remove_units_pattern = "|".join([re.escape(unit) for unit in remove_units])
+    return re.search(remove_units_pattern, x["impactUnit"]) is not None
 
 
 def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
