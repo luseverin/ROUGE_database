@@ -549,7 +549,12 @@ def extraction_chain(
         impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
 
         # extract impact value
-        impact_value = extract_impact_value(pd.DataFrame([impact]))
+        try:
+            impact_value = extract_impact_value(pd.DataFrame([impact]))
+        except TypeError as e:
+            LOGGER.info("Error occurred while extracting impact value: %s", e)
+            continue
+
         impact_unit = impact["impactUnit"]
         impact_desc = make_impact_description(impact, impact_value, impact_unit)
 
