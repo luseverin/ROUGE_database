@@ -30,6 +30,71 @@ nlp = spacy.load("en_core_web_sm")
 LOGGER = logging.getLogger("postprocessing")
 
 
+# Damage degree classification patterns
+FULLY_DESTROYED_PATTERNS = r"\b(fully\s+(?:damaged|destroyed)|destroyed|collapsed|flattened|completely\s+(?:damaged|destroyed))\b"
+PARTIALLY_DAMAGED_PATTERNS = r"\b(partially\s+damaged|damaged)\b"
+APPLICABLE_UNITS = (
+    r"\b(homes?|structures?|vehicles?|roads?|crops?|informal settlements?)\b"
+)
+
+
+def classify_damage_degree(x):
+    """
+    Classify damage degree from impactUnit column into 3 categories:
+    - "unspecified": damage degree unspecified or not applicable
+    - "partially damaged": partial damage indicated
+    - "fully destroyed": complete destruction indicated
+
+    Parameters
+    ----------
+    x : pandas.Series
+        A pandas Series row with an "impactUnit" column.
+
+    Returns
+    -------
+    pandas.Series
+        Returns modified Series with new "damageDegree" column.
+
+    Examples
+    --------
+    >>> df['damageDegree'] = df.apply(classify_damage_degree, axis=1)
+    """
+
+    unit_str = x.get("impactUnit", None)
+
+    # Default to unspecified
+    damage_degree = "unspecified"
+
+    # If unit is null/empty, return unspecified
+    if pd.isnull(unit_str) or unit_str is None or not isinstance(unit_str, str):
+        x["damageDegree"] = damage_degree
+        return x
+
+    unit_lower = str(unit_str).lower()
+
+    applicable_unit = re.search(APPLICABLE_UNITS, unit_lower, re.IGNORECASE)
+    if not applicable_unit:
+        x["damageDegree"] = damage_degree
+        return x
+
+    # Check for full destruction keywords
+    if re.search(FULLY_DESTROYED_PATTERNS, unit_lower, re.IGNORECASE):
+        damage_degree = "fully destroyed"
+    # Check for partial damage keywords
+    elif re.search(PARTIALLY_DAMAGED_PATTERNS, unit_lower, re.IGNORECASE):
+        damage_degree = "partially damaged"
+
+    # finally remove damage degree keywords from unit
+    unit_cleaned = re.sub(FULLY_DESTROYED_PATTERNS, "", unit_str, flags=re.IGNORECASE)
+    unit_cleaned = re.sub(
+        PARTIALLY_DAMAGED_PATTERNS, "", unit_cleaned, flags=re.IGNORECASE
+    )
+    unit_cleaned = re.sub(r"\s+", " ", unit_cleaned).strip()  # clean extra spaces
+    x["impactUnit"] = unit_cleaned
+    x["damageDegree"] = damage_degree
+    return x
+
+
 def consolidate_dates(df, date_field, fill_func):
     """
     Consolidate dates columns by filling None with statistic taken over the  same column
@@ -595,6 +660,11 @@ def normalize_people_unit(x):
     if re.search(PEOPLE_NORMALIZER, unit, re.IGNORECASE):
         x["impactUnit"] = "people"
         x["flag_people_unit_normalization"] = True
+    return x
+
+
+def standardize_destruction_unit(x):
+
     return x
 
 
