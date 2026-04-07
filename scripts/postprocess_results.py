@@ -33,10 +33,13 @@ from src.sanity_checks import *
 # 4. Geocoding
 
 ## Parameters
-filename_in = "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
+filename_in = (
+    "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
+)
+# "labelled_reports_impacts_gaps_v050426"  # name of file to process (without extension)
+# "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
 # "labelled_reports_gaps_llama-3.3-70b-versatile_v270326"
 # "labelled_reports_gaps_meta-llama_llama-4-scout-17b-16e-instruct_v270326"
-# "labelled_reports_impacts_nogaps_v270326"
 
 
 filename_out = (
@@ -48,7 +51,7 @@ post_proc = (
     True  # whether or not we want to process the LLM output or the labelled data
 )
 check_flag_value_in_text = (
-    False  # whether or not we want to check if the value is in the original text
+    True  # whether or not we want to check if the value is in the original text
 )
 convert_to_people = True  # whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False  # whether or not we want to force unit to default unit of subtype when unknown unit
@@ -69,6 +72,22 @@ remove_cats = [
     "Assisted People",
     "Other Human Impacts",
 ]  # list of impactSubtypes to remove
+
+dedup_cols = [
+    "appealCode",
+    "impactSubtype",
+    "impactValue",
+    "impactUnit",
+    "country_iso3",
+    "location",
+    "startYear",
+    "startMonth",
+    "startDay",
+    "endYear",
+    "endMonth",
+    "endDay",
+    "hazards",
+]
 
 # geocoding params
 geocode = True  # whether or not we want to geocode
@@ -183,6 +202,10 @@ else:
     # infer subtype from unit
     if infer_subtype_from_unit:
         response_df_proc = response_df_proc.apply(reclass_subtype_from_unit, axis=1)
+
+    # process damage degree
+    response_df_proc = response_df_proc.apply(classify_damage_degree, axis=1)
+
     # filter unknown subtype
     if filter_unknown_subtype:
         response_df_proc = response_df_proc[
@@ -194,6 +217,31 @@ else:
         )
     if merge_subtypes:
         response_df_proc = response_df_proc.apply(merge_impact_subtypes, axis=1)
+
+    # Filter duplicates
+    if dedup_cols is not None:
+        # stringify dedup_cols to avoid issues with unhashable types in geometry column
+        response_df_proc[dedup_cols] = response_df_proc[dedup_cols].astype(str)
+        init_len = len(response_df_proc)
+        duplicates = response_df_proc.duplicated(subset=dedup_cols)
+        with pd.option_context(
+            "display.max_rows",
+            None,
+            "display.max_columns",
+            None,
+            "display.width",
+            None,
+        ):
+            LOGGER.info(
+                "Duplicates:\n %s", response_df_proc.loc[duplicates, dedup_cols]
+            )  # .to_string(max_rows=None, max_cols=None)
+
+        response_df_proc = response_df_proc[~duplicates]
+
+        LOGGER.info(f"Dropped {init_len - len(response_df_proc)} duplicates")
+
+        # convert dedup_cols back to original types
+        response_df_proc = format_output(response_df_proc)
 
     ## Post conversion flags
     response_df_proc["flag_unit_nonstd"] = response_df_proc.apply(
