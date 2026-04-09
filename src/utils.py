@@ -7,6 +7,34 @@ MODEL_NAMES_MAP = {  # short names for model
 }
 
 
+def detect_annotation_cols(df):
+    """Detect annotation columns in the dataframe based on column names"""
+    annotation_cols = [col for col in df.columns if "annotation" in col.lower()]
+    return annotation_cols
+
+
+def print_impact(df):
+    """Display function to better visualize impact df"""
+    annot_cols = detect_annotation_cols(df)
+    return df[
+        [
+            "appealCode",
+            "impactSubtype",
+            "impactValue",
+            "impactUnit",
+            "location",
+            "startYear",
+            "startMonth",
+            "startDay",
+            "endYear",
+            "endMonth",
+            "endDay",
+            "hazards",
+        ]
+        + annot_cols
+    ]
+
+
 def print_match(matched_df):
     """Display function to better visualize match df"""
     return matched_df[
