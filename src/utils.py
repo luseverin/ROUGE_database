@@ -23,6 +23,7 @@ def print_impact(df):
             "impactValue",
             "impactUnit",
             "location",
+            "locationPolygon",
             "startYear",
             "startMonth",
             "startDay",
@@ -48,6 +49,8 @@ def print_match(matched_df):
             "impactUnit_matched",
             "location",
             "location_matched",
+            "locationPolygon",
+            "locationPolygon_matched",
             "impactSubtype_sim",
             "impactValue_error",
             "impactValue_sim",
@@ -73,9 +76,7 @@ def filter_by_flags(df, flag_filters=list):
     return df
 
 
-def filter_matches(
-    matched_df, value_error_th=0.05, sim_th=0.6, match_cat=["impactSubtype"]
-):
+def filter_matches(matched_df, value_error_th=0.05, sim_th=0.6, match_cat=None):
     """Filter matches based on value error threshold for quantitative and similarity threshold for qualitative"""
     # filter matches
     matched_df_filter_qt = matched_df.copy()
