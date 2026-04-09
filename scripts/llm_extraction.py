@@ -43,9 +43,9 @@ reports_in = test_reports  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[
 nreports = len(reports_in)
 
 ## Parameters
-chunk_size = 1000  # chunk size of input. None to disable
-max_rounds = 10  # max number of continuations
-sim_name = f"test_reports_gaps_chunksize{chunk_size}"  # all_appeals_unique_1-222"#name of simulation "labelled_reports"
+chunk_size = 800  # chunk size of input. None to disable
+max_rounds = 2  # max number of continuations
+sim_name = f"test_reports_gaps_chunksize{chunk_size}_{max_rounds}it"  # all_appeals_unique_1-222"#name of simulation "labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
