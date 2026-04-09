@@ -525,6 +525,9 @@ def extraction_chain(
         )
     identified_impacts = []
 
+    # deduplicate impact values
+    answer_impact_values = deduplicate_structured_responses([], answer_impact_values)
+
     ## Localize, date and find hazards of each impact value
     for i, impact in enumerate(answer_impact_values):
 
