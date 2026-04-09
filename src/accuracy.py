@@ -1,23 +1,29 @@
 import pandas as pd
-#import json
-#from collections import Counter
+
+# import json
+# from collections import Counter
 import numpy as np
-#import regex as re
-#import pycountry
+
+# import regex as re
+# import pycountry
 from sklearn.metrics.pairwise import cosine_similarity
-#import copy as cp
+
+# import copy as cp
 from src.geocoding import remove_admin_words
-#import ast
-#from geopy.distance import geodesic
+
+# import ast
+# from geopy.distance import geodesic
 
 from sklearn.metrics.pairwise import cosine_similarity
+
 
 def vectorize(cell_values, unique_values):
     """vectorizing function for categorical columns"""
-    #cell_values = list() if not cell_values else cell_values
+    # cell_values = list() if not cell_values else cell_values
     cell_values = [cell_values] if not isinstance(cell_values, list) else cell_values
     vector = [1 if unique_value in cell_values else 0 for unique_value in unique_values]
     return np.array(vector)
+
 
 def make_cosine_matrix(vec_df1, vec_df2, matching_cols):
     """Build cosine similarity matrix based on matching columns of vectorized dataframes"""
@@ -25,20 +31,23 @@ def make_cosine_matrix(vec_df1, vec_df2, matching_cols):
 
     for k, col in enumerate(matching_cols):
         # Convert Series of arrays/lists to 2D numpy arrays
-        X = np.stack(vec_df1[col].values) #nsamples, nfeatures
+        X = np.stack(vec_df1[col].values)  # nsamples, nfeatures
         Y = np.stack(vec_df2[col].values)
         # Compute cosine similarity
-        sim_mat[:,:,k] = cosine_similarity(X, Y)
+        sim_mat[:, :, k] = cosine_similarity(X, Y)
     return sim_mat
 
-def split_nans_df(df,key):
+
+def split_nans_df(df, key):
     """split a dataframe into two, according to whether the column key contains nans"""
-    not_nan_ids, nan_ids = get_nan_ids(df,key)
+    not_nan_ids, nan_ids = get_nan_ids(df, key)
     return df.loc[not_nan_ids], df.loc[nan_ids]
 
-def get_nan_ids(df,key):
+
+def get_nan_ids(df, key):
     """split a dataframe into two, according to whether the column key contains nans"""
     return df[~df[key].isna()].index.values, df[df[key].isna()].index.values
+
 
 def split_nans(ext_df, lab_df, key, nan_policy="strict"):
     """
@@ -89,6 +98,7 @@ def split_nans(ext_df, lab_df, key, nan_policy="strict"):
 
     return not_nan_ext_df, not_nan_lab_df, nan_ext_df, nan_lab_df
 
+
 def IoU(geom1, geom2):
     """Compute intersection over union between two geometries."""
     if not geom1 or not geom2:
@@ -101,6 +111,7 @@ def IoU(geom1, geom2):
     else:
         return 0
 
+
 def compute_iou(gdf_left, gdf_right):
     """Compute intersections over union between all rows of two geodataframes."""
     # ensure both are in the same CRS
@@ -110,7 +121,7 @@ def compute_iou(gdf_left, gdf_right):
     iou_matrix = np.zeros((len(gdf_left), len(gdf_right)))
 
     ##only compute ious on intersections to speed up
-    #joined = gpd.sjoin(gdf_left, gdf_right, how="inner", predicate="intersects")
+    # joined = gpd.sjoin(gdf_left, gdf_right, how="inner", predicate="intersects")
 
     # Compute pairwise IoUs
     for i, geom_left in enumerate(gdf_left.geometry):
@@ -119,12 +130,14 @@ def compute_iou(gdf_left, gdf_right):
 
     return iou_matrix
 
+
 def scaled_value_diff(v1, v2):
     """Scaled difference between two vectors"""
     v1 = np.asarray(v1)
     v2 = np.asarray(v2)
     res = (v1 - v2) / v1
     return res
+
 
 def max_value_diff(v1, v2):
     """
@@ -140,14 +153,20 @@ def max_value_diff(v1, v2):
     max_scaled_diff : numpy array
         Maximum of scaled differences between v1 and v2.
     """
-    return np.array([np.abs(scaled_value_diff(v1, v2)), np.abs(scaled_value_diff(v2, v1))]).max(axis=0)
+    return np.array(
+        [np.abs(scaled_value_diff(v1, v2)), np.abs(scaled_value_diff(v2, v1))]
+    ).max(axis=0)
 
-def calc_value_sim(v1, v2, clip=(0,1)):
+
+def calc_value_sim(v1, v2, clip=(0, 1)):
     """Scaled absolute difference between two vectors"""
 
     return 1 - np.clip(max_value_diff(v1, v2), 0, 1)
 
-def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights, valid_shape=True, valid_cols=True):
+
+def compute_weighted_sim(
+    dist_mat, similarity_cols, matching_cols_weights, valid_shape=True, valid_cols=True
+):
     """
     Compute weighted similarity aggregation across columns.
 
@@ -189,10 +208,13 @@ def compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights, valid
         )
 
     weights = np.array([matching_cols_weights[col] for col in similarity_cols])
-    weights = weights.reshape((1,1,weights.size))
-    return np.nansum(weights*dist_mat, axis=2) / np.nansum(weights)
+    weights = weights.reshape((1, 1, weights.size))
+    return np.nansum(weights * dist_mat, axis=2) / np.nansum(weights)
 
-def find_match_sim(dist_mat, similarity_cols, matching_cols_weights):
+
+def find_match_sim(
+    dist_mat, similarity_cols, matching_cols_weights, match_by="labelled"
+):
     """
     Find best match between extracted and labelled dataframes by maxing weighted similarity.
 
@@ -205,6 +227,9 @@ def find_match_sim(dist_mat, similarity_cols, matching_cols_weights):
         Must match the columns used to build dist_mat.
     matching_cols_weights : dict
         Dictionary mapping column names to their weights.
+    match_by : str, default "labelled"
+        "labelled": for each labelled row, find extracted rows with max similarity.
+        "extracted": for each extracted row, find labelled row with max similarity.
 
     Returns
     -------
@@ -212,20 +237,41 @@ def find_match_sim(dist_mat, similarity_cols, matching_cols_weights):
         Indices of extracted and labelled rows that match.
     """
     agg_sim = compute_weighted_sim(dist_mat, similarity_cols, matching_cols_weights)
-    max_sim = np.max(agg_sim, axis=1) #find max similarity value (#ext)
     tol = 1e-12
-    candidates_id_sim = np.argwhere(np.abs(agg_sim - max_sim[:, None]) < tol)
-    id_match_ext, id_match_lab = candidates_id_sim[:,0], candidates_id_sim[:,1]
+
+    if match_by == "labelled":
+        # For each labelled row (column), find extracted rows (rows) with max similarity
+        max_sim = np.max(
+            agg_sim, axis=0
+        )  # Max over extracted rows, shape (n_labelled,)
+        candidates_id_sim = np.argwhere(np.abs(agg_sim - max_sim[None, :]) < tol)
+    elif match_by == "extracted":
+        # For each extracted row (row), find labelled row (column) with max similarity
+        max_sim = np.max(
+            agg_sim, axis=1
+        )  # Max over labelled rows, shape (n_extracted,)
+        candidates_id_sim = np.argwhere(np.abs(agg_sim - max_sim[:, None]) < tol)
+    else:
+        raise ValueError(
+            f"match_by must be 'labelled' or 'extracted', got '{match_by}'"
+        )
+
+    id_match_ext, id_match_lab = candidates_id_sim[:, 0], candidates_id_sim[:, 1]
     return id_match_ext, id_match_lab
+
 
 def find_match_value(ext_df, lab_df, id_match_ext, id_match_lab):
     """Find best match between extracted and labelled dataframes by minimizing value difference"""
-    #calculate diff
-    vdiff_candidates = np.abs(ext_df.iloc[id_match_ext]["impactValue"].values -
-                              lab_df.iloc[id_match_lab]["impactValue"].values)
-    vdiff_candidates = pd.DataFrame({"id_ext":id_match_ext, "id_lab":id_match_lab, "vdiff":vdiff_candidates})
-    tol = 1e-12 #tolerance for matching to account for rounding errors
-    id_match_ext = np.array([]) #reset idx arrays
+    # calculate diff
+    vdiff_candidates = np.abs(
+        ext_df.iloc[id_match_ext]["impactValue"].values
+        - lab_df.iloc[id_match_lab]["impactValue"].values
+    )
+    vdiff_candidates = pd.DataFrame(
+        {"id_ext": id_match_ext, "id_lab": id_match_lab, "vdiff": vdiff_candidates}
+    )
+    tol = 1e-12  # tolerance for matching to account for rounding errors
+    id_match_ext = np.array([])  # reset idx arrays
     id_match_lab = np.array([])
     for idx, group in vdiff_candidates.groupby("id_ext"):
         min_value = group["vdiff"].min()
@@ -233,11 +279,57 @@ def find_match_value(ext_df, lab_df, id_match_ext, id_match_lab):
         id_match_ext = np.append(id_match_ext, group.iloc[min_idx]["id_ext"].values)
         id_match_lab = np.append(id_match_lab, group.iloc[min_idx]["id_lab"].values)
 
-    return id_match_ext.astype(int), id_match_lab.astype(int) #ensure indices are ints
+    return id_match_ext.astype(int), id_match_lab.astype(int)  # ensure indices are ints
+
+
+def find_match_value_by_labelled(ext_df, lab_df, id_match_ext, id_match_lab):
+    """
+    Find best match between extracted and labelled dataframes by minimizing value difference.
+    Each labelled row is matched to one or more extracted rows (if value differences are equal).
+
+    Parameters
+    ----------
+    ext_df : pd.DataFrame
+        Extracted dataframe.
+    lab_df : pd.DataFrame
+        Labelled dataframe.
+    id_match_ext : np.ndarray
+        Extracted row indices of candidate matches.
+    id_match_lab : np.ndarray
+        Labelled row indices of candidate matches.
+
+    Returns
+    -------
+    id_match_ext, id_match_lab : np.ndarray
+        Refined indices ensuring each labelled row has at most one extracted match
+        (or multiple if value differences are exactly equal).
+    """
+    # Calculate value differences
+    vdiff_candidates = np.abs(
+        ext_df.iloc[id_match_ext]["impactValue"].values
+        - lab_df.iloc[id_match_lab]["impactValue"].values
+    )
+    vdiff_candidates = pd.DataFrame(
+        {"id_ext": id_match_ext, "id_lab": id_match_lab, "vdiff": vdiff_candidates}
+    )
+    tol = 1e-12  # Tolerance for matching to account for rounding errors
+    id_match_ext = np.array([])  # Reset idx arrays
+    id_match_lab = np.array([])
+
+    # Group by labelled row and keep all extracted rows with minimum value difference
+    for idx, group in vdiff_candidates.groupby("id_lab"):
+        min_value = group["vdiff"].min()
+        min_idx = np.argwhere(np.abs(group["vdiff"].values - min_value) < tol).flatten()
+        id_match_ext = np.append(id_match_ext, group.iloc[min_idx]["id_ext"].values)
+        id_match_lab = np.append(id_match_lab, group.iloc[min_idx]["id_lab"].values)
+
+    return id_match_ext.astype(int), id_match_lab.astype(int)  # Ensure indices are ints
+
 
 def reindex_match(id_match, orig_df):
     """Reindex match to original index from entire dataframe containing all reports"""
     return orig_df.iloc[id_match]["orig_index"].values.flatten()
+
 
 def split_nans_sim_matrix(dist_mat, nan_id_ext, nan_id_lab):
     """Split similarity matrix between rows that have impactValue nan and those that don't
@@ -252,16 +344,18 @@ def split_nans_sim_matrix(dist_mat, nan_id_ext, nan_id_lab):
     dist_mat_na = dist_mat.copy()
     if len(nan_id_ext):
         if len(nan_id_lab):
-            #if both ext and lab have nans, put nans from ext and lab in separate mat and remove them from the original
-            dist_mat_notna = np.delete(np.delete(dist_mat_notna, nan_id_ext, axis=0), nan_id_lab, axis=1)
-            dist_mat_na = dist_mat_na[nan_id_ext, :, :][:,nan_id_lab,:]
+            # if both ext and lab have nans, put nans from ext and lab in separate mat and remove them from the original
+            dist_mat_notna = np.delete(
+                np.delete(dist_mat_notna, nan_id_ext, axis=0), nan_id_lab, axis=1
+            )
+            dist_mat_na = dist_mat_na[nan_id_ext, :, :][:, nan_id_lab, :]
         else:
             dist_mat_notna = np.delete(dist_mat_notna, nan_id_ext, axis=0)
             dist_mat_na = dist_mat_na[nan_id_ext, :, :]
     else:
         if len(nan_id_lab):
-            dist_mat_notna  = np.delete(dist_mat_notna, nan_id_lab, axis=1)
-            dist_mat_na = dist_mat_na[:, nan_id_lab, :]#np.array([])
+            dist_mat_notna = np.delete(dist_mat_notna, nan_id_lab, axis=1)
+            dist_mat_na = dist_mat_na[:, nan_id_lab, :]  # np.array([])
         else:
             dist_mat_notna = dist_mat_notna
             dist_mat_na = np.array([])
@@ -269,7 +363,19 @@ def split_nans_sim_matrix(dist_mat, nan_id_ext, nan_id_lab):
     dist_mat_notna = None if dist_mat_notna.size == 0 else dist_mat_notna
     return dist_mat_notna, dist_mat_na
 
-def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols, matching_cols_weights, geo_match=False, value_match=None):
+
+def match_rows(
+    ext_df,
+    lab_df,
+    ext_vec,
+    lab_vec,
+    matching_cols,
+    similarity_cols,
+    matching_cols_weights,
+    geo_match=False,
+    value_match=None,
+    match_by="labelled",
+):
     """
     Match rows between extracted and labelled dataframes.
 
@@ -292,6 +398,9 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
         'pre': include impactValue similarity before matching.
         'post': refine matches by minimizing value difference after matching.
         None: ignore value matching.
+    match_by : str, default "labelled"
+        "labelled": each labelled row is uniquely matched to extracted row(s).
+        "extracted": each extracted row is uniquely matched to a labelled row.
 
     Returns
     -------
@@ -308,24 +417,32 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
             f"Missing from matching_cols: {missing}"
         )
 
+    # Validation: match_by parameter
+    if match_by not in ["labelled", "extracted"]:
+        raise ValueError(
+            f"match_by must be 'labelled' or 'extracted', got '{match_by}'"
+        )
+
     # Track which columns are in dist_mat in order
     dist_mat_cols = list(similarity_cols)  # These are built first
 
-    #compute cosine distance
+    # compute cosine distance
     dist_mat = make_cosine_matrix(ext_vec, lab_vec, similarity_cols)
 
     # geo matching
     if geo_match:
-        #expand dist_mat to store results
+        # expand dist_mat to store results
         iou_mat = compute_iou(ext_df, lab_df)
-        dist_mat = np.append(dist_mat, iou_mat[:,:, None], axis=2)
+        dist_mat = np.append(dist_mat, iou_mat[:, :, None], axis=2)
         dist_mat_cols.append("geometry")
 
-    #calculate diff
+    # calculate diff
     if value_match == "pre":
-        value_diff = calc_value_sim(ext_df["impactValue"].values.reshape(-1,1),
-                                     lab_df["impactValue"].values.reshape(1,-1))
-        dist_mat = np.append(dist_mat, value_diff[:,:, None], axis=2)
+        value_diff = calc_value_sim(
+            ext_df["impactValue"].values.reshape(-1, 1),
+            lab_df["impactValue"].values.reshape(1, -1),
+        )
+        dist_mat = np.append(dist_mat, value_diff[:, :, None], axis=2)
         dist_mat_cols.append("impactValue")
 
     # Validate that dist_mat_cols match what compute_weighted_sim will receive
@@ -335,26 +452,37 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
             f"don't match dist_mat shape {dist_mat.shape}"
         )
 
-    #matching based on similarity only
-    id_match_ext, id_match_lab = find_match_sim(dist_mat, dist_mat_cols, matching_cols_weights)
+    # matching based on similarity only
+    id_match_ext, id_match_lab = find_match_sim(
+        dist_mat, dist_mat_cols, matching_cols_weights, match_by=match_by
+    )
 
     # refine best candidates by minimizing value diff
     if value_match == "post":
-        id_match_ext, id_match_lab = find_match_value(ext_df, lab_df, id_match_ext, id_match_lab)
+        if match_by == "labelled":
+            id_match_ext, id_match_lab = find_match_value_by_labelled(
+                ext_df, lab_df, id_match_ext, id_match_lab
+            )
+        else:  # match_by == "extracted"
+            id_match_ext, id_match_lab = find_match_value(
+                ext_df, lab_df, id_match_ext, id_match_lab
+            )
 
-    #reindex back in original df
+    # reindex back in original df
     reid_match_ext = reindex_match(id_match_ext, ext_df)
     reid_match_lab = reindex_match(id_match_lab, lab_df)
 
-    #slice dist_mat only including best candidates to store accuracy results
+    # slice dist_mat only including best candidates to store accuracy results
     accuracy_matrix = dist_mat[id_match_ext, id_match_lab, :]
 
     # Compute aggregated weighted similarity for each matched pair and append
-    #agg_sim = compute_weighted_sim(accuracy_matrix, dist_mat_cols, matching_cols_weights, valid_shape=False)
-    #accuracy_matrix = np.append(accuracy_matrix, agg_sim.reshape(-1, 1), axis=1)
+    # agg_sim = compute_weighted_sim(accuracy_matrix, dist_mat_cols, matching_cols_weights, valid_shape=False)
+    # accuracy_matrix = np.append(accuracy_matrix, agg_sim.reshape(-1, 1), axis=1)
 
     try:
-        weights = np.array([matching_cols_weights[col] for col in dist_mat_cols], dtype=float)
+        weights = np.array(
+            [matching_cols_weights[col] for col in dist_mat_cols], dtype=float
+        )
         sum_weights = np.nansum(weights)
         if sum_weights == 0:
             match_sim = np.full((accuracy_matrix.shape[0],), np.nan)
@@ -363,20 +491,39 @@ def match_rows(ext_df, lab_df, ext_vec, lab_vec, matching_cols, similarity_cols,
         accuracy_matrix = np.append(accuracy_matrix, match_sim.reshape(-1, 1), axis=1)
     except Exception:
         # If weighting fails for any reason, append NaNs to keep shape consistent
-        accuracy_matrix = np.append(accuracy_matrix, np.full((accuracy_matrix.shape[0], 1), np.nan), axis=1)
+        accuracy_matrix = np.append(
+            accuracy_matrix, np.full((accuracy_matrix.shape[0], 1), np.nan), axis=1
+        )
 
     return reid_match_ext, reid_match_lab, accuracy_matrix
 
+
 ## Analysis functions
-def filter_matches(matched_df, value_error_th=0.05, sim_th=0.6, match_cat=["impactSubtype"]):
+def filter_matches(
+    matched_df, value_error_th=0.05, sim_th=0.6, match_cat=["impactSubtype"]
+):
     """Filter matches based on value error threshold for quantitative and similarity threshold for qualitative"""
-    #filter matches
+    # filter matches
     matched_df_filter_qt = matched_df.copy()
-    matched_df_filter_qt = matched_df_filter_qt[(matched_df_filter_qt["match_sim"] >= sim_th) & (matched_df_filter_qt["impactValue_error"] <= value_error_th) & (matched_df_filter_qt["quanti"]=="quanti")]
+    matched_df_filter_qt = matched_df_filter_qt[
+        (matched_df_filter_qt["match_sim"] >= sim_th)
+        & (matched_df_filter_qt["impactValue_error"] <= value_error_th)
+        & (matched_df_filter_qt["quanti"] == "quanti")
+    ]
     matched_df_filter_ql = matched_df.copy()
-    matched_df_filter_ql = matched_df_filter_ql[(matched_df_filter_ql["match_sim"] >= sim_th) & (matched_df_filter_ql["quanti"]=="quali")]
+    matched_df_filter_ql = matched_df_filter_ql[
+        (matched_df_filter_ql["match_sim"] >= sim_th)
+        & (matched_df_filter_ql["quanti"] == "quali")
+    ]
     if match_cat:
-        matched_df_filter_ql = pd.concat([matched_df_filter_ql.query(f"{cat} == {cat}_matched").dropna(how="all",axis=0) for cat in match_cat]).sort_index()
+        matched_df_filter_ql = pd.concat(
+            [
+                matched_df_filter_ql.query(f"{cat} == {cat}_matched").dropna(
+                    how="all", axis=0
+                )
+                for cat in match_cat
+            ]
+        ).sort_index()
     return pd.concat([matched_df_filter_qt, matched_df_filter_ql], axis=0)
 
 
@@ -384,25 +531,36 @@ def true_positives(matched_df):
     """Tru positives"""
     return matched_df["lab_match_id_sim"].nunique()
 
+
 def false_negatives(n_lab, n_matches):
     """False negatives"""
-    return n_lab - n_matches
+    return max(0, n_lab - n_matches)
+
 
 def false_positives(n_ext, n_matches):
     """False positives"""
     return max(0, n_ext - n_matches)
 
+
 def precision(n_matches, n_ext):
-    return n_matches/n_ext if n_ext > 0 else np.nan
+    return n_matches / n_ext if n_ext > 0 else np.nan
+
 
 def recall(n_matches, n_lab):
-    return n_matches/n_lab if n_lab > 0 else np.nan
+    return n_matches / n_lab if n_lab > 0 else np.nan
+
 
 def f1(precision, recall):
-    return 2*precision*recall/(precision+recall) if (precision + recall) > 0 else np.nan
+    return (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else np.nan
+    )
+
 
 def coverage(n_ext, n_lab):
-    return 100*n_ext/n_lab if n_lab > 0 else np.nan
+    return 100 * n_ext / n_lab if n_lab > 0 else np.nan
+
 
 def make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key):
     metrics_by_key["nb labelled"] = n_lab
@@ -417,15 +575,25 @@ def make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key):
     metrics_by_key["quanti"] = qq
     return metrics_by_key
 
-def make_coverage_accuracy_df(extracted_df, labelled_df, matched_df_filter, group_key, group_keys=None, keep_vars=[]):
+
+def make_coverage_accuracy_df(
+    extracted_df,
+    labelled_df,
+    matched_df_filter,
+    group_key,
+    group_keys=None,
+    keep_vars=[],
+):
     """Make coverage df filtering matches by accuracy and grouped by group_key"""
 
     df_list = []
     for qq in ["quanti", "quali"]:
-        labelled_dfq = labelled_df[labelled_df["quanti"]==qq]
-        extracted_dfq = extracted_df[extracted_df["quanti"]==qq]
-        matched_df_filterq = matched_df_filter[matched_df_filter["quanti"]==qq]
-        n_lab = len(labelled_dfq); n_ext = len(extracted_dfq); true_pos = true_positives(matched_df_filterq)
+        labelled_dfq = labelled_df[labelled_df["quanti"] == qq]
+        extracted_dfq = extracted_df[extracted_df["quanti"] == qq]
+        matched_df_filterq = matched_df_filter[matched_df_filter["quanti"] == qq]
+        n_lab = len(labelled_dfq)
+        n_ext = len(extracted_dfq)
+        true_pos = true_positives(matched_df_filterq)
         metrics_by_key = {}
         if group_key is None:
             metrics_by_key = make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key)
@@ -436,15 +604,24 @@ def make_coverage_accuracy_df(extracted_df, labelled_df, matched_df_filter, grou
             for group_id in group_keys:
                 group_lab = labelled_dfq[labelled_dfq[group_key] == group_id]
                 group_ext = extracted_dfq[extracted_dfq[group_key] == group_id]
-                group_ext_match = matched_df_filterq[matched_df_filterq[group_key] == group_id]
-                n_lab = len(group_lab); n_ext = len(group_ext); true_pos = true_positives(group_ext_match)
-                metrics_by_key = make_match_dict(n_ext, n_lab, true_pos, qq, metrics_by_key)
+                group_ext_match = matched_df_filterq[
+                    matched_df_filterq[group_key] == group_id
+                ]
+                n_lab = len(group_lab)
+                n_ext = len(group_ext)
+                true_pos = true_positives(group_ext_match)
+                metrics_by_key = make_match_dict(
+                    n_ext, n_lab, true_pos, qq, metrics_by_key
+                )
                 if len(keep_vars):
                     for keep_var in keep_vars:
                         if keep_var != group_key and len(group_ext):
-                            metrics_by_key[keep_var] = group_ext[keep_var].head(1).values[0]
+                            metrics_by_key[keep_var] = (
+                                group_ext[keep_var].head(1).values[0]
+                            )
                 df_list.append(pd.DataFrame(metrics_by_key, index=[group_id]))
     return pd.concat(df_list)
+
 
 def f1_bt(tp, fp, fn):
     if (tp + fp + fn) == 0:
@@ -452,11 +629,13 @@ def f1_bt(tp, fp, fn):
     else:
         return 2 * tp / (2 * tp + fp + fn)
 
+
 def recall_bt(tp, fn):
     if (tp + fn) == 0:
         return 0
     else:
         return tp / (tp + fn)
+
 
 def precision_bt(tp, fp):
     if (tp + fp) == 0:
@@ -464,8 +643,9 @@ def precision_bt(tp, fp):
     else:
         return tp / (tp + fp)
 
+
 def bootstrap_f1(tp, fp, fn, n_boot=5000):
-    #artificially add tps, fps, fns if sample size too small
+    # artificially add tps, fps, fns if sample size too small
     if tp < 1:
         tp = 1
     if fp < 1:
@@ -473,11 +653,13 @@ def bootstrap_f1(tp, fp, fn, n_boot=5000):
     if fn < 1:
         fn = 1
 
-    data = np.concatenate([
-        2 * np.ones(tp),             # true positives
-        np.ones(fp),        # false positives
-        np.zeros(fn)        # false negatives
-    ])
+    data = np.concatenate(
+        [
+            2 * np.ones(tp),  # true positives
+            np.ones(fp),  # false positives
+            np.zeros(fn),  # false negatives
+        ]
+    )
     bootrap_metrics = {
         "precision": [],
         "recall": [],
@@ -494,6 +676,7 @@ def bootstrap_f1(tp, fp, fn, n_boot=5000):
         bootrap_metrics["precision"].append(precision_b)
         bootrap_metrics["recall"].append(recall_b)
         bootrap_metrics["f1_score"].append(f1_score_b)
-    bootrap_metrics = {k : np.percentile(v, [2.5, 97.5]) for k,v in bootrap_metrics.items()}
+    bootrap_metrics = {
+        k: np.percentile(v, [2.5, 97.5]) for k, v in bootrap_metrics.items()
+    }
     return bootrap_metrics
-
