@@ -100,28 +100,50 @@ def split_nans(ext_df, lab_df, key, nan_policy="strict"):
 
 
 def IoU(geom1, geom2):
-    """Compute intersection over union between two geometries."""
+    """
+    Compute intersection over union between two geometries.
+
+    Handles invalid geometries by attempting validation and returning 0 on failure.
+    """
     if not geom1 or not geom2:
         return 0
-    intersection = geom1.intersection(geom2)
-    if intersection and not intersection.is_empty:
-        inter_area = intersection.area
-        union_area = geom1.area + geom2.area - inter_area
-        return inter_area / union_area if union_area != 0 else 0
-    else:
+
+    try:
+        # Validate geometries - fix if invalid
+        if not geom1.is_valid:
+            geom1 = geom1.buffer(0)  # buffer(0) fixes many geometry issues
+        if not geom2.is_valid:
+            geom2 = geom2.buffer(0)
+
+        # Skip if geometries are degenerate (points or lines)
+        if geom1.area == 0 or geom2.area == 0:
+            return 0
+
+        intersection = geom1.intersection(geom2)
+        if intersection and not intersection.is_empty:
+            inter_area = intersection.area
+            union_area = geom1.area + geom2.area - inter_area
+            return inter_area / union_area if union_area != 0 else 0
+        else:
+            return 0
+    except Exception as e:
+        print(f"Geometry error in IoU computation: {e}")
+        # Return 0 for any geometry computation errors (TopologyException, etc.)
+        # This is safe because a geometry that fails to compute is unlikely to be a true match
         return 0
 
 
 def compute_iou(gdf_left, gdf_right):
-    """Compute intersections over union between all rows of two geodataframes."""
+    """
+    Compute intersections over union between all rows of two geodataframes.
+
+    Handles invalid geometries gracefully by returning 0 for problematic pairs.
+    """
     # ensure both are in the same CRS
     gdf_left = gdf_left.to_crs(gdf_right.crs)
 
     # Create empty matrix for IoUs
     iou_matrix = np.zeros((len(gdf_left), len(gdf_right)))
-
-    ##only compute ious on intersections to speed up
-    # joined = gpd.sjoin(gdf_left, gdf_right, how="inner", predicate="intersects")
 
     # Compute pairwise IoUs
     for i, geom_left in enumerate(gdf_left.geometry):
