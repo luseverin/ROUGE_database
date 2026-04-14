@@ -561,6 +561,7 @@ def extraction_chain(
     validate_hazards=True,
     max_rounds=5,
     chunk_size=None,
+    multi_dates=False,
     **groq_kwargs,
 ):
     """
@@ -668,12 +669,15 @@ def extraction_chain(
         impact.update(answer_loc)
 
         ## Find dates
-        # Check if this is qualitative (no impactValue)
-        is_qualitative = impact.get("impactValue") is None or pd.isna(
-            impact.get("impactValue")
-        )
+        if multi_dates:
+            # Check if this is qualitative (no impactValue)
+            multi_dates_extract = impact.get("impactValue") is None or pd.isna(
+                impact.get("impactValue")
+            )
+        else:
+            multi_dates_extract = False
 
-        if is_qualitative:
+        if multi_dates_extract:
             # For qualitative, extract multiple date pairs
             prompt_impact_dates = build_messages(
                 identify_impact_dates_prompt_qualitative(text, impact_desc, answer_loc)
@@ -770,6 +774,7 @@ def get_event_impacts_multiprompt(
     chunk_size=None,
     max_rounds=5,
     res_savename=None,
+    multi_dates=False,
     **groq_kwargs,
 ):
     """Wrapper function to do all level promptings for impact extraction
@@ -825,6 +830,7 @@ def get_event_impacts_multiprompt(
             validate_impSubtypes=validate_impSubtypes,
             validate_hazards=validate_hazards,
             chunk_size=chunk_size,
+            multi_dates=multi_dates,
             **groq_kwargs,
         )
 

@@ -1,4 +1,5 @@
 import datetime as dt
+from operator import mul
 from src.data import *
 from src.LLM_functions import *
 from src.labelling_helpers import take_longest_report
@@ -26,11 +27,11 @@ labelled_reports_raw = ifrc_reports_df.merge(
 
 # eventually select by appeal code
 appeals_test = [
-    "MDRYE011",
-    "MDRZM022",
+    # "MDRYE011",
+    # "MDRZM022",
     "MDRSD034",
-    "MDRUG050",
-    "MDRRW022",
+    # "MDRUG050",
+    # "MDRRW022",
 ]  # ["MDRYE011","MDRZM022", "MDRSD034", "MDRUG050", "MDRRW022"]
 test_reports = labelled_reports_raw[
     labelled_reports_raw.appealCode.isin(appeals_test)
@@ -45,7 +46,8 @@ nreports = len(reports_in)
 ## Parameters
 chunk_size = 1000  # chunk size of input. None to disable
 max_rounds = 1  # max number of continuations
-sim_name = f"test_reports_gaps_multidates_chunksize{chunk_size}_{max_rounds}it"
+multi_dates = True  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
+sim_name = f"test_MDRSD034_gaps_multidates_chunksize{chunk_size}_{max_rounds}it"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
@@ -88,6 +90,7 @@ try:
         max_rounds=max_rounds,
         res_savename=res_savename,
         dedup_fields=dedup_fields,
+        multi_dates=multi_dates,
         **groq_kwargs,
     )
     LOGGER.info("Extraction completed successfully.")
