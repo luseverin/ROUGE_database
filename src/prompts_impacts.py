@@ -209,7 +209,7 @@ def identify_impact_dates_prompt_qualitative(text, impact_description, locations
     ---
     Using information from the text above and no previous knowledge, please answer the query.
     Query: Identify from the text above ALL the time periods when {impact_description} occurred at locations {locations}.
-    If multiple distinct time periods are mentioned, extract ALL of them as separate start-end date pairs.
+    If multiple distinct time periods are mentioned, extract them as separate start-end date pairs.
 
     Answer as a JSON in the following format and respecting the rules described after:
     JSON format:
@@ -237,7 +237,8 @@ def identify_impact_dates_prompt_qualitative(text, impact_description, locations
     }}
 
     Rules:
-    - Extract ALL distinct time periods mentioned, not just one.
+    - Extract ALL distinct time periods that refer to the described impact.
+    - Do NOT extract dates that refer to other impacts or events that are not related to the described impact.
     - For each distinct period, create a separate object in the datePairs list.
     - Each datePair must have its own dateAnnotation with the exact text excerpt for that time period.
     - Follow the JSON format strictly; do not add or remove fields.
@@ -255,7 +256,7 @@ def identify_impact_dates_prompt_qualitative(text, impact_description, locations
             "endYear": 2023,
             "endMonth": 2,
             "endDay": null,
-            "dateAnnotation": ["From January 15 to February 2023, the area was flooded."]
+            "dateAnnotation": ["From January 15 to February 2023, the flood destroyed houses."]
         }},
         {{
             "startYear": 2023,
@@ -264,7 +265,7 @@ def identify_impact_dates_prompt_qualitative(text, impact_description, locations
             "endYear": 2023,
             "endMonth": 7,
             "endDay": 31,
-            "dateAnnotation": ["During June and July 2023, flooding resumed."]
+            "dateAnnotation": ["During June and July 2023, flooding destroyed further houses."]
         }}
     ]
     }}
