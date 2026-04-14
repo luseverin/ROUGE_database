@@ -1,5 +1,6 @@
 # Functions to extract data with LLMs
 import time
+from attr import validate
 import pandas as pd
 import numpy as np
 import json as json
@@ -217,6 +218,7 @@ def get_model_response_retry(
 def get_model_response_retry_continue(
     prompt_user,
     output_model,
+    validate_fields,
     prompt_system=None,
     prompt_assistant=None,
     max_rounds=5,
@@ -247,7 +249,9 @@ def get_model_response_retry_continue(
         try:
             structured_response_non_dedup = structured_response
             structured_response = deduplicate_structured_responses(
-                full_response_formatted, structured_response
+                full_response_formatted,
+                structured_response,
+                validate_fields=validate_fields,
             )
             LOGGER.info(
                 "Deduplicated %i impacts",
@@ -363,32 +367,20 @@ def force_target_type(output_model, response):
     return response
 
 
-def deduplicate_structured_responses(prev_responses, new_responses):
+def deduplicate_structured_responses(
+    prev_responses,
+    new_responses,
+    validate_fields,
+):
     """Function to check for duplicate responses. Returns a list of unique responses."""
     new_unique_responses = []
     seen = set(
-        [
-            (
-                entry["impactSubtype"],
-                entry["impactValue"],
-                entry["impactUnit"],
-                # tuple(entry.get("location") or []),
-                # tuple(entry.get("country") or []),
-                # tuple(entry.get("hazards") or [])
-            )
-            for entry in prev_responses
-        ]
+        tuple(str(entry[field]) for field in validate_fields)
+        for entry in prev_responses
     )
 
     for new_entry in new_responses:
-        entry_key = (
-            new_entry["impactSubtype"],
-            new_entry["impactValue"],
-            new_entry["impactUnit"],
-            # tuple(new_entry.get("location") or []),
-            # tuple(new_entry.get("country") or []),
-            # tuple(new_entry.get("hazards") or []),
-        )
+        entry_key = tuple(str(new_entry[field]) for field in validate_fields)
         if entry_key not in seen:
             seen.add(entry_key)
             new_unique_responses.append(new_entry)
@@ -432,19 +424,57 @@ def break_down_text(sentences, max_tokens=5000):
 
 def extract_impact_value(impact):
     """
-    Extracts the impact value from the impact dictionary.
+    Extracts the impact value from the impact dictionary/DataFrame.
+    Correctly handles None, np.nan, and their string equivalents ("null", "none", "nan", etc.)
+
+    Args:
+        impact: A pandas DataFrame with one row containing impact value columns
+
+    Returns:
+        The maximum numeric value, or None if no valid values found
     """
+
     impact_cols = [
         col
         for col in impact
         if col in ["impactValue", "impactValueMin", "impactValueMax"]
     ]
-    return impact[impact_cols].max().max()
+
+    if not impact_cols:
+        return None
+
+    # Get the data
+    data = impact[impact_cols]
+
+    # Define null string values to filter
+    null_strings = {"None", "none", "Null", "null", "NULL", "NaN", "nan", "NAN", ""}
+
+    # Function to check if a value is null-like
+    def is_null_like(val):
+        if val is None or (isinstance(val, float) and np.isnan(val)):
+            return True
+        if isinstance(val, str) and val.strip() in null_strings:
+            return True
+        return False
+
+    # Collect valid numeric values
+    valid_values = []
+    for col in impact_cols:
+        for val in data[col]:
+            if not is_null_like(val):
+                try:
+                    valid_values.append(float(val))
+                except (ValueError, TypeError):
+                    pass
+
+    # Return the maximum value or None if no valid values
+    return max(valid_values) if valid_values else None
 
 
 def impact_extraction_chain(
     text,
     impact_types_dict,
+    validate_fields,
     validate_impSubtypes=True,
     max_rounds=5,
     **groq_kwargs,
@@ -464,21 +494,69 @@ def impact_extraction_chain(
     impact_types = answer_impact_types["impactSubtypes"]
 
     ## Identify impact values
-    prompt_value_unit = identify_value_unit_prompt(text, impact_types)
+    prompt_value_unit = identify_value_unit_prompt_both(text, impact_types)
     ImpactValue.set_allowed_subtypes(impact_types)
     if not validate_impSubtypes:
         ImpactValue.turn_off_impactSubtypes_validation()
 
     answer_impact_values, valid_errors_impVal = get_model_response_retry_continue(
-        prompt_value_unit, ImpactValueList, max_rounds=max_rounds, **groq_kwargs
+        prompt_value_unit,
+        ImpactValueList,
+        validate_fields=validate_fields,
+        max_rounds=max_rounds,
+        **groq_kwargs,
     )
     return answer_impact_values, valid_errors_impVal
+
+
+def duplicate_impact_by_date_pairs(impact_dict, date_pairs, valid_error_dates):
+    """
+    Duplicate an impact record for each date pair.
+
+    Args:
+        impact_dict: The impact dictionary (without date fields)
+        date_pairs: List of DatePair objects with individual dateAnnotation
+        valid_error_dates: Count of validation errors for the date fields
+
+    Returns:
+        List of impact dictionaries, one per date pair
+    """
+    duplicated_impacts = []
+
+    for date_pair in date_pairs:
+        # Create a copy of the impact
+        impact_copy = deepcopy(impact_dict)
+
+        # Convert DatePair to dict if needed
+        if hasattr(date_pair, "model_dump"):
+            pair_dict = date_pair.model_dump()
+        else:
+            pair_dict = date_pair
+
+        # Add the individual date pair fields, including its annotation
+        impact_copy.update(
+            {
+                "startYear": pair_dict.get("startYear"),
+                "startMonth": pair_dict.get("startMonth"),
+                "startDay": pair_dict.get("startDay"),
+                "endYear": pair_dict.get("endYear"),
+                "endMonth": pair_dict.get("endMonth"),
+                "endDay": pair_dict.get("endDay"),
+                "dateAnnotation": pair_dict.get("dateAnnotation", []),
+                "valid_errors_dates": valid_error_dates,
+            }
+        )
+
+        duplicated_impacts.append(impact_copy)
+
+    return duplicated_impacts
 
 
 def extraction_chain(
     text,
     impact_types_dict,
     hazards_list,
+    dedup_fields,
     validate_impSubtypes=True,
     validate_hazards=True,
     max_rounds=5,
@@ -506,6 +584,7 @@ def extraction_chain(
                 impact_extraction_chain(
                     str(chunk),
                     impact_types_dict,
+                    validate_fields=dedup_fields,
                     validate_impSubtypes=validate_impSubtypes,
                     max_rounds=max_rounds,
                     **groq_kwargs,
@@ -519,6 +598,7 @@ def extraction_chain(
         answer_impact_values, valid_errors_impVal = impact_extraction_chain(
             text,
             impact_types_dict,
+            validate_fields=dedup_fields,
             validate_impSubtypes=validate_impSubtypes,
             max_rounds=max_rounds,
             **groq_kwargs,
@@ -526,7 +606,11 @@ def extraction_chain(
     identified_impacts = []
 
     # deduplicate impact values
-    answer_impact_values = deduplicate_structured_responses([], answer_impact_values)
+    answer_impact_values = deduplicate_structured_responses(
+        [],
+        answer_impact_values,
+        validate_fields=dedup_fields,
+    )
 
     ## Localize, date and find hazards of each impact value
     for i, impact in enumerate(answer_impact_values):
@@ -555,11 +639,19 @@ def extraction_chain(
         try:
             impact_value = extract_impact_value(pd.DataFrame([impact]))
         except TypeError as e:
+            print("TypeError in extract_impact_value for impact:", impact)
             LOGGER.info("Error occurred while extracting impact value: %s", e)
             continue
 
         impact_unit = impact["impactUnit"]
-        impact_desc = make_impact_description(impact, impact_value, impact_unit)
+        impact_type = impact["impactSubtype"]
+        impact_sentences = impact.get("valueAnnotation", None)
+        if not impact_sentences:
+            LOGGER.info("No impact sentences found for impact: %s", impact)
+            continue
+        impact_desc = make_impact_description(
+            impact_type, impact_value, impact_unit, impact_sentences
+        )
 
         ## Find locs
         prompt_impact_loc = build_messages(
@@ -576,47 +668,93 @@ def extraction_chain(
         impact.update(answer_loc)
 
         ## Find dates
-        prompt_impact_dates = build_messages(
-            identify_impact_dates_prompt(text, impact, answer_loc)
+        # Check if this is qualitative (no impactValue)
+        is_qualitative = impact.get("impactValue") is None or pd.isna(
+            impact.get("impactValue")
         )
-        _, answer_dates, valid_errors_dates = get_model_response_retry(
-            prompt_impact_dates, ImpactDates, **groq_kwargs
-        )
-        if isinstance(answer_dates, list) and len(answer_dates) == 1:
-            answer_dates = answer_dates[0]
-        if not isinstance(answer_dates, dict):
-            answer_dates = {
-                "startYear": None,
-                "startMonth": None,
-                "startDay": None,
-                "endYear": None,
-                "endMonth": None,
-                "endDay": None,
-                "dateAnnotation": None,
-            }
-        answer_dates["valid_errors_dates"] = valid_errors_dates
-        impact.update(answer_dates)
 
-        ## Find hazards
-        prompt_impact_hazards = build_messages(
-            identify_impact_hazards_prompt(
-                text, impact_desc, answer_loc, answer_dates, hazards_list
+        if is_qualitative:
+            # For qualitative, extract multiple date pairs
+            prompt_impact_dates = build_messages(
+                identify_impact_dates_prompt_qualitative(text, impact_desc, answer_loc)
             )
-        )
-        ImpactHazards.set_allowed_classes(hazards_list)
-        if not validate_hazards:
-            ImpactHazards.turn_off_hazard_validation()
-        _, answer_hazards, valid_errors_haz = get_model_response_retry(
-            prompt_impact_hazards, ImpactHazards, **groq_kwargs
-        )
-        if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
-            answer_hazards = answer_hazards[0]
-        if not isinstance(answer_hazards, dict):
-            answer_hazards = {"hazards": None, "hazardsAnnotation": None}
-        answer_hazards["valid_errors_haz"] = valid_errors_haz
-        impact.update(answer_hazards)
+            _, answer_dates, valid_errors_dates = get_model_response_retry(
+                prompt_impact_dates, ImpactDatesMultiple, **groq_kwargs
+            )
 
-        identified_impacts.append(impact)
+            if isinstance(answer_dates, dict) and "datePairs" in answer_dates:
+                date_pairs = answer_dates["datePairs"]
+                # Duplicate impact for each date pair (each carries its own annotation)
+                impacts_to_process = duplicate_impact_by_date_pairs(
+                    impact, date_pairs, valid_errors_dates
+                )
+            else:
+                LOGGER.info(
+                    "Failed to extract multiple date pairs for impact: %s", impact
+                )
+                if isinstance(answer_dates, list) and len(answer_dates) == 1:
+                    answer_dates = answer_dates[0]
+                if not isinstance(answer_dates, dict):
+                    answer_dates = {
+                        "startYear": None,
+                        "startMonth": None,
+                        "startDay": None,
+                        "endYear": None,
+                        "endMonth": None,
+                        "endDay": None,
+                        "dateAnnotation": None,
+                    }
+                answer_dates["valid_errors_dates"] = valid_errors_dates
+                impact.update(answer_dates)
+                impacts_to_process = [
+                    impact
+                ]  # process as single impact without duplication
+        else:
+            # For quantitative, use single date extraction (existing logic)
+            prompt_impact_dates = build_messages(
+                identify_impact_dates_prompt(text, impact_desc, answer_loc)
+            )
+            _, answer_dates, valid_errors_dates = get_model_response_retry(
+                prompt_impact_dates, ImpactDates, **groq_kwargs
+            )
+            if isinstance(answer_dates, list) and len(answer_dates) == 1:
+                answer_dates = answer_dates[0]
+            if not isinstance(answer_dates, dict):
+                answer_dates = {
+                    "startYear": None,
+                    "startMonth": None,
+                    "startDay": None,
+                    "endYear": None,
+                    "endMonth": None,
+                    "endDay": None,
+                    "dateAnnotation": None,
+                }
+            answer_dates["valid_errors_dates"] = valid_errors_dates
+            impact.update(answer_dates)
+            impacts_to_process = [
+                impact
+            ]  # process as single impact without duplication
+
+        for impact_dup in impacts_to_process:
+            # Extract hazards for each duplicated impact
+            prompt_impact_hazards = build_messages(
+                identify_impact_hazards_prompt(
+                    text, impact_desc, answer_loc, impact_dup, hazards_list
+                )
+            )
+            ImpactHazards.set_allowed_classes(hazards_list)
+            if not validate_hazards:
+                ImpactHazards.turn_off_hazard_validation()
+            _, answer_hazards, valid_errors_haz = get_model_response_retry(
+                prompt_impact_hazards, ImpactHazards, **groq_kwargs
+            )
+            if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
+                answer_hazards = answer_hazards[0]
+            if not isinstance(answer_hazards, dict):
+                answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+            answer_hazards["valid_errors_haz"] = valid_errors_haz
+            impact_dup.update(answer_hazards)
+            identified_impacts.append(impact_dup)
 
     return identified_impacts
 
@@ -625,6 +763,7 @@ def get_event_impacts_multiprompt(
     df_labelled,
     impact_types_dict,
     hazards_list,
+    dedup_fields,
     text_col="nathaz_text",
     validate_impSubtypes=True,
     validate_hazards=True,
@@ -681,6 +820,7 @@ def get_event_impacts_multiprompt(
             row[text_col],
             impact_types_dict,
             hazards_list,
+            dedup_fields=dedup_fields,
             max_rounds=max_rounds,
             validate_impSubtypes=validate_impSubtypes,
             validate_hazards=validate_hazards,

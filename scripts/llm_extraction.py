@@ -43,9 +43,9 @@ reports_in = test_reports  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[
 nreports = len(reports_in)
 
 ## Parameters
-chunk_size = 800  # chunk size of input. None to disable
-max_rounds = 2  # max number of continuations
-sim_name = f"test_reports_gaps_chunksize{chunk_size}_{max_rounds}it"  # all_appeals_unique_1-222"#name of simulation "labelled_reports"
+chunk_size = 1000  # chunk size of input. None to disable
+max_rounds = 1  # max number of continuations
+sim_name = f"test_reports_gaps_multidates_chunksize{chunk_size}_{max_rounds}it"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
@@ -54,6 +54,7 @@ impmaintype = IMPACT_TYPES
 impsubtype_dict = IMPACT_DESCRIPTIONS
 impsubtype = IMPACT_SUBTYPES
 # Validation
+dedup_fields = ["impactSubtype", "impactUnit", "impactValue"]
 validate_impSubtypes = False
 validate_hazards = True  # deactivate hazards validation as cause issues
 
@@ -86,6 +87,7 @@ try:
         chunk_size=chunk_size,
         max_rounds=max_rounds,
         res_savename=res_savename,
+        dedup_fields=dedup_fields,
         **groq_kwargs,
     )
     LOGGER.info("Extraction completed successfully.")
