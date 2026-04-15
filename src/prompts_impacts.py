@@ -167,14 +167,18 @@ def identify_impact_loc_prompt(text, impact_description):
     return prompt
 
 
-def identify_impact_dates_prompt(text, impact_description, locations):
+def identify_impact_dates_prompt(text, impact_description, locations, hazards=None):
+    if hazards is not None:
+        hazards_str = f" caused by the hazards {hazards}"
+    else:
+        hazards_str = ""
     prompt = f"""
     Context information is below.
     ---
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify from the text abovethe dates when {impact_description} occurred at locations {locations}.
+    Query: Identify from the text above the dates when {impact_description}{hazards_str} occurred at locations {locations}.
     Answer as a JSON in the following format and respecting the rules described after:
     JSON format:
     {{
@@ -200,7 +204,9 @@ def identify_impact_dates_prompt(text, impact_description, locations):
     return prompt
 
 
-def identify_impact_dates_prompt_qualitative(text, impact_description, locations):
+def identify_impact_dates_prompt_qualitative(
+    text, impact_description, locations, hazards=None
+):
     """Prompt for extracting MULTIPLE date pairs for qualitative impacts"""
     prompt = f"""
     Context information is below.
@@ -274,15 +280,19 @@ def identify_impact_dates_prompt_qualitative(text, impact_description, locations
 
 
 def identify_impact_hazards_prompt(
-    text, impact_description, locations, dates, hazards_list
+    text, impact_description, locations, hazards_list, dates=None
 ):
+    if dates is not None:
+        date_str = f" and dates {dates}"
+    else:
+        date_str = ""
     prompt = f"""
     Context information is below.
     ---
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify from the text above the hazards that caused {impact_description} at locations {locations} and dates {dates}.
+    Query: Identify from the text above the hazards that caused {impact_description} at locations {locations}{date_str}.
     Answer as a JSON in the following format and respecting the rules described after:
     JSON format:
     {{

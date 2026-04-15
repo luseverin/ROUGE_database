@@ -488,9 +488,13 @@ def impact_extraction_chain(
     _, answer_impact_types, valid_errors_impSubT = get_model_response_retry(
         prompt_impact_type, ImpactSubtypes, **groq_kwargs
     )
-    if not answer_impact_types or not len(answer_impact_types):
+    if not answer_impact_types or len(answer_impact_types) == 0:
         LOGGER.info("No impact types identified. Stopping extraction.")
         return None, 0
+    elif len(answer_impact_types["impactSubtypes"]) == 0:
+        LOGGER.info("No impact types identified. Stopping extraction.")
+        return None, 0
+
     impact_types = answer_impact_types["impactSubtypes"]
 
     ## Identify impact values
@@ -569,8 +573,8 @@ def extraction_chain(
         1. Type
         2. Value unit
         3. Loc
-        4. Dates
-        5. Hazards
+        4. Hazards
+        5. Dates
     """
     error_counts = {}
     text = str(text)
@@ -668,6 +672,25 @@ def extraction_chain(
         answer_loc["valid_errors_loc"] = valid_errors_loc
         impact.update(answer_loc)
 
+        # Extract hazards for each duplicated impact
+        prompt_impact_hazards = build_messages(
+            identify_impact_hazards_prompt(
+                text, impact_desc, answer_loc, hazards_list, dates=None
+            )
+        )
+        ImpactHazards.set_allowed_classes(hazards_list)
+        if not validate_hazards:
+            ImpactHazards.turn_off_hazard_validation()
+        _, answer_hazards, valid_errors_haz = get_model_response_retry(
+            prompt_impact_hazards, ImpactHazards, **groq_kwargs
+        )
+        if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
+            answer_hazards = answer_hazards[0]
+        if not isinstance(answer_hazards, dict):
+            answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+        answer_hazards["valid_errors_haz"] = valid_errors_haz
+        impact.update(answer_hazards)
+
         ## Find dates
         if multi_dates:
             # Check if this is qualitative (no impactValue)
@@ -680,7 +703,9 @@ def extraction_chain(
         if multi_dates_extract:
             # For qualitative, extract multiple date pairs
             prompt_impact_dates = build_messages(
-                identify_impact_dates_prompt_qualitative(text, impact_desc, answer_loc)
+                identify_impact_dates_prompt_qualitative(
+                    text, impact_desc, answer_loc, hazards=impact.get("hazards")
+                )
             )
             _, answer_dates, valid_errors_dates = get_model_response_retry(
                 prompt_impact_dates, ImpactDatesMultiple, **groq_kwargs
@@ -716,7 +741,9 @@ def extraction_chain(
         else:
             # For quantitative, use single date extraction (existing logic)
             prompt_impact_dates = build_messages(
-                identify_impact_dates_prompt(text, impact_desc, answer_loc)
+                identify_impact_dates_prompt(
+                    text, impact_desc, answer_loc, hazards=impact.get("hazards")
+                )
             )
             _, answer_dates, valid_errors_dates = get_model_response_retry(
                 prompt_impact_dates, ImpactDates, **groq_kwargs
@@ -738,27 +765,27 @@ def extraction_chain(
             impacts_to_process = [
                 impact
             ]  # process as single impact without duplication
-
-        for impact_dup in impacts_to_process:
-            # Extract hazards for each duplicated impact
-            prompt_impact_hazards = build_messages(
-                identify_impact_hazards_prompt(
-                    text, impact_desc, answer_loc, impact_dup, hazards_list
-                )
-            )
-            ImpactHazards.set_allowed_classes(hazards_list)
-            if not validate_hazards:
-                ImpactHazards.turn_off_hazard_validation()
-            _, answer_hazards, valid_errors_haz = get_model_response_retry(
-                prompt_impact_hazards, ImpactHazards, **groq_kwargs
-            )
-            if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
-                answer_hazards = answer_hazards[0]
-            if not isinstance(answer_hazards, dict):
-                answer_hazards = {"hazards": None, "hazardsAnnotation": None}
-            answer_hazards["valid_errors_haz"] = valid_errors_haz
-            impact_dup.update(answer_hazards)
-            identified_impacts.append(impact_dup)
+        identified_impacts.append(impact)
+        # for impact_dup in impacts_to_process:
+        #    # Extract hazards for each duplicated impact
+        #    prompt_impact_hazards = build_messages(
+        #        identify_impact_hazards_prompt(
+        #            text, impact_desc, answer_loc, impact_dup, hazards_list
+        #        )
+        #    )
+        #    ImpactHazards.set_allowed_classes(hazards_list)
+        #    if not validate_hazards:
+        #        ImpactHazards.turn_off_hazard_validation()
+        #    _, answer_hazards, valid_errors_haz = get_model_response_retry(
+        #        prompt_impact_hazards, ImpactHazards, **groq_kwargs
+        #    )
+        #    if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
+        #        answer_hazards = answer_hazards[0]
+        #    if not isinstance(answer_hazards, dict):
+        #        answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+        #    answer_hazards["valid_errors_haz"] = valid_errors_haz
+        #    impact_dup.update(answer_hazards)
+        #    identified_impacts.append(impact_dup)
 
     return identified_impacts
 
