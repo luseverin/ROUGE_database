@@ -214,7 +214,7 @@ def identify_impact_dates_prompt_qualitative(
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify from the text above ALL the time periods when {impact_description} occurred at locations {locations}.
+    Query: Identify from the text above the time periods when {impact_description} occurred at locations {locations}.
     If multiple distinct time periods are mentioned, extract them as separate start-end date pairs.
 
     Answer as a JSON in the following format and respecting the rules described after:
