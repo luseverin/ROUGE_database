@@ -714,7 +714,7 @@ def extraction_chain(
             if isinstance(answer_dates, dict) and "datePairs" in answer_dates:
                 date_pairs = answer_dates["datePairs"]
                 # Duplicate impact for each date pair (each carries its own annotation)
-                impacts_to_process = duplicate_impact_by_date_pairs(
+                impact_list = duplicate_impact_by_date_pairs(
                     impact, date_pairs, valid_errors_dates
                 )
             else:
@@ -735,9 +735,7 @@ def extraction_chain(
                     }
                 answer_dates["valid_errors_dates"] = valid_errors_dates
                 impact.update(answer_dates)
-                impacts_to_process = [
-                    impact
-                ]  # process as single impact without duplication
+                impact_list = [impact]  # process as single impact without duplication
         else:
             # For quantitative, use single date extraction (existing logic)
             prompt_impact_dates = build_messages(
@@ -762,30 +760,8 @@ def extraction_chain(
                 }
             answer_dates["valid_errors_dates"] = valid_errors_dates
             impact.update(answer_dates)
-            impacts_to_process = [
-                impact
-            ]  # process as single impact without duplication
-        identified_impacts.append(impact)
-        # for impact_dup in impacts_to_process:
-        #    # Extract hazards for each duplicated impact
-        #    prompt_impact_hazards = build_messages(
-        #        identify_impact_hazards_prompt(
-        #            text, impact_desc, answer_loc, impact_dup, hazards_list
-        #        )
-        #    )
-        #    ImpactHazards.set_allowed_classes(hazards_list)
-        #    if not validate_hazards:
-        #        ImpactHazards.turn_off_hazard_validation()
-        #    _, answer_hazards, valid_errors_haz = get_model_response_retry(
-        #        prompt_impact_hazards, ImpactHazards, **groq_kwargs
-        #    )
-        #    if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
-        #        answer_hazards = answer_hazards[0]
-        #    if not isinstance(answer_hazards, dict):
-        #        answer_hazards = {"hazards": None, "hazardsAnnotation": None}
-        #    answer_hazards["valid_errors_haz"] = valid_errors_haz
-        #    impact_dup.update(answer_hazards)
-        #    identified_impacts.append(impact_dup)
+            impact_list = [impact]  # process as single impact without duplication
+        identified_impacts.extend(impact_list)
 
     return identified_impacts
 
