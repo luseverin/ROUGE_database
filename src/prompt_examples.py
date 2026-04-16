@@ -13,7 +13,7 @@ examples_value_unit = """[{
        },
        {
        "impactSubtype" : "Crop Production and Forestry",
-       "impactValue":null,
+       "impactValue":200,
        "impactUnit": "kg of crop production",
        "impactValuePrecision" : "approx",
        "impactValueMin": 100,
