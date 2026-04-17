@@ -208,13 +208,17 @@ def identify_impact_dates_prompt_qualitative(
     text, impact_description, locations, hazards=None
 ):
     """Prompt for extracting MULTIPLE date pairs for qualitative impacts"""
+    if hazards is not None:
+        hazards_str = f" caused by the hazards {hazards}"
+    else:
+        hazards_str = ""
     prompt = f"""
     Context information is below.
     ---
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify from the text above the time periods when {impact_description} occurred at locations {locations}.
+    Query: Identify from the text above the time periods when {impact_description}{hazards_str} occurred at locations {locations}.
     If multiple distinct time periods are mentioned, extract them as separate start-end date pairs.
 
     Answer as a JSON in the following format and respecting the rules described after:
