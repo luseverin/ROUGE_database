@@ -45,9 +45,9 @@ nreports = len(reports_in)
 
 ## Parameters
 chunk_size = 1000  # chunk size of input. None to disable
-max_rounds = 1  # max number of continuations
-multi_dates = True  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
-sim_name = f"test_MDRSD034_gaps_multidates_chunksize{chunk_size}_{max_rounds}it"
+max_rounds = None  # max number of continuations for impact extraction. None to disable
+multi_dates = False  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
+sim_name = f"test_MDRSD034_1quali_chunksize{chunk_size}_{max_rounds}it"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
@@ -56,7 +56,8 @@ impmaintype = IMPACT_TYPES
 impsubtype_dict = IMPACT_DESCRIPTIONS
 impsubtype = IMPACT_SUBTYPES
 # Validation
-dedup_fields = ["impactSubtype", "impactUnit", "impactValue"]
+dedup_impacts = "quali"  # whether to deduplicate impacts or not. If "quali", only deduplicate qualitative impacts, if "all", deduplicate all impacts, if None, do not deduplicate
+dedup_fields = ["impactSubtype", "impactUnit"]
 validate_impSubtypes = False
 validate_hazards = True  # deactivate hazards validation as cause issues
 
@@ -80,7 +81,7 @@ log_file = DATA_LOGS / f"LOGS_{logger_name}_{res_savename}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 LOGGER.info(f"Processing {res_savename} from {file_path}...")
 try:
-    response, response_df = get_event_impacts_multiprompt(
+    response, response_df = get_event_impacts(
         reports_in,
         impact_types_dict=impsubtype_dict,
         hazards_list=hazcat,
@@ -89,6 +90,7 @@ try:
         chunk_size=chunk_size,
         max_rounds=max_rounds,
         res_savename=res_savename,
+        dedup_impacts=dedup_impacts,
         dedup_fields=dedup_fields,
         multi_dates=multi_dates,
         **groq_kwargs,
