@@ -63,6 +63,42 @@ class ImpactValue(BaseModel):
         return value
 
 
+class ImpactValueQuanti(BaseModel):
+    impactSubtype: str
+    impactValue: float
+    impactValueMin: Optional[float] = None
+    impactValueMax: Optional[float] = None
+    impactValuePrecision: Optional[str] = None
+    impactUnit: str
+    valueAnnotation: List[str]
+
+    _impactSubtypes_list: List[str]
+
+    # marker to do impactSubtypes validation or not
+    _validate_impactSubtypes = True
+
+    @classmethod
+    def turn_off_impactSubtypes_validation(cls):
+        cls._validate_impactSubtypes = False
+
+    @classmethod
+    def set_allowed_subtypes(cls, impact_subtypes: List[str]):
+        cls._impactSubtypes_list = impact_subtypes
+
+    @field_validator("impactSubtype")
+    def validate_impact_subtype(cls, value):
+        if value not in cls._impactSubtypes_list:
+            if cls._validate_impactSubtypes:
+                raise ValueError(
+                    f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}"
+                )
+            else:
+                print(
+                    f"Invalid impactSubtype: {value}. Must be one of {cls._impactSubtypes_list}"
+                )
+        return value
+
+
 class ImpactLocation(BaseModel):
     country: List[str]
     location: Optional[List[str]] = None
@@ -263,6 +299,10 @@ class ImpactList(RootModel):
 
 class ImpactValueList(RootModel):
     root: List[ImpactValue]
+
+
+class ImpactValueQuantiList(RootModel):
+    root: List[ImpactValueQuanti]
 
 
 class ImpactListTypeSubType(RootModel):
