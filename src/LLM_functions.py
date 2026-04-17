@@ -645,11 +645,16 @@ def impact_extraction_chain_quanti(
             **groq_kwargs,
         )
     else:
-        answer_impact_values, valid_errors_impVal = get_model_response_retry(
-            prompt_value_unit, ImpactValueQuantiList, **groq_kwargs
+        _, answer_impact_values, valid_errors_impVal = get_model_response_retry(
+            build_messages(prompt_value_unit), ImpactValueQuantiList, **groq_kwargs
+        )
+        valid_errors_impVal = (
+            [valid_errors_impVal] * len(answer_impact_values)
+            if answer_impact_values
+            else []
         )
 
-    return answer_impact_values, valid_errors_impVal
+    return impact_types, answer_impact_values, valid_errors_impVal
 
 
 def duplicate_impact_by_date_pairs(impact_dict, date_pairs, valid_error_dates):
@@ -693,6 +698,149 @@ def duplicate_impact_by_date_pairs(impact_dict, date_pairs, valid_error_dates):
         duplicated_impacts.append(impact_copy)
 
     return duplicated_impacts
+
+
+def extract_localization_hazards_for_impact(
+    text, impact_desc, answer_loc, hazards_list, validate_hazards=True, **groq_kwargs
+):
+    """
+    Helper function to extract hazards for a given impact description.
+    Compartmentalized to reduce code duplication.
+
+    Args:
+        text: Full text for context
+        impact_desc: Description of the impact
+        answer_loc: Location dict with country/location/annotation
+        hazards_list: List of allowed hazards
+        validate_hazards: Whether to validate hazard values
+        **groq_kwargs: Additional kwargs for API calls
+
+    Returns:
+        Tuple of (answer_loc, answer_hazards, valid_errors_haz)
+    """
+    # Extract hazards
+    prompt_impact_hazards = build_messages(
+        identify_impact_hazards_prompt(
+            text, impact_desc, answer_loc, hazards_list, dates=None
+        )
+    )
+    ImpactHazards.set_allowed_classes(hazards_list)
+    if not validate_hazards:
+        ImpactHazards.turn_off_hazard_validation()
+    _, answer_hazards, valid_errors_haz = get_model_response_retry(
+        prompt_impact_hazards, ImpactHazards, **groq_kwargs
+    )
+    if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
+        answer_hazards = answer_hazards[0]
+    if not isinstance(answer_hazards, dict):
+        answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+    answer_hazards["valid_errors_haz"] = valid_errors_haz
+
+    return answer_hazards
+
+
+def extract_locations_for_impact(text, impact_desc, **groq_kwargs):
+    """
+    Helper function to extract locations for a given impact description.
+    Compartmentalized to reduce code duplication.
+
+    Args:
+        text: Full text for context
+        impact_desc: Description of the impact
+        **groq_kwargs: Additional kwargs for API calls
+
+    Returns:
+        Tuple of (answer_loc_dict, valid_errors_loc)
+    """
+    prompt_impact_loc = build_messages(identify_impact_loc_prompt(text, impact_desc))
+    _, answer_loc, valid_errors_loc = get_model_response_retry(
+        prompt_impact_loc, ImpactLocation, **groq_kwargs
+    )
+    if isinstance(answer_loc, list) and len(answer_loc) == 1:
+        answer_loc = answer_loc[0]
+    if not isinstance(answer_loc, dict):
+        answer_loc = {"country": None, "location": None, "locationAnnotation": None}
+    answer_loc["valid_errors_loc"] = valid_errors_loc
+
+    return answer_loc
+
+
+def extract_dates_for_impact(
+    text,
+    impact_desc,
+    answer_loc,
+    multi_dates=False,
+    is_qualitative=False,
+    **groq_kwargs,
+):
+    """
+    Helper function to extract dates for a given impact description.
+    Handles both quantitative (single date range) and qualitative (multiple date pairs).
+
+    Args:
+        text: Full text for context
+        impact_desc: Description of the impact
+        answer_loc: Location dict with country/location/annotation
+        is_qualitative: If True, extract multiple date pairs; else single date range
+        **groq_kwargs: Additional kwargs for API calls
+
+    Returns:
+        Tuple of (answer_dates_dict, valid_errors_dates, impacts_list)
+            - impacts_list will contain duplicated impacts for multi-date extraction
+    """
+    if is_qualitative and multi_dates:
+        # For qualitative, extract multiple date pairs
+        prompt_impact_dates = build_messages(
+            identify_impact_dates_prompt_qualitative(text, impact_desc, answer_loc)
+        )
+        _, answer_dates, valid_errors_dates = get_model_response_retry(
+            prompt_impact_dates, ImpactDatesMultiple, **groq_kwargs
+        )
+
+        if isinstance(answer_dates, dict) and "datePairs" in answer_dates:
+            date_pairs = answer_dates["datePairs"]
+            return answer_dates, date_pairs
+        else:
+            # Fall back to single date if extraction fails
+            LOGGER.info(
+                "Failed to extract multiple date pairs, falling back to single date"
+            )
+            if isinstance(answer_dates, list) and len(answer_dates) == 1:
+                answer_dates = answer_dates[0]
+            if not isinstance(answer_dates, dict):
+                answer_dates = {
+                    "startYear": None,
+                    "startMonth": None,
+                    "startDay": None,
+                    "endYear": None,
+                    "endMonth": None,
+                    "endDay": None,
+                    "dateAnnotation": None,
+                }
+            answer_dates["valid_errors_dates"] = valid_errors_dates
+            return answer_dates, None
+    else:
+        # Use single date extraction
+        prompt_impact_dates = build_messages(
+            identify_impact_dates_prompt(text, impact_desc, answer_loc)
+        )
+        _, answer_dates, valid_errors_dates = get_model_response_retry(
+            prompt_impact_dates, ImpactDates, **groq_kwargs
+        )
+        if isinstance(answer_dates, list) and len(answer_dates) == 1:
+            answer_dates = answer_dates[0]
+        if not isinstance(answer_dates, dict):
+            answer_dates = {
+                "startYear": None,
+                "startMonth": None,
+                "startDay": None,
+                "endYear": None,
+                "endMonth": None,
+                "endDay": None,
+                "dateAnnotation": None,
+            }
+        answer_dates["valid_errors_dates"] = valid_errors_dates
+        return answer_dates, None
 
 
 def extraction_chain_multiprompt(
@@ -789,37 +937,14 @@ def extraction_chain_multiprompt(
             impact["valueAnnotation"],
         )
 
-        ## Find locs
-        prompt_impact_loc = build_messages(
-            identify_impact_loc_prompt(text, impact_desc)
-        )
-        _, answer_loc, valid_errors_loc = get_model_response_retry(
-            prompt_impact_loc, ImpactLocation, **groq_kwargs
-        )
-        if isinstance(answer_loc, list) and len(answer_loc) == 1:
-            answer_loc = answer_loc[0]
-        if not isinstance(answer_loc, dict):
-            answer_loc = {"country": None, "location": None, "locationAnnotation": None}
-        answer_loc["valid_errors_loc"] = valid_errors_loc
+        # Extract locations
+        answer_loc = extract_locations_for_impact(text, impact_desc, **groq_kwargs)
         impact.update(answer_loc)
 
-        # Extract hazards for each duplicated impact
-        prompt_impact_hazards = build_messages(
-            identify_impact_hazards_prompt(
-                text, impact_desc, answer_loc, hazards_list, dates=None
-            )
+        # Extract hazards
+        answer_hazards = extract_localization_hazards_for_impact(
+            text, impact_desc, answer_loc, hazards_list, validate_hazards, **groq_kwargs
         )
-        ImpactHazards.set_allowed_classes(hazards_list)
-        if not validate_hazards:
-            ImpactHazards.turn_off_hazard_validation()
-        _, answer_hazards, valid_errors_haz = get_model_response_retry(
-            prompt_impact_hazards, ImpactHazards, **groq_kwargs
-        )
-        if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
-            answer_hazards = answer_hazards[0]
-        if not isinstance(answer_hazards, dict):
-            answer_hazards = {"hazards": None, "hazardsAnnotation": None}
-        answer_hazards["valid_errors_haz"] = valid_errors_haz
         impact.update(answer_hazards)
 
         ## Find dates
@@ -897,148 +1022,11 @@ def extraction_chain_multiprompt(
     return identified_impacts
 
 
-def extract_localization_hazards_for_impact(
-    text, impact_desc, answer_loc, hazards_list, validate_hazards=True, **groq_kwargs
-):
-    """
-    Helper function to extract hazards for a given impact description.
-    Compartmentalized to reduce code duplication.
-
-    Args:
-        text: Full text for context
-        impact_desc: Description of the impact
-        answer_loc: Location dict with country/location/annotation
-        hazards_list: List of allowed hazards
-        validate_hazards: Whether to validate hazard values
-        **groq_kwargs: Additional kwargs for API calls
-
-    Returns:
-        Tuple of (answer_loc, answer_hazards, valid_errors_haz)
-    """
-    # Extract hazards
-    prompt_impact_hazards = build_messages(
-        identify_impact_hazards_prompt(
-            text, impact_desc, answer_loc, hazards_list, dates=None
-        )
-    )
-    ImpactHazards.set_allowed_classes(hazards_list)
-    if not validate_hazards:
-        ImpactHazards.turn_off_hazard_validation()
-    _, answer_hazards, valid_errors_haz = get_model_response_retry(
-        prompt_impact_hazards, ImpactHazards, **groq_kwargs
-    )
-    if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
-        answer_hazards = answer_hazards[0]
-    if not isinstance(answer_hazards, dict):
-        answer_hazards = {"hazards": None, "hazardsAnnotation": None}
-    answer_hazards["valid_errors_haz"] = valid_errors_haz
-
-    return answer_loc, answer_hazards, valid_errors_haz
-
-
-def extract_locations_for_impact(text, impact_desc, **groq_kwargs):
-    """
-    Helper function to extract locations for a given impact description.
-    Compartmentalized to reduce code duplication.
-
-    Args:
-        text: Full text for context
-        impact_desc: Description of the impact
-        **groq_kwargs: Additional kwargs for API calls
-
-    Returns:
-        Tuple of (answer_loc_dict, valid_errors_loc)
-    """
-    prompt_impact_loc = build_messages(identify_impact_loc_prompt(text, impact_desc))
-    _, answer_loc, valid_errors_loc = get_model_response_retry(
-        prompt_impact_loc, ImpactLocation, **groq_kwargs
-    )
-    if isinstance(answer_loc, list) and len(answer_loc) == 1:
-        answer_loc = answer_loc[0]
-    if not isinstance(answer_loc, dict):
-        answer_loc = {"country": None, "location": None, "locationAnnotation": None}
-    answer_loc["valid_errors_loc"] = valid_errors_loc
-
-    return answer_loc, valid_errors_loc
-
-
-def extract_dates_for_impact(
-    text, impact_desc, answer_loc, is_qualitative=False, **groq_kwargs
-):
-    """
-    Helper function to extract dates for a given impact description.
-    Handles both quantitative (single date range) and qualitative (multiple date pairs).
-
-    Args:
-        text: Full text for context
-        impact_desc: Description of the impact
-        answer_loc: Location dict with country/location/annotation
-        is_qualitative: If True, extract multiple date pairs; else single date range
-        **groq_kwargs: Additional kwargs for API calls
-
-    Returns:
-        Tuple of (answer_dates_dict, valid_errors_dates, impacts_list)
-            - impacts_list will contain duplicated impacts for multi-date extraction
-    """
-    if is_qualitative:
-        # For qualitative, extract multiple date pairs
-        prompt_impact_dates = build_messages(
-            identify_impact_dates_prompt_qualitative(text, impact_desc, answer_loc)
-        )
-        _, answer_dates, valid_errors_dates = get_model_response_retry(
-            prompt_impact_dates, ImpactDatesMultiple, **groq_kwargs
-        )
-
-        if isinstance(answer_dates, dict) and "datePairs" in answer_dates:
-            date_pairs = answer_dates["datePairs"]
-            return answer_dates, valid_errors_dates, date_pairs
-        else:
-            # Fall back to single date if extraction fails
-            LOGGER.info(
-                "Failed to extract multiple date pairs, falling back to single date"
-            )
-            if isinstance(answer_dates, list) and len(answer_dates) == 1:
-                answer_dates = answer_dates[0]
-            if not isinstance(answer_dates, dict):
-                answer_dates = {
-                    "startYear": None,
-                    "startMonth": None,
-                    "startDay": None,
-                    "endYear": None,
-                    "endMonth": None,
-                    "endDay": None,
-                    "dateAnnotation": None,
-                }
-            answer_dates["valid_errors_dates"] = valid_errors_dates
-            return answer_dates, valid_errors_dates, None
-    else:
-        # For quantitative, use single date extraction
-        prompt_impact_dates = build_messages(
-            identify_impact_dates_prompt(text, impact_desc, answer_loc)
-        )
-        _, answer_dates, valid_errors_dates = get_model_response_retry(
-            prompt_impact_dates, ImpactDates, **groq_kwargs
-        )
-        if isinstance(answer_dates, list) and len(answer_dates) == 1:
-            answer_dates = answer_dates[0]
-        if not isinstance(answer_dates, dict):
-            answer_dates = {
-                "startYear": None,
-                "startMonth": None,
-                "startDay": None,
-                "endYear": None,
-                "endMonth": None,
-                "endDay": None,
-                "dateAnnotation": None,
-            }
-        answer_dates["valid_errors_dates"] = valid_errors_dates
-        return answer_dates, valid_errors_dates, None
-
-
 def extraction_chain_multiprompt_sep(
     text,
     impact_types_dict,
     hazards_list,
+    dedup_impacts,
     dedup_fields,
     validate_impSubtypes=True,
     validate_hazards=True,
@@ -1072,141 +1060,104 @@ def extraction_chain_multiprompt_sep(
     text = str(text)
     sentences = listify_strings(text)
 
-    # ===== STEP 1: Identify impact subtypes from entire text =====
-    prompt_impact_type = build_messages(
-        identify_impacts_prompt(text, impact_types_dict)
-    )
-    impact_types_list = list(impact_types_dict.keys())
-    ImpactSubtypes.set_allowed_subtypes(impact_types_list)
-    _, answer_impact_types, valid_errors_impSubT = get_model_response_retry(
-        prompt_impact_type, ImpactSubtypes, **groq_kwargs
-    )
-
-    if not answer_impact_types or len(answer_impact_types) == 0:
-        LOGGER.info("No impact types identified. Stopping extraction.")
-        return []
-    elif (
-        isinstance(answer_impact_types, dict)
-        and len(answer_impact_types.get("impactSubtypes", [])) == 0
-    ):
-        LOGGER.info("No impact types identified. Stopping extraction.")
-        return []
-
-    impact_types = answer_impact_types["impactSubtypes"]
-    identified_impacts = []
-
-    # ===== STEP 2: Extract QUANTITATIVE impacts (with values and units) =====
     LOGGER.info("Step 2: Extracting quantitative impacts...")
     if chunk_size:
         chunks = break_down_text(sentences, chunk_size)
+        impact_types = []
         answer_impact_values = []
         valid_errors_impVal = []
 
         for chunk in chunks:
-            answer_impact_values_chunk, valid_errors_impVal_chunk = (
-                impact_extraction_chain_quanti(
-                    str(chunk),
-                    impact_types_dict,
-                    validate_fields=dedup_fields,
-                    validate_impSubtypes=validate_impSubtypes,
-                    max_rounds=max_rounds,
-                    **groq_kwargs,
-                )
+            (
+                impact_types_chunk,
+                answer_impact_values_chunk,
+                valid_errors_impVal_chunk,
+            ) = impact_extraction_chain_quanti(
+                str(chunk),
+                impact_types,
+                validate_fields=dedup_fields,
+                validate_impSubtypes=validate_impSubtypes,
+                max_rounds=max_rounds,
+                **groq_kwargs,
             )
+            if impact_types_chunk:
+                impact_types.extend(impact_types_chunk)
             if answer_impact_values_chunk:
                 answer_impact_values.extend(answer_impact_values_chunk)
                 valid_errors_impVal.extend(valid_errors_impVal_chunk)
     else:
-        answer_impact_values, valid_errors_impVal = impact_extraction_chain_quanti(
-            text,
-            impact_types_dict,
-            validate_fields=dedup_fields,
-            validate_impSubtypes=validate_impSubtypes,
-            max_rounds=max_rounds,
-            **groq_kwargs,
+        impact_types, answer_impact_values, valid_errors_impVal = (
+            impact_extraction_chain_quanti(
+                text,
+                impact_types,
+                validate_fields=dedup_fields,
+                validate_impSubtypes=validate_impSubtypes,
+                max_rounds=max_rounds,
+                **groq_kwargs,
+            )
         )
+    impact_types = list(set(impact_types))
+    answer_impact_values_cleaned = clean_value_unit(
+        answer_impact_values, valid_errors_impVal
+    )
 
-    # Normalize list structures BEFORE deduplication and track valid indices
-    answer_impact_values_cleaned = []
-    for i, impact in enumerate(answer_impact_values):
-        # normalize list structure
-        if isinstance(impact, list):
-            if len(impact) == 1:
-                impact = impact[0]
-            else:
-                LOGGER.info("discarding impact (list with >1 items): %s", impact)
-                continue
-
-        # validate that impact is a dict with the required key
-        if not isinstance(impact, dict):
-            LOGGER.info("discarding impact (not a dict): %s", impact)
-            continue
-
-        if "impactValue" not in impact:
-            LOGGER.info("discarding impact (missing 'impactValue'): %s", impact)
-            continue
-        answer_impact_values_cleaned.append(impact)
-
-    # deduplicate impact values (note: deduplication may reduce count)
-    if dedup_fields is not None:
+    # deduplicate impact values
+    if dedup_impacts == "all":
         answer_impact_values_cleaned = deduplicate_structured_responses(
             [],
             answer_impact_values_cleaned,
             validate_fields=dedup_fields,
         )
+    elif dedup_impacts == "quali":
+        quanti_imp = [
+            imp
+            for imp in answer_impact_values_cleaned
+            if imp.get("impactValue") is not None
+        ]
+        quali_imp = [
+            imp
+            for imp in answer_impact_values_cleaned
+            if imp.get("impactValue") is None
+        ]
+        quali_imp_dedup = deduplicate_structured_responses(
+            [],
+            quali_imp,
+            validate_fields=dedup_fields,
+        )
+        answer_impact_values_cleaned = quanti_imp + quali_imp_dedup
 
+    identified_impacts = []
     # Process each quantitative impact
     for i, impact in enumerate(answer_impact_values_cleaned):
 
-        # Filter out impacts without valid values/units (QUANTITATIVE requirement)
-        try:
-            impact_value = extract_impact_value(pd.DataFrame([impact]))
-        except Exception as e:
-            LOGGER.info("Error occurred while extracting impact value: %s", e)
-            continue
-
-        impact_unit = impact.get("impactUnit")
-
-        if impact_value is None or pd.isna(impact_value):
-            LOGGER.info("discarding impact (no valid impactValue): %s", impact)
-            continue
-        if impact_unit is None or (
-            isinstance(impact_unit, float) and pd.isna(impact_unit)
-        ):
-            LOGGER.info("discarding impact (no valid impactUnit): %s", impact)
-            continue
-
-        # track errors in impact extraction
-        impact.update({"valid_errors_impactValue": valid_errors_impVal[i]})
-
-        impact_type = impact["impactSubtype"]
-        impact_sentences = impact.get("valueAnnotation", None)
-        if not impact_sentences:
-            LOGGER.info("No impact sentences found for impact: %s", impact)
-            continue
-
         impact_desc = make_impact_description(
-            impact_type, impact_value, impact_unit, impact_sentences
+            impact["impactSubtype"],
+            impact["impactValue"],
+            impact["impactUnit"],
+            impact["valueAnnotation"],
         )
 
         # Extract locations
-        answer_loc, valid_errors_loc = extract_locations_for_impact(
-            text, impact_desc, **groq_kwargs
-        )
+        answer_loc = extract_locations_for_impact(text, impact_desc, **groq_kwargs)
         impact.update(answer_loc)
 
         # Extract hazards
-        _, answer_hazards, valid_errors_haz = extract_localization_hazards_for_impact(
+        answer_hazards = extract_localization_hazards_for_impact(
             text, impact_desc, answer_loc, hazards_list, validate_hazards, **groq_kwargs
         )
         impact.update(answer_hazards)
 
         # Extract dates (single date range for quantitative)
-        answer_dates, valid_errors_dates, _ = extract_dates_for_impact(
-            text, impact_desc, answer_loc, is_qualitative=False, **groq_kwargs
+        answer_dates, _ = extract_dates_for_impact(
+            text,
+            impact_desc,
+            answer_loc,
+            is_qualitative=False,
+            multi_dates=multi_dates,
+            **groq_kwargs,
         )
         impact.update(answer_dates)
-
+        unique_subtype.add(impact["impactSubtype"])
         identified_impacts.append(impact)
 
     LOGGER.info("Extracted %i quantitative impacts", len(identified_impacts))
@@ -1220,7 +1171,7 @@ def extraction_chain_multiprompt_sep(
         qualitative_impact_desc = f"impacts of type '{subtype}'"
 
         # Extract locations for this subtype (should capture ALL affected locations)
-        answer_loc, valid_errors_loc = extract_locations_for_impact(
+        answer_loc = extract_locations_for_impact(
             text, qualitative_impact_desc, **groq_kwargs
         )
 
@@ -1232,7 +1183,7 @@ def extraction_chain_multiprompt_sep(
             continue
 
         # Extract hazards that caused this subtype of impact
-        _, answer_hazards, valid_errors_haz = extract_localization_hazards_for_impact(
+        answer_hazards = extract_localization_hazards_for_impact(
             text,
             qualitative_impact_desc,
             answer_loc,
@@ -1242,11 +1193,12 @@ def extraction_chain_multiprompt_sep(
         )
 
         # Extract dates for qualitative (single or multiple date pairs depending on multi_dates parameter)
-        answer_dates, valid_errors_dates, date_pairs = extract_dates_for_impact(
+        answer_dates, date_pairs = extract_dates_for_impact(
             text,
             qualitative_impact_desc,
             answer_loc,
-            is_qualitative=multi_dates,  # Use multi_dates to control whether to extract multiple date pairs
+            is_qualitative=True,
+            multi_dates=multi_dates,  # Use multi_dates to control whether to extract multiple date pairs
             **groq_kwargs,
         )
 
