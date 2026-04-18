@@ -98,30 +98,15 @@ def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
         for impactType in df_loop["impactSubtype"].unique():
             df_impact_loop = df_loop[df_loop["impactSubtype"] == impactType]
 
-            # Check for rows at country level
-            df_admin_0 = df_impact_loop[df_impact_loop["locationLowestAdminNum"] == 0]
-            df_admin_1 = df_impact_loop[df_impact_loop["locationLowestAdminNum"] == 1]
-            df_admin_2 = df_impact_loop[df_impact_loop["locationLowestAdminNum"] == 2]
-            # df_admin_1_2 = df_impact_loop[df_impact_loop["locationLowestAdminNum"] > 0]
+            # Take the row with the maximum impactValue_final regardless of admin level
+            if df_impact_loop.empty:
+                continue
+
+            max_idx = df_impact_loop["impactValue_final"].idxmax()
+            df_admin = df_impact_loop.loc[[max_idx]]
 
             row = {}
-            if not df_admin_0.empty:
-                row = {}
-                # Sum of impactValue_final
-                # row["impactValue_final"] = df_admin_0["impactValue_final"].sum()
-                row["impactValue_final"] = df_admin_0["impactValue_final"].max()
-                df_admin = df_admin_0
-
-            elif (not df_admin_1.empty) and (ADM_min>=1):
-                row["impactValue_final"] = df_admin_1["impactValue_final"].sum()
-                df_admin = df_admin_1
-
-            elif (not df_admin_2.empty) and (ADM_min>=2) :
-                row["impactValue_final"] = df_admin_2["impactValue_final"].sum()
-                df_admin = df_admin_2
-
-            else :
-                continue
+            row["impactValue_final"] = df_admin["impactValue_final"].iloc[0]
 
             # Helper to flatten list-like entries
             def flatten_unique(series):
@@ -161,7 +146,6 @@ def group_quanti_country_level(df: pd.DataFrame, ADM_min=0) -> pd.DataFrame:
                     if not non_nulls.empty:
                         row[col] = non_nulls.iloc[0]
             df_output.append(row)
-
     return pd.DataFrame(df_output)
 
 def clean_group(df_impact, ADM_min=0) :
