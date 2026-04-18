@@ -67,3 +67,7 @@ elif user == "lseverino":
     NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
 else:
     raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
+
+## Montandon
+if user == "lhasbini":
+    MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
