@@ -219,8 +219,12 @@ def reclassify_impact_subtype(x, impact_kw_reclass=IMPACT_KEYWORDS):
     flag : bool
         Flag indicating whether the impact subtype was reclassified
     """
-    if x["impactSubtype"] in list(impact_kw_reclass.keys()):
-        x["flag_impactSubtype_reclass"] = False
+    x["flag_impactSubtype_reclass"] = False
+    if pd.isnull(x["impactSubtype"]) or x["impactSubtype"] is None:
+        x["impactSubtype"] = "Unknown"
+        x["flag_unknown_subtype"] = True
+        return x
+    elif x["impactSubtype"] in list(impact_kw_reclass.keys()):
         x["flag_unknown_subtype"] = False
         return x
     candidates = []
@@ -841,10 +845,14 @@ def replace_numbers_unit(x):
             if last_token_modified or (
                 prev_token and is_float_digit(prev_token.text)
             ):  # and could_be_unit(next_tokens) do not necessarily ask to be a unit?
-                if modified_tokens[-1] == " ":  # remove whitespace
+                while (
+                    modified_tokens and modified_tokens[-1] == " "
+                ):  # remove whitespace
                     modified_tokens.pop()
-                prev_number = float(modified_tokens.pop())
-                id_number *= prev_number
+                # Verify the last token is actually a number before converting
+                if modified_tokens and is_float_digit(modified_tokens[-1]):
+                    prev_number = float(modified_tokens.pop())
+                    id_number *= prev_number
             last_token_modified = True  # mark that the last token was modified
 
         else:  # if no number identified, keep as is

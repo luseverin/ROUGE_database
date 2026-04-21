@@ -147,10 +147,11 @@ def replace_numbers(text_in):
             if last_token_modified or (
                 prev_token and is_float_digit(prev_token.text)
             ):  # and could_be_unit(next_tokens) do not necessarily ask to be a unit?
-                if modified_tokens[-1] == " ":  # remove whitespace
+                if modified_tokens and modified_tokens[-1] == " ":  # remove whitespace
                     modified_tokens.pop()
-                prev_number = float(modified_tokens.pop())
-                number *= prev_number
+                if modified_tokens and is_float_digit(modified_tokens[-1]):
+                    prev_number = float(modified_tokens.pop())
+                    number *= prev_number
             modified_tokens.append(str(number))
             last_token_modified = True  # mark that the last token was modified
 
