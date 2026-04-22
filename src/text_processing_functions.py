@@ -1,11 +1,13 @@
 import regex as re
 import numpy as np
 import logging
+from functools import wraps
 
 # import pandas as pd
 # import ast
 import spacy
 import spacy_fastlang
+import fasttext.FastText as fasttext_module
 import unicodedata
 from sympy import I
 from text_to_num import text2num
@@ -29,7 +31,53 @@ nltk.download("stopwords")  # Download stopwords
 
 ## load spacy nlp
 nlp = spacy.load("en_core_web_sm")  # en_core_web_sm
-# nlp.add_pipe("language_detector")  # Disabled: incompatible with NumPy 2.0
+# Keep language detection in a separate optional pipeline so failures in
+# spacy_fastlang/fasttext (e.g., NumPy 2 incompatibility) do not break
+# other text processing functions using `nlp`.
+_nlp_language = None
+
+
+def _patch_fasttext_predict_numpy2_compat():
+    """Patch fasttext predict for NumPy 2 compatibility.
+
+    fasttext's Python wrapper uses np.array(probs, copy=False), which raises
+    on NumPy 2 in some cases. We patch it once to use np.asarray(probs).
+    """
+
+    predict_fn = fasttext_module._FastText.predict
+    if getattr(predict_fn, "_numpy2_compat", False):
+        return
+
+    @wraps(predict_fn)
+    def _predict_numpy2_compat(
+        self, text, k=1, threshold=0.0, on_unicode_error="strict"
+    ):
+        def check(entry):
+            if entry.find("\n") != -1:
+                raise ValueError("predict processes one line at a time (remove '\\n')")
+            entry += "\n"
+            return entry
+
+        if type(text) == list:
+            text = [check(entry) for entry in text]
+            all_labels, all_probs = self.f.multilinePredict(
+                text, k, threshold, on_unicode_error
+            )
+            return all_labels, all_probs
+
+        text = check(text)
+        predictions = self.f.predict(text, k, threshold, on_unicode_error)
+        if predictions:
+            probs, labels = zip(*predictions)
+        else:
+            probs, labels = ([], ())
+        return labels, np.asarray(probs)
+
+    _predict_numpy2_compat._numpy2_compat = True
+    fasttext_module._FastText.predict = _predict_numpy2_compat
+
+
+_patch_fasttext_predict_numpy2_compat()
 # nlp.add_pipe('find_numbers')
 
 
@@ -45,10 +93,25 @@ def detect_language(text):
     Returns:
         str: Detected language.
     """
-    # nlp = spacy.load("en_core_web_sm")
-    # nlp.add_pipe("language_detector")
-    doc = nlp(text)
-    return doc._.language  # Check if detected language is English
+    global _nlp_language
+
+    if not isinstance(text, str) or text.strip() == "":
+        return "unknown"
+
+    if _nlp_language is None:
+        _nlp_language = spacy.load("en_core_web_sm")
+        try:
+            _nlp_language.add_pipe("language_detector")
+        except Exception as err:
+            LOGGER.warning("Language detector unavailable: %s", err)
+            return "unknown"
+
+    try:
+        doc = _nlp_language(text)
+        # Fastlang sets doc._.language; if unavailable, default to English.
+        return getattr(doc._, "language", "en") or "unknown"
+    except ValueError:
+        raise
 
 
 def written_num(text, lang="en"):
