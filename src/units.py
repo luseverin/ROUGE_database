@@ -82,7 +82,7 @@ UNIT_TYPE_KW_RECLASS = {
 }
 HARMONIZE_UNITS_KW = {
     "people": r"\b(people|persons?|individuals?|residents?)\b",
-    "households": r"\b(family|families|households?)\b",
+    "households": r"\b(family|families|households?|hhs?)\b",
     "communities": r"\b(community|communities)\b",
     "villages": r"\b(villages?|hamlets?)\b",
     "roads": r"\b(roads?|routes?|bridges?|highways?|motorways?)\b",
