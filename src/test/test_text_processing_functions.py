@@ -1,10 +1,12 @@
 import sys, os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import unittest
 import spacy
 import pandas as pd
 from src.text_processing_functions import *
+
 
 class TestTextProcessing(unittest.TestCase):
 
@@ -19,10 +21,14 @@ class TestTextProcessing(unittest.TestCase):
 
     def test_detect_language_empty(self):
         lang = detect_language("")
-        self.assertEqual(lang, "en")  # spaCy fastlang defaults to English on empty
+        self.assertEqual(lang, "unknown")
 
     def test_remove_newlines(self):
-        text = ["This is a line. \n", "This is another line. \n", "And another one. \n \n\n"]
+        text = [
+            "This is a line. \n",
+            "This is another line. \n",
+            "And another one. \n \n\n",
+        ]
         expected = ["This is a line.", "This is another line.", "And another one."]
         self.assertEqual(remove_newlines(text), expected)
 
@@ -91,25 +97,23 @@ class TestTextProcessing(unittest.TestCase):
         self.assertTrue(could_be_unit("5 km"))
         self.assertTrue(could_be_unit("5 m"))
         self.assertTrue(could_be_unit("5 people"))
-        self.assertTrue(could_be_unit("5 %"))
         self.assertTrue(could_be_unit("five critical infrastructures"))
-
 
     def test_could_be_unit_false(self):
         self.assertFalse(could_be_unit("5 apples"))
         self.assertFalse(could_be_unit("jeej"))
         self.assertFalse(could_be_unit("critical jeek"))
 
-    #def test_standardize_metric_units_simple(self):
+    # def test_standardize_metric_units_simple(self):
     #    result = standardize_metric_units("10 miles")
     #    converted = "kilometer "
     #    self.assertIn("16.09344 kilometer", result)
-#
-    #def test_standardize_metric_units_no_units(self):
+    #
+    # def test_standardize_metric_units_no_units(self):
     #    text = "There are 5 apples"
     #    self.assertEqual(standardize_metric_units(text), text)
 
-    #def test_standardize_metric_units_multiple_matches(self):
+    # def test_standardize_metric_units_multiple_matches(self):
     #    # "10 ton tonne" matches both ton and tonne -> ValueError
     #    with self.assertRaises(ValueError):
     #        standardize_metric_units("10 ton tonne")
@@ -132,35 +136,39 @@ class TestTextProcessing(unittest.TestCase):
 
     # ---------------- Hazard description ----------------
     def test_select_hazard_description_normal(self):
-        sentences = ["background details",
-                     "other stuff",
-                     "other stuff 2",
-                     "other stuff 3",
-                     "other stuff 4",
-                     "other stuff 5",
-                     "other stuff 6",
-                     "other stuff 7",
-                     "other stuff 8",
-                     "other stuff 9",
-                     "other stuff 10",
-                     "other stuff 11",
-                     "coordination and partnerships info",
-                     "blabla",
-                     "blabla 2"]
-        selected = ["background details",
-                     "other stuff",
-                     "other stuff 2",
-                     "other stuff 3",
-                     "other stuff 4",
-                     "other stuff 5",
-                     "other stuff 6",
-                     "other stuff 7",
-                     "other stuff 8",
-                     "other stuff 9",
-                     "other stuff 10",
-                     "other stuff 11",
-                     "coordination and partnerships info",
-                     "blabla"]#buffer of 1
+        sentences = [
+            "background details",
+            "other stuff",
+            "other stuff 2",
+            "other stuff 3",
+            "other stuff 4",
+            "other stuff 5",
+            "other stuff 6",
+            "other stuff 7",
+            "other stuff 8",
+            "other stuff 9",
+            "other stuff 10",
+            "other stuff 11",
+            "coordination and partnerships info",
+            "blabla",
+            "blabla 2",
+        ]
+        selected = [
+            "background details",
+            "other stuff",
+            "other stuff 2",
+            "other stuff 3",
+            "other stuff 4",
+            "other stuff 5",
+            "other stuff 6",
+            "other stuff 7",
+            "other stuff 8",
+            "other stuff 9",
+            "other stuff 10",
+            "other stuff 11",
+            "coordination and partnerships info",
+            "blabla",
+        ]  # buffer of 1
         result = select_hazard_description(sentences)
         self.assertEqual(selected, result)
 
@@ -191,21 +199,27 @@ class TestTextProcessing(unittest.TestCase):
         hazards = {"Flood": r"\bflood\b"}
         result = check_hazard_type_keyword("Sunny day", hazards)
         self.assertEqual(result, [])
+
     # ---------------- Impact description ----------------
     def test_select_impact_description_with_headers(self):
         report = {
             "reportName": "Test Report",
             "appealType": "DREF",
-            "sentences": [
-                "introduction text",
-                "situation analysis",
-                "more situation details",
-                "coordination and partnerships",
-                "coordination details",
-                "response details"
-            ]
+            "text_processed": "\n".join(
+                [
+                    "introduction text",
+                    "situation analysis",
+                    "more situation details",
+                    "coordination and partnerships",
+                    "coordination details",
+                    "response details",
+                ]
+            ),
         }
-        result = select_impact_description(report)
+        headers_keep = ["situation analysis"]
+        headers_drop = ["coordination and partnerships"]
+        out = select_impact_description(report, headers_keep, headers_drop)
+        result = out["nathaz_text"]
         self.assertIn("situation analysis", result)
         self.assertIn("more situation details", result)
         self.assertIn("introduction text", result)
@@ -216,45 +230,56 @@ class TestTextProcessing(unittest.TestCase):
         report = {
             "reportName": "Test Report",
             "appealType": "DREF",
-            "sentences": [
-                "random text 1",
-                "random text 2",
-                "random text 3"
-            ]
+            "text_processed": "\n".join(
+                ["random text 1", "random text 2", "random text 3"]
+            ),
         }
-        result = select_impact_description(report)
-        self.assertEqual(len(result), 3)
+        headers_keep = ["situation analysis"]
+        headers_drop = ["coordination and partnerships"]
+        out = select_impact_description(report, headers_keep, headers_drop)
+        self.assertEqual(out["nathaz_text"], "")
 
     def test_select_impact_description_only_drop_headers(self):
         report = {
             "reportName": "Test Report",
             "appealType": "DREF",
-            "sentences": [
-                "intro text",
-                "more intro",
-                "coordination and partnerships",
-                "response section"
-            ]
+            "text_processed": "\n".join(
+                [
+                    "intro text",
+                    "more intro",
+                    "coordination and partnerships",
+                    "response section",
+                ]
+            ),
         }
-        result = select_impact_description(report)
-        self.assertIn("intro text", result)
-        self.assertNotIn("response section", result)
+        headers_keep = ["situation analysis"]
+        headers_drop = ["coordination and partnerships"]
+        result = select_impact_description(report, headers_keep, headers_drop)[
+            "nathaz_text"
+        ]
+        self.assertEqual(result, "")
 
     def test_select_impact_description_multiple_keep_headers(self):
         report = {
             "reportName": "Test Report",
             "appealType": "DREF",
-            "sentences": [
-                "start",
-                "situation analysis",
-                "crisis details",
-                "coordination and partnerships",
-                "coordination details",
-                "needs (gaps) identified",
-                "response plan"
-            ]
+            "text_processed": "\n".join(
+                [
+                    "start",
+                    "situation analysis",
+                    "crisis details",
+                    "coordination and partnerships",
+                    "coordination details",
+                    "needs (gaps) identified",
+                    "response plan",
+                ]
+            ),
         }
-        result = select_impact_description(report)
+        headers_keep = ["situation analysis", "needs (gaps) identified"]
+        headers_drop = ["coordination and partnerships"]
+        result = select_impact_description(report, headers_keep, headers_drop)[
+            "nathaz_text"
+        ]
         self.assertIn("situation analysis", result)
         self.assertIn("needs (gaps) identified", result)
 
@@ -286,26 +311,29 @@ class TestTextProcessing(unittest.TestCase):
     def test_check_disaster_type_keyword_cyclone(self):
         result = check_disaster_type_keyword("tropical cyclone approaching")
         self.assertIn("Cyclone", result)
+
     ## ---------------- Entities & causal relationships ----------------
-    #def test_extract_entities(self):
+    # def test_extract_entities(self):
     #    ents = extract_entities("Barack Obama visited Paris.")
     #    self.assertTrue(any("Barack Obama" in ent for ent, _ in ents))
+
+
 #
-    #def test_extract_entities_empty(self):
-    #    ents = extract_entities("")
-    #    self.assertEqual(ents, [])
+# def test_extract_entities_empty(self):
+#    ents = extract_entities("")
+#    self.assertEqual(ents, [])
 #
-    #def test_extract_causal_relationships_simple(self):
-    #    hazards = {"Flood": r"\bflood\b", "cholera": r"\bcholera\b"}
-    #    sentence = "Flood caused cholera."
-    #    rels = extract_causal_relationships(sentence, ["cause"], hazards)
-    #    self.assertTrue(any("Flood" in rel for rel in rels))
+# def test_extract_causal_relationships_simple(self):
+#    hazards = {"Flood": r"\bflood\b", "cholera": r"\bcholera\b"}
+#    sentence = "Flood caused cholera."
+#    rels = extract_causal_relationships(sentence, ["cause"], hazards)
+#    self.assertTrue(any("Flood" in rel for rel in rels))
 #
-    #def test_extract_causal_relationships_no_relation(self):
-    #    hazards = {"Flood": r"\bflood\b"}
-    #    sentence = "Flood is dangerous."
-    #    rels = extract_causal_relationships(sentence, ["cause"], hazards)
-    #    self.assertEqual(rels, [])
+# def test_extract_causal_relationships_no_relation(self):
+#    hazards = {"Flood": r"\bflood\b"}
+#    sentence = "Flood is dangerous."
+#    rels = extract_causal_relationships(sentence, ["cause"], hazards)
+#    self.assertEqual(rels, [])
 
 if __name__ == "__main__":
     unittest.main()

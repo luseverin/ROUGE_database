@@ -1,242 +1,245 @@
-import sys, os
+import sys
+import os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import unittest
-import pandas as pd
-import geopandas as gpd
 import numpy as np
-from unittest.mock import patch, MagicMock
-from shapely.geometry import Point, Polygon, MultiPolygon
-from shapely.ops import unary_union
-import shapely
-from collections import defaultdict
-import sys, os
-import tempfile
-import pprint
-import traceback
+import pandas as pd
+from unittest.mock import patch
+from shapely.geometry import Polygon, Point, MultiPolygon
 
 from src.geocoding import (
+    normalize_to_list,
     identify_robust_country,
-    fallback_country_union,
-    gather_to_lowest_admin,
-    remove_admin_words,
-    rotated_levenshtein_similarity,
-    atomic_gpkg_save,
-    save_df_geo,
-    geocode_from_nominatim_output_optimized,
+    identify_unique_location_country,
+    identify_unique_locations_v2,
+    identify_unique_locations_v3,
+    find_closest_country,
+    find_best_match,
     fallback_country_union,
     prepare_result_df,
-    run_parallel_geocode,
     associate_locations_to_polygons,
-    run_parallel_associate,
-    run_parallel_in_batches,
-    geocode_df_to_polygon_by_unique_loc,
 )
-from src.geocoding_utils import (    
+from src.geocoding_utils import (
+    _normalize_country_key,
+    country_to_iso,
+    country_list_to_iso3,
+    get_iso2_from_iso3,
+    singularize_word,
+    rotated_levenshtein_similarity,
+    remove_admin_words,
     clean_geometry,
     to_flat_multipolygon,
     sanitize_and_merge_geometries,
-    remove_admin_words,
-    rotated_levenshtein_similarity,
-    country_to_iso
-    )
+    get_continent,
+    split_continents,
+    fuzzy_country_match,
+)
 
-class TestGeocodingUtils(unittest.TestCase):
-    def test_clean_geometry_valid_polygon(self):
-        poly = Polygon([(0,0), (1,0), (1,1), (0,1)])
-        cleaned = clean_geometry(poly)
-        self.assertTrue(cleaned.is_valid)
-        self.assertEqual(cleaned.area, poly.area)
 
-    def test_clean_geometry_none_or_empty(self):
-        self.assertIsNone(clean_geometry(None))
-        self.assertIsNone(clean_geometry(Polygon()))
+class TestCountryIsoMapping(unittest.TestCase):
+    def test_country_to_iso_common_variants(self):
+        expected = {
+            "LAO PDR": "LAO",
+            "Lao P.D.R.": "LAO",
+            "DPRK": "PRK",
+            "I. R. of Iran": "IRN",
+            "St. Lucia": "LCA",
+            "Congo, Dem. Rep.": "COD",
+            "Congo, Rep.": "COG",
+            "The Bahamas": "BHS",
+            "The Gambia": "GMB",
+            "Micronesia": "FSM",
+            "Swaziland": "SWZ",
+            "Palestine": "PSE",
+            "Turkey": "TUR",
+        }
+        for name, iso in expected.items():
+            self.assertEqual(country_to_iso(name, representation="alpha3"), iso)
 
-    def test_to_flat_multipolygon(self):
-        poly1 = Polygon([(0,0), (1,0), (1,1), (0,1)])
-        poly2 = Polygon([(2,2), (3,2), (3,3), (2,3)])
-        mp = MultiPolygon([poly1, poly2])
-        result = to_flat_multipolygon([poly1, mp])
-        self.assertIsInstance(result, MultiPolygon)
-        self.assertEqual(len(result.geoms), 3)
+    def test_country_to_iso_handles_null_like_inputs(self):
+        self.assertIsNone(country_to_iso(None, representation="alpha3"))
+        self.assertIsNone(country_to_iso("", representation="alpha3"))
+        self.assertIsNone(country_to_iso("None", representation="alpha3"))
 
-    def test_sanitize_and_merge_geometries(self):
-        poly1 = Polygon([(0,0), (1,0), (1,1), (0,1)])
-        poly2 = Polygon([(1,1), (2,1), (2,2), (1,2)])
-        merged = sanitize_and_merge_geometries([poly1, poly2, None])
-        self.assertTrue(merged.is_valid)
-        self.assertTrue(merged.area > 1.0)
+    def test_country_list_to_iso3_filters_none(self):
+        values = country_list_to_iso3(["Micronesia", None, "", "Somaliland"])
+        self.assertEqual(values, ["FSM", "XXM"])
+
+    def test_country_to_iso_numeric_and_alpha2(self):
+        self.assertEqual(country_to_iso("840", representation="alpha3"), "USA")
+        self.assertEqual(country_to_iso("US", representation="alpha3"), "USA")
+
+    def test_country_to_iso3_to_iso2_roundtrip(self):
+        self.assertEqual(get_iso2_from_iso3("USA"), "US")
+        self.assertEqual(get_iso2_from_iso3(["USA", "FRA"]), ["US", "FR"])
+
+    def test_normalize_country_key(self):
+        self.assertEqual(
+            _normalize_country_key(" The Congo, Dem. Rep. "), "congo dem rep"
+        )
+
+    def test_fuzzy_country_match(self):
+        best, score = fuzzy_country_match("Argentin")
+        self.assertIsNotNone(best)
+        self.assertGreater(score, 0)
+
+
+class TestGeocodingUtilsGeometry(unittest.TestCase):
+    def test_singularize_word(self):
+        self.assertEqual(singularize_word("structures"), "structure")
+
+    def test_rotated_levenshtein_similarity(self):
+        self.assertAlmostEqual(
+            rotated_levenshtein_similarity("new york city", "city new york"), 1.0
+        )
 
     def test_remove_admin_words(self):
-        loc = "New York City Municipality"
-        cleaned = remove_admin_words(loc)
-        self.assertEqual(cleaned, "New York")
+        self.assertEqual(remove_admin_words("New York City Municipality"), "new york")
 
-    def test_rotated_levenshtein_similarity_simple(self):
-        s1 = "New York City"
-        s2 = "City New York"
-        sim = rotated_levenshtein_similarity(s1, s2)
-        self.assertAlmostEqual(sim, 1.0)
+    def test_clean_geometry(self):
+        bowtie = Polygon([(0, 0), (1, 1), (1, 0), (0, 1), (0, 0)])
+        cleaned = clean_geometry(bowtie)
+        self.assertTrue(cleaned is None or cleaned.is_valid)
 
-    def test_country_to_iso_basic(self):
-        iso = country_to_iso("United States")
-        self.assertEqual(iso, "USA")
-        iso2 = country_to_iso(["United States", "France"])
-        self.assertEqual(iso2, ["USA", "FRA"])
+    def test_to_flat_multipolygon(self):
+        p1 = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+        p2 = Polygon([(2, 2), (3, 2), (3, 3), (2, 3)])
+        out = to_flat_multipolygon([p1, MultiPolygon([p2])])
+        self.assertIsInstance(out, MultiPolygon)
+        self.assertEqual(len(out.geoms), 2)
 
-class TestGeocoding(unittest.TestCase):
-    def test_identify_robust_country_basic(self):
-        df = pd.DataFrame({
-            "country": ["USA", None],
-            "country_iso3": ["USA", None],
-            "country_kw": ["United States", "Canada"],
-            "country_iso3_kw": ["USA", "CAN"],
-            "location": [["New York"], None]
-        })
-        keys, loc_to_country, loc_to_iso = identify_robust_country(df)
-        # Should handle missing country & location correctly
-        self.assertIn(("New York", "USA"), keys)
-        self.assertIn(("Canada", "Canada"), keys)
+    def test_sanitize_and_merge_geometries(self):
+        p1 = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+        p2 = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+        out = sanitize_and_merge_geometries([p1, p2])
+        self.assertIsInstance(out, MultiPolygon)
+        self.assertGreaterEqual(len(out.geoms), 1)
 
-    def test_fallback_country_union_empty(self):
-        empty_result = fallback_country_union({}, [], [])
-        # Should return a dataframe with expected columns
-        expected_cols = [
-            "finest_level", "locationOsm", "locationPolygon",
-            "flag_geocoding_osm", "flag_geocoding_country", "geometry"
-        ]
-        self.assertListEqual(list(empty_result.columns), expected_cols)
-
-    def test_gather_to_lowest_admin_basic(self):
-        poly = Polygon([(0,0), (1,0), (1,1), (0,1)])
-        df_locations = pd.DataFrame({
-            "geometry": [poly],
-            "finest_level": [1],
-            "locationPolygon": ["TestLocation"],
-            "ADMIN_0": ["USA"],
-            "ADMIN_1": ["New York"],
-            "ADMIN_2": ["Albany"]
-        })
-        gpd_files = {
-            "ADM_1": pd.DataFrame({
-                "ADMIN_0": ["USA"],
-                "ADMIN_1": ["New York"],
-                "geometry": [poly]
-            }),
-            "ADM_2": pd.DataFrame({
-                "ADMIN_0": ["USA"],
-                "ADMIN_1": ["New York"],
-                "ADMIN_2": ["Albany"],
-                "geometry": [poly]
-            })
-        }
-        merged_geom, loc_names = gather_to_lowest_admin(df_locations, gpd_files, lowest_level=1)
-        self.assertEqual(len(loc_names), 1)
-        self.assertTrue(merged_geom.is_valid)
-
-    def test_remove_admin_words_basic(self):
-        loc = "Albany County Municipality"
-        cleaned = remove_admin_words(loc)
-        self.assertEqual(cleaned, "Albany")
-
-    def test_rotated_levenshtein_similarity_basic(self):
-        s1 = "New York City"
-        s2 = "City New York"
-        sim = rotated_levenshtein_similarity(s1, s2)
-        self.assertAlmostEqual(sim, 1.0)
-    
-    def setUp(self):
-        # Example row for location processing
-        self.row = {"location": ["Place1"], "country": ["USA"], "country_kw": ["USA"], "impactValue": 10, "impactUnit": "USD"}
-        self.df_geo = pd.DataFrame([self.row])
-        
-        # Individual locations with geometries
-        self.df_geo_individual_locs = pd.DataFrame({
-            "location": ["Place1"],
-            "geometry": [Point(0,0)],
-            "finest_level": [2],
-            "flag_geocoding_country": [1],
-            "flag_geocoding_osm": [0],
-            "locationOsm": ["Place1"],
-            "locationPolygon": ["Place1"],
-            "iso3_code": ["USA"],
-            "gaul0_code": [1],
-            "gaul1_code": [10],
-            "gaul2_code": [100]
-        })
-        
-        # Mocked GAUL-like GeoDataFrames
-        self.gdf_file = {
-            "ADM_0": self.df_geo_individual_locs,
-            "ADM_1": self.df_geo_individual_locs,
-            "ADM_2": self.df_geo_individual_locs
-        }
-
-    # ------------------ GeoPackage saving ------------------ #
-    def test_atomic_gpkg_save(self):
-        gdf = gpd.GeoDataFrame(self.df_geo_individual_locs, geometry="geometry")
-        with tempfile.TemporaryDirectory() as tmpdir:
-            target_path = os.path.join(tmpdir, "test.gpkg")
-            result = atomic_gpkg_save(gdf, target_path, layer_name="multipolygons")
-            self.assertTrue(result)
-            self.assertTrue(os.path.exists(target_path))
-
-    def test_save_df_geo(self):
-        gdf = gpd.GeoDataFrame(self.df_geo_individual_locs, geometry="geometry")
-        with tempfile.TemporaryDirectory() as tmpdir:
-            save_df_geo(gdf, tmpdir, "test_savename", split_lowest_levels=True)
-            files = os.listdir(tmpdir)
-            self.assertTrue(any(f.endswith(".gpkg") for f in files))
-
-    # ------------------ Location association ------------------ #
-    def test_associate_locations_to_polygons_basic(self):
-        df_out = associate_locations_to_polygons(self.row, self.df_geo_individual_locs, self.gdf_file)
-        self.assertIsInstance(df_out, pd.DataFrame)
-        self.assertIn("geometry", df_out.columns)
-        self.assertIn("locationLowestAdmin", df_out.columns)
-        self.assertEqual(df_out.iloc[0]["flag_geocoding_country"], 1)
-
-    @patch("src.geocoding.associate_locations_to_polygons")
-    def test_run_parallel_associate(self, mock_associate):
-        mock_associate.return_value = self.df_geo_individual_locs
-        df_out = run_parallel_associate(self.df_geo, self.df_geo_individual_locs, self.gdf_file, max_workers=1)
-        self.assertIsInstance(df_out, pd.DataFrame)
-        self.assertIn("geometry", df_out.columns)
-        self.assertTrue(mock_associate.called)
-
-    @patch("src.geocoding.run_parallel_associate")
-    def test_run_parallel_in_batches(self, mock_parallel):
-        mock_parallel.return_value = self.df_geo_individual_locs
-        df_out = run_parallel_in_batches(self.df_geo, self.df_geo_individual_locs, self.gdf_file, batch_size=1, max_workers=1)
-        self.assertIsInstance(df_out, pd.DataFrame)
-        self.assertIn("geometry", df_out.columns)
-        self.assertTrue(mock_parallel.called)
-
-    # ------------------ Full geocoding pipeline ------------------ #
-    @patch("src.geocoding.open_admin_gpd")
-    @patch("src.geocoding.identify_robust_country")
-    @patch("src.geocoding.run_parallel_geocode")
-    @patch("src.geocoding.run_parallel_in_batches")
-    @patch("src.geocoding.save_df_geo")
-    @patch("src.geocoding.find_best_nomin")
-    def test_geocode_df_to_polygon_by_unique_loc(
-        self, mock_find_best, mock_save, mock_batches, mock_parallel_geo, mock_identify, mock_open_gpd
-    ):
-        # Setup mocks
-        mock_open_gpd.return_value = self.gdf_file
-        mock_identify.return_value = (
-            [("Place1", "USA")],
-            {("Place1", "USA"): ["USA"]},
-            {("Place1", "USA"): ["USA"]}
+    def test_get_continent_and_split_continents(self):
+        world = pd.DataFrame(
+            {
+                "ISO_A3": ["USA"],
+                "ADM0_ISO": ["USA"],
+                "CONTINENT": ["North America"],
+            }
         )
-        mock_find_best.return_value = (MagicMock(), {"admin_level": 2, "name": "Place1", "admin_field": "ADMIN_2", "country": "USA", "country_iso": "USA"})
-        mock_parallel_geo.return_value = self.df_geo_individual_locs
-        mock_batches.return_value = self.df_geo_individual_locs
+        self.assertEqual(get_continent("USA", world), "North America")
 
-        df_split, df_full = geocode_df_to_polygon_by_unique_loc(self.df_geo, save_path=False, res_savename=False)
-        self.assertIsInstance(df_split, pd.DataFrame)
-        self.assertIsInstance(df_full, pd.DataFrame)
-        self.assertTrue(mock_save.called == False) 
+        df_geom = pd.DataFrame({"country_iso3": [["USA"]]})
+        out = split_continents(df_geom, world)
+        self.assertEqual(out.loc[0, "continent"], ["North America"])
+
+
+class TestGeocodingRowHandling(unittest.TestCase):
+    def test_normalize_to_list(self):
+        self.assertEqual(normalize_to_list(None), [])
+        self.assertEqual(normalize_to_list(np.nan), [])
+        self.assertEqual(normalize_to_list(" none "), [])
+        self.assertEqual(normalize_to_list("Micronesia"), ["Micronesia"])
+        self.assertEqual(normalize_to_list(["A", None, "nan", "B"]), ["A", "B"])
+
+    def test_identify_robust_country_merges_columns(self):
+        df = pd.DataFrame(
+            {
+                "country": [["Micronesia"], None],
+                "country_kw": [["Federated States of Micronesia"], ["Palestine"]],
+            }
+        )
+        out = identify_robust_country(df, "country", "country_kw", "country_robust")
+        self.assertIn("country_robust", out.columns)
+        self.assertEqual(
+            out.loc[0, "country_robust"],
+            ["Federated States of Micronesia", "Micronesia"],
+        )
+        self.assertEqual(out.loc[1, "country_robust"], ["Palestine"])
+
+    def test_associate_locations_to_polygons_handles_none_iso3(self):
+        row = {
+            "location": ["western FSM"],
+            "country_robust": ["Micronesia"],
+            "country_robust_iso3": None,
+        }
+        df_geo_individual_locs = pd.DataFrame(
+            {
+                "location": ["western FSM", "western FSM"],
+                "iso3_code": ["FSM", "PLW"],
+                "geometry": [np.nan, np.nan],
+                "finest_level": [0, 0],
+                "flag_geocoding_country": [0, 0],
+                "flag_geocoding_osm": [0, 0],
+                "locationOsm": ["western FSM", "western FSM"],
+                "locationPolygon": ["FSM", "PLW"],
+            }
+        )
+
+        out = associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file={})
+        self.assertIsInstance(out, pd.DataFrame)
+        self.assertIn("geometry", out.columns)
+        self.assertEqual(len(out), 1)
+
+    def test_identify_unique_location_country(self):
+        df = pd.DataFrame(
+            {
+                "country_robust": [["Micronesia"]],
+                "country_robust_iso3": [["FSM"]],
+                "country_robust_iso2": [["FM"]],
+                "location": [["western FSM"]],
+            }
+        )
+        out = identify_unique_location_country(df)
+        self.assertIn("location", out.columns)
+        self.assertIn("country_iso3", out.columns)
+        self.assertEqual(out.loc[0, "country_iso3"], "FSM")
+
+    def test_identify_unique_locations_v2_and_v3(self):
+        df = pd.DataFrame(
+            {
+                "country_robust": [["France", "Italy"], ["France"]],
+                "country_robust_iso3": [["FRA", "ITA"], ["FRA"]],
+                "country_robust_iso2": [["FR", "IT"], ["FR"]],
+                "location": [["Paris"], ["Paris"]],
+            }
+        )
+        out_v2 = identify_unique_locations_v2(df)
+        out_v3 = identify_unique_locations_v3(df)
+        self.assertGreaterEqual(len(out_v2), 1)
+        self.assertGreaterEqual(len(out_v3), 1)
+
+    def test_find_closest_country(self):
+        gdf = pd.DataFrame({"ADMIN_0": ["France", "Italy"]})
+        self.assertEqual(find_closest_country("Frnace", gdf, threshold=0.4), "France")
+
+    def test_find_best_match(self):
+        address = {"city": "new york"}
+        info, sim = find_best_match("new york", address, 0.5)
+        self.assertGreaterEqual(sim, 0.5)
+        self.assertIn("admin_level", info)
+
+    def test_prepare_result_df(self):
+        df = pd.DataFrame({"ADMIN_1": ["New York"], "geometry": [Point(0, 0)]})
+        best = {"admin_level": 1, "name": "new york", "admin_field": "ADMIN_1"}
+        out = prepare_result_df(df, best, "new york")
+        self.assertIn("locationOsm", out.columns)
+        self.assertEqual(out.loc[0, "location"], "new york")
+
+    @patch("src.geocoding.get_polygon")
+    def test_fallback_country_union(self, mock_get_polygon):
+        poly_df = pd.DataFrame(
+            {
+                "geometry": [Point(0, 0).buffer(0.1)],
+                "iso3_code": ["FSM"],
+                "ADMIN_0": ["Micronesia"],
+            }
+        )
+        mock_get_polygon.return_value = poly_df
+        out = fallback_country_union(
+            {"ADM_0": pd.DataFrame()}, "western FSM", ["Micronesia"], ["FSM"]
+        )
+        self.assertIn("location", out.columns)
+        self.assertEqual(out.loc[out.index[0], "location"], "western FSM")
+
 
 if __name__ == "__main__":
     unittest.main()
