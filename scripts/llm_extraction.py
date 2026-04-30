@@ -2,7 +2,7 @@ import datetime as dt
 from operator import mul
 from src.data import *
 from src.LLM_functions import *
-from src.labelling_helpers import take_longest_report
+from src.labelling_helpers import take_latest_report, take_longest_report
 from src.logger_setup import set_logger
 
 ## Open and read the JSON file
@@ -14,7 +14,7 @@ file_path = (
 ifrc_reports_df = pd.read_csv(file_path)
 
 # filter reports by report type and date
-ifrc_reports_df_filtered = take_longest_report(ifrc_reports_df)
+ifrc_reports_df_filtered = take_latest_report(ifrc_reports_df)
 
 # eventually load labelled reports
 labelled_reports = pd.read_csv(
@@ -27,19 +27,22 @@ labelled_reports_raw = ifrc_reports_df.merge(
 
 # eventually select by appeal code
 appeals_test = [
-    # "MDRYE011",
-    # "MDRZM022",
+    "MDRYE011",
+    "MDRZM022",
     "MDRSD034",
-    # "MDRUG050",
-    # "MDRRW022",
+    "MDRUG050",
+    "MDRRW022",
 ]  # ["MDRYE011","MDRZM022", "MDRSD034", "MDRUG050", "MDRRW022"]
 test_reports = labelled_reports_raw[
     labelled_reports_raw.appealCode.isin(appeals_test)
 ]  # ifrc_reports_df_filtered[ifrc_reports_df_filtered.appealCode.isin(appeals_test)]
 
 # select reports to process
-nreports = 350
-reports_in = test_reports  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+lreport = 350 + 132
+rreport = len(ifrc_reports_df_filtered)
+reports_in = ifrc_reports_df_filtered.iloc[
+    lreport : rreport + 1
+]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 nreports = len(reports_in)
 
@@ -47,7 +50,9 @@ nreports = len(reports_in)
 chunk_size = 1000  # chunk size of input. None to disable
 max_rounds = None  # max number of continuations for impact extraction. None to disable
 multi_dates = False  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
-sim_name = f"test_MDRSD034_1quali_chunksize{chunk_size}_{max_rounds}it"
+sim_name = (
+    f"{lreport}-{rreport}_latest_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
+)
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
@@ -57,7 +62,7 @@ impsubtype_dict = IMPACT_DESCRIPTIONS
 impsubtype = IMPACT_SUBTYPES
 # Validation
 dedup_impacts = "quali"  # whether to deduplicate impacts or not. If "quali", only deduplicate qualitative impacts, if "all", deduplicate all impacts, if None, do not deduplicate
-dedup_fields = ["impactSubtype", "impactUnit"]
+dedup_fields = ["impactSubtype"]
 validate_impSubtypes = False
 validate_hazards = True  # deactivate hazards validation as cause issues
 
