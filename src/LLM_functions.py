@@ -71,19 +71,6 @@ def add_key_value_pairs(data, new_pairs):
     return data
 
 
-# def check_result_json(result_json, label=None):
-#    try:
-#        answer = json.loads(result_json.replace("\n", ""))
-#        if label:
-#            answer = answer[label]
-#    except Exception as e:
-#        LOGGER.error("An unexpected error occurred: %s", e)
-#        return None
-#    if not answer:
-#        LOGGER.info("JSON is empty: %s", result_json)
-#    return answer
-
-
 def build_messages(prompt, prompt_system=None, prompt_assistant=None):
     """Build messages for OpenAI API based on (user) prompt, system prompt and assistant prompt"""
 
@@ -557,7 +544,9 @@ def impact_extraction_chain(
     return answer_impact_values, valid_errors_impVal
 
 
-def clean_value_unit(answer_impact_values, valid_errors_impVal):
+def clean_value_unit(
+    answer_impact_values, valid_errors_impVal, nullify_quali_unit=True
+):
     """Clean and validate the impact values and units extracted by the model, ensuring they are in the correct format and contain the required fields.
     This function performs the following steps:
     1. Normalizes the list structure of the impact values, unwrapping singleton lists
@@ -589,7 +578,9 @@ def clean_value_unit(answer_impact_values, valid_errors_impVal):
         # extract impact value
         try:
             impact_value = extract_impact_value(pd.DataFrame([impact]))
-            impact["impactValue"] = impact_value
+            # impact["impactValue"] = impact_value
+            # if nullify_quali_unit and impact_value is None:
+            #    impact["impactUnit"] = None
         except TypeError as e:
             print("TypeError in extract_impact_value for impact:", impact)
             LOGGER.info("Error occurred while extracting impact value: %s", e)
