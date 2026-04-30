@@ -1,7 +1,6 @@
-
 ## Script to filter final data
-#1 drop duplicates
-#2 select columns
+# 1 drop duplicates
+# 2 select columns
 
 import pandas as pd
 import geopandas as gpd
@@ -15,28 +14,42 @@ from src.geocoding_utils import split_continents
 from src.logger_setup import set_logger
 
 ## Parameters
-dedup_cols = ["appealCode","impactSubtype", "impactValue", "impactUnit", "iso3_code",
-              "location", "startYear", "startMonth", "startDay","endYear", "endMonth",
-              "endDay", "hazards"]
+dedup_cols = [
+    "appealCode",
+    "impactSubtype",
+    "impactValue",
+    "impactUnit",
+    "iso3_code",
+    "location",
+    "startYear",
+    "startMonth",
+    "startDay",
+    "endYear",
+    "endMonth",
+    "endDay",
+    "hazards",
+]
+
+merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
 
 ##load data (model)
-res_savename = "merged_subtypespost_processed_labelled_reports_impacts_all_v111025_v030226_geo"
+res_savename = "post_processed_0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426_v230426_geo"
 
 # Set up final name
-filename_out = "filter_" + "post_processed_labelled_reports_impacts_all_v111025_v030226_geo"
+filename_out = "filter_" + res_savename
 
-#set up logger
+# set up logger
 logger_name = "data_filter"
 log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ## Load data
-response_df = gpd.read_file(DATA_OUT_PROC / (res_savename+".gpkg"))
+response_df = gpd.read_file(DATA_OUT_PROC / (res_savename + ".gpkg"))
 
 # Sort list columns
 response_df = format_output(response_df)
 
-#for col in LIST_COLS :
+# for col in LIST_COLS :
 #    if col in response_df.columns :
 #        response_df[col] = response_df[col].apply(sorted)
 
@@ -46,11 +59,16 @@ response_df = delistify_cols(response_df)
 init_len = len(response_df)
 duplicates = response_df.duplicated(subset=dedup_cols)
 with pd.option_context(
-    "display.max_rows", None,
-    "display.max_columns", None,
-    "display.width", None,
+    "display.max_rows",
+    None,
+    "display.max_columns",
+    None,
+    "display.width",
+    None,
 ):
-    LOGGER.info("Duplicates:\n %s", response_df.loc[duplicates, dedup_cols])#.to_string(max_rows=None, max_cols=None)
+    LOGGER.info(
+        "Duplicates:\n %s", response_df.loc[duplicates, dedup_cols]
+    )  # .to_string(max_rows=None, max_cols=None)
 
 response_df = response_df[~duplicates]
 
@@ -59,87 +77,152 @@ LOGGER.info(f"Dropped {init_len - len(response_df)} duplicates")
 ## Parse to correct dtypes
 response_df = format_output(response_df)
 
-#hot fix, replace nan of null with null
+# hot fix, replace nan of null with null
 response_df["impactUnit"] = response_df["impactUnit"].replace({"nan of null": "null"})
 
 ##Filter unwanted flags
-unwanted_flags = ["flag_remove_cat", "flag_value_no_unit", "flag_unit_nonstd", "flag_response_unit", "flag_unknown_subtype"]
+unwanted_flags = [
+    "flag_remove_cat",
+    "flag_value_no_unit",
+    "flag_unit_nonstd",
+    "flag_response_unit",
+    "flag_unknown_subtype",
+    "flag_unknown_hazard",
+]
 for flag in unwanted_flags:
     if flag not in response_df.columns:
         LOGGER.warning(f"Flag {flag} not found in data")
         continue
 
     init_len = len(response_df)
-    response_df = response_df[response_df[flag]==False]
+    response_df = response_df[response_df[flag] == False]
     LOGGER.info(f"Filtered {init_len - len(response_df)} entries based on {flag} flag")
 
 ## gather flag columns
-flag_unit_std = ['flag_unit_harmonization', 'flag_non-SI_unit_standardization']
-flag_error_columns = ["flag_remove_number_unit_error",
-                      "flag_unit_conversion_error",
-                      "flag_non-SI_unit_standardization_error",
-                      "flag_SI_unit_standardization_error",
-                      'flag_failed_currency_conversion']
+flag_unit_std = ["flag_unit_harmonization", "flag_non-SI_unit_standardization"]
+flag_error_columns = [
+    "flag_remove_number_unit_error",
+    "flag_unit_conversion_error",
+    "flag_non-SI_unit_standardization_error",
+    "flag_SI_unit_standardization_error",
+    "flag_failed_currency_conversion",
+]
 
-response_df = gather_flags(response_df, flag_unit_std, flag_name="flag_non-SI_unit_standardization")
-response_df = gather_flags(response_df, flag_error_columns, flag_name="flag_unit_processing_error")
+response_df = gather_flags(
+    response_df, flag_unit_std, flag_name="flag_non-SI_unit_standardization"
+)
+response_df = gather_flags(
+    response_df, flag_error_columns, flag_name="flag_unit_processing_error"
+)
 
 ## gather annotation columns
-annotation_columns = ["valueAnnotation", "locationAnnotation", "dateAnnotation", "hazardsAnnotation"]
-response_df["sourceExcerpts"] = response_df.apply(merge_annotations, args=(annotation_columns,), axis=1)
+annotation_columns = [
+    "valueAnnotation",
+    "locationAnnotation",
+    "dateAnnotation",
+    "hazardsAnnotation",
+]
+response_df["sourceExcerpts"] = response_df.apply(
+    merge_annotations, args=(annotation_columns,), axis=1
+)
 
 ## merge infra and service access
-response_df = response_df.apply(merge_impact_subtypes, impact_kw_reclass=IMPACT_SUBTYPE_MERGER,axis=1)
+if merge_subtypes:
+    response_df = response_df.apply(
+        merge_impact_subtypes, impact_kw_reclass=IMPACT_SUBTYPE_MERGER, axis=1
+    )
 
 ## Filter unwanted columns
-columns_data_final = ["appealCode", "reportDate", "reportLink", "disasterType",
-                 "impactSubtype", "impactValue", "impactValueMin", "impactValueMax", "impactValuePrecision", "impactUnit",
-                 "startYear", "startMonth", "startDay", "endYear", "endMonth", "endDay", "hazards", "location", "geometry",
-                 "locationPolygon", "locationLowestAdmin", "iso3_code", "sourceExcerpts"]
+columns_data_final = [
+    "appealCode",
+    "reportDate",
+    "reportLink",
+    "disasterType",
+    "impactSubtype",
+    "impactValue",
+    "impactValueMin",
+    "impactValueMax",
+    "impactValuePrecision",
+    "impactUnit",
+    "startYear",
+    "startMonth",
+    "startDay",
+    "endYear",
+    "endMonth",
+    "endDay",
+    "hazards",
+    "location",
+    "geometry",
+    "locationPolygon",
+    "locationLowestAdmin",
+    "iso3_code",
+    "sourceExcerpts",
+]
 
-columns_flags_final = ['valid_errors_impactValue',
-         'valid_errors_loc',
-         'valid_errors_dates',
-         'valid_errors_haz',
-         'flag_value_not_in_text',
-         'flag_impactSubtype_reclass',
-         'flag_hazards_reclass',
-         'flag_remove_number_unit',
-         'flag_SI_unit_standardization',
-         'flag_non-SI_unit_standardization',
-         'flag_unit_processing_error',
-         'flag_unit_nonstd',
-         'flag_reclass_subtype_from_unit',
-         'flag_pop_cntry',
-         'flag_value_no_unit',
-         'flag_partial_unit',
-         'flag_geocoding_country',
-         'flag_geocoding_osm']
+columns_flags_final = [
+    "valid_errors_impactValue",
+    "valid_errors_loc",
+    "valid_errors_dates",
+    "valid_errors_haz",
+    "flag_value_not_in_text",
+    "flag_impactSubtype_reclass",
+    "flag_hazards_reclass",
+    "flag_remove_number_unit",
+    "flag_SI_unit_standardization",
+    "flag_non-SI_unit_standardization",
+    "flag_unit_processing_error",
+    "flag_unit_nonstd",
+    "flag_reclass_subtype_from_unit",
+    "flag_pop_cntry",
+    "flag_value_no_unit",
+    "flag_partial_unit",
+    "flag_geocoding_country",
+    "flag_geocoding_osm",
+]
 
 response_df_filtered = response_df.copy()
-response_df_filtered = response_df_filtered[[col for col in columns_data_final + columns_flags_final if col in response_df_filtered.columns]]
+response_df_filtered = response_df_filtered[
+    [
+        col
+        for col in columns_data_final + columns_flags_final
+        if col in response_df_filtered.columns
+    ]
+]
 
 ## Rename cols
-col_rename = {
-    "iso3_code": "country_iso3",
-    "disasterType": "disasterType_IFRC"
-}
+col_rename = {"iso3_code": "country_iso3", "disasterType": "disasterType_IFRC"}
 response_df_filtered = response_df_filtered.rename(columns=col_rename)
 
 ## Split per continent
-world = gpd.read_file(ADMIN_PATH / "ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp")
+world = gpd.read_file(
+    ADMIN_PATH / "ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp"
+)
 response_df_filtered_continent = split_continents(response_df_filtered, world)
 
 ## Save
-atomic_gpkg_save(response_df_filtered_continent, DATA_OUT_PROC / (filename_out + ".gpkg"))
-response_df_filtered_continent.to_parquet(DATA_OUT_PROC / (filename_out+".parquet"),compression="zstd", index=False)
-response_df_filtered.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+atomic_gpkg_save(
+    response_df_filtered_continent, DATA_OUT_PROC / (filename_out + ".gpkg")
+)
+response_df_filtered_continent.to_parquet(
+    DATA_OUT_PROC / (filename_out + ".parquet"), compression="zstd", index=False
+)
+response_df_filtered.drop(columns=["geometry"]).to_csv(
+    DATA_OUT_PROC / (filename_out + ".csv"), index=False
+)
 
-#save per continent
-for continent, df in response_df_filtered_continent.explode("continent").groupby("continent"):
+# save per continent
+for continent, df in response_df_filtered_continent.explode("continent").groupby(
+    "continent"
+):
     continent = continent.replace(" ", "_")
-    if len(str(DATA_OUT_PROC / f"{filename_out}_{continent}.parquet")) > 260 :
-        LOGGER.info(f'More than 260 characters, Unable to save file to {str(DATA_OUT_PROC / f"{filename_out}_{continent}.parquet")}')
-    else :
-        df.to_parquet(DATA_OUT_PROC / (f"{filename_out}_{continent}"+".parquet"),compression="zstd", index=False)
+    if len(str(DATA_OUT_PROC / f"{filename_out}_{continent}.parquet")) > 260:
+        LOGGER.info(
+            f'More than 260 characters, Unable to save file to {str(DATA_OUT_PROC / f"{filename_out}_{continent}.parquet")}'
+        )
+    else:
+        df.to_parquet(
+            DATA_OUT_PROC / (f"{filename_out}_{continent}" + ".parquet"),
+            compression="zstd",
+            index=False,
+        )
     atomic_gpkg_save(df, DATA_OUT_PROC / (f"{filename_out}_{continent}" + ".gpkg"))
