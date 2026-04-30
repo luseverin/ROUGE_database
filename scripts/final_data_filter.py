@@ -31,7 +31,9 @@ dedup_cols = [
 ]
 
 merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
-
+remove_unknown_hazards = (
+    True  # whether to remove impacts for which all hazards are unknown
+)
 ##load data (model)
 res_savename = "post_processed_0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426_v230426_geo"
 
@@ -79,6 +81,10 @@ response_df = format_output(response_df)
 
 # hot fix, replace nan of null with null
 response_df["impactUnit"] = response_df["impactUnit"].replace({"nan of null": "null"})
+if remove_unknown_hazards:
+    response_df["flag_all_hazards_unknown"] = response_df.apply(
+        lambda x: all(haz == "Unknown" for haz in x["hazards"]), axis=1
+    )
 
 ##Filter unwanted flags
 unwanted_flags = [
@@ -87,8 +93,10 @@ unwanted_flags = [
     "flag_unit_nonstd",
     "flag_response_unit",
     "flag_unknown_subtype",
-    "flag_unknown_hazard",
+    "flag_all_hazards_unknown",
+    # "flag_hazards_unknown",
 ]
+
 for flag in unwanted_flags:
     if flag not in response_df.columns:
         LOGGER.warning(f"Flag {flag} not found in data")

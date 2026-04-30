@@ -262,9 +262,10 @@ def reclassify_hazard(x, hazard_kw_reclass=hazard_kw_reclass):
         Reclassified hazard type
     """
     corr_haz = cp.deepcopy(x["hazards"])
-    flag = False
+    flag_reclass = False
+    flag_unknown = False
     if any([haz for haz in x["hazards"] if haz not in hazard_kw_reclass.keys()]):
-        flag = True
+        flag_reclass = True
         for i, haz in enumerate(x["hazards"]):
             if haz not in hazard_kw_reclass.keys():
                 candidates = [
@@ -276,8 +277,10 @@ def reclassify_hazard(x, hazard_kw_reclass=hazard_kw_reclass):
                     corr_haz[i] = candidates[0]
                 else:
                     corr_haz[i] = "Unknown"
+                    flag_unknown = True
     x["hazards"] = corr_haz
-    x["flag_hazards_reclass"] = flag
+    x["flag_hazards_reclass"] = flag_reclass
+    x["flag_hazards_unknown"] = flag_unknown
     return x
 
 
