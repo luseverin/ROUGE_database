@@ -1849,7 +1849,10 @@ def geocode_df_to_polygon_by_unique_loc(
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
-    nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{res_savename}.csv")
+    if not res_savename : 
+        nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{dt.date.today().strftime('%d%m%y')}.csv")
+    else : 
+        nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{res_savename}.csv")
     unique_loc.to_csv(nominatim_save_path, index=False)
     # atomic_gpkg_save(unique_loc, nominatim_save_path)
     LOGGER.info("Nominatim output saved in %s", nominatim_save_path)
@@ -1863,7 +1866,10 @@ def geocode_df_to_polygon_by_unique_loc(
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
-    geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{res_savename}.gpkg")
+    if not res_savename :
+        geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.csv")
+    else :  
+        geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.gpkg")
     atomic_gpkg_save(
         df_geo_individual_locs, geocode_unique_save_path, layer_name="multipolygons"
     )
