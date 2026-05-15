@@ -169,10 +169,6 @@ def identify_unique_location_country(df_geo):
                         rows[key] = c
                         # rows[key] = True
 
-    # df_unique = pd.DataFrame(
-    #     list(rows.keys()),
-    #     columns=["location", "country", "country_iso3", "country_iso2"]
-    # )
     df_unique = pd.DataFrame(
         [(loc, country, iso3, iso2) for (loc, iso3, iso2), country in rows.items()],
         columns=["location", "country", "country_iso3", "country_iso2"],
@@ -190,6 +186,11 @@ def identify_unique_location_country(df_geo):
         return country.name if country else row["country"]
 
     df_unique["country"] = df_unique.apply(normalize_country, axis=1)
+
+    # Ensure no missing locations: replace missing/empty with country name
+    df_unique["location"] = df_unique["location"].where(
+        df_unique["location"].notna() & (df_unique["location"] != ""), df_unique["country"]
+    )
 
     return df_unique
 
@@ -345,10 +346,24 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL"):
             ne_0 = gpd.read_file(
                 os.path.join(
                     ADMIN_PATH,
-                    "ne_110m_admin_0_countries",
-                    "ne_110m_admin_0_countries.shp",
+                    "ne_50m_admin_0_countries",
+                    "ne_50m_admin_0_countries.shp",
                 )
             )
+            
+            #Add the countries which are missing from the 50m resolution
+            ne_0_10m = gpd.read_file(
+            os.path.join(
+                ADMIN_PATH,
+                "ne_10m_admin_0_countries",
+                "ne_10m_admin_0_countries.shp",
+                )
+            )  
+            missing_iso3 = set(ne_0_10m["ISO_A3"]) - set(ne_0["ISO_A3"]) 
+            missing_countries = ne_0_10m[ne_0_10m["ISO_A3"].isin(missing_iso3)]
+            ne_0 = pd.concat([ne_0, missing_countries],ignore_index=True)
+
+            #Clean the file structure and merge with GAUL
             ne_0 = ne_0.rename({"ADMIN": "ADMIN_0", "ISO_A3": "iso3_code"}, axis=1)
             ne_0["gaul1_code"] = None
             ne_0["gaul2_code"] = None
@@ -540,7 +555,6 @@ def get_polygon(
         LOGGER.error("[get_polygon] Error: %s", e)
     return None
 
-
 def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
     """
     Find the administrative polygon containing the geometry at the specified level.
@@ -593,7 +607,6 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
         adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
         return adm2_match if not adm2_match.empty else None
 
-
 def fallback_country_union(gdf_file, location, countries, iso_countries):
     """Fallback: Combine polygons of all possible countries"""
     country_polygons = []
@@ -641,9 +654,7 @@ def fallback_country_union(gdf_file, location, countries, iso_countries):
     )
     return empty_df.assign(location=location)
 
-
 #### Queries nominatim and find best match
-
 
 def query_nominatim(location, country_iso2, max_retries=2, initial_delay=1):
     """
@@ -662,7 +673,7 @@ def query_nominatim(location, country_iso2, max_retries=2, initial_delay=1):
                 language="en",
                 addressdetails=True,
                 geometry="geojson",
-                featuretype=["country", "state", "city", "settlement"],
+                # featuretype=["country", "state", "city", "settlement", "island"],
             )
             if country_iso2:
                 geocode_kwargs["country_codes"] = country_iso2
@@ -688,7 +699,6 @@ def query_nominatim(location, country_iso2, max_retries=2, initial_delay=1):
         "[query_nominatim] All %i attempts failed for '%s'", max_retries, location
     )
     return None
-
 
 def query_reverse_geocode(coords, lang="en", zoom=13, max_retries=2, initial_delay=1):
     """
@@ -762,7 +772,6 @@ def query_reverse_geocode(coords, lang="en", zoom=13, max_retries=2, initial_del
             return None
 
     return None
-
 
 def find_best_match(loc_clean, address, similarity_th, print_info=False):
     """
@@ -862,8 +871,6 @@ def find_best_match(loc_clean, address, similarity_th, print_info=False):
 
 
 #### To save files
-
-
 def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
     """Save to a temporary file then rename (atomic operation)"""
     temp_dir = tempfile.mkdtemp()
@@ -888,7 +895,6 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
         except:
             pass
 
-
 def save_df_geo(df_geo, save_path, res_savename):
     """Save a GeoDataFrame to a GeoPackage file with standardized CRS and naming."""
     save_df = df_geo.copy()
@@ -907,15 +913,13 @@ def save_df_geo(df_geo, save_path, res_savename):
         except Exception as e:
             LOGGER.error("[GeoPackage Save Error] %s", e)
 
-
 #### Optimize geocoding and work per unique location found
 
 ##### Functions for nominatim
 
-
 def find_best_nomin(row, similarity_th, print_info=False):
     """Query Nominatim for a location across candidate countries and
-    return the best matching result with similarity evaluation.
+    return the best matching result with similarity evaluation.s
 
     Args:
         row: A row from the unique locations DataFrame with columns
@@ -968,38 +972,11 @@ def find_best_nomin(row, similarity_th, print_info=False):
                     filtered.append(nr)
             nom_results = filtered
 
-        # if nom_result is not None:
-        #     # If a nominatim result is found, verify that the country is identical to the input
-        #     address = nom_result.raw.get("address", {})
-        #     if "country_code" in address and address["country_code"]:
-        #         nom_iso2 = address["country_code"]
-        #         if nom_iso2 != curr_iso2.upper():
-        #             nom_result = None
-        #     if nom_result is not None and "country" in address and address["country"]:
-        #         nom_country = address["country"]
-        #         if nom_country != curr_country:
-        #             nom_result = None
-
     # if nom_result is None:
     if not nom_results:
         # return None, None
         return empty
 
-    # Evaluate similarity
-    # loc_clean = remove_admin_words(location)
-    # coords    = (nom_result.latitude, nom_result.longitude)
-    # address   = nom_result.raw.get("address", {}) if nom_result and isinstance(nom_result.raw, dict) else {}
-
-    # match_info, sim = find_best_match(loc_clean, address, similarity_th, print_info)
-    # if sim > best_sim:
-    #     best_sim = sim
-    #     best_result = {
-    #         **match_info,
-    #         "coords"      : coords,
-    #         "country"     : curr_country,
-    #         "country_iso3": curr_iso3,
-    #         "country_iso2": curr_iso2,
-    #     }
     loc_clean = remove_admin_words(location)
     idx = 0
     while idx < len(nom_results):
@@ -1039,9 +1016,7 @@ def find_best_nomin(row, similarity_th, print_info=False):
         }
     )
 
-
 ##### Convert individual locations to polygons
-
 
 def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
     """Attempt alternative strategies to match an administrative polygon
@@ -1596,20 +1571,24 @@ def associate_locations_to_polygons(
         merged_geometry = sanitize_and_merge_geometries(df_location_subset["geometry"])
         # merged_geometry, location_names = gather_to_lowest_admin(df_location_subset, gdf_file, merge_level)
 
-        flag_country_count = df_location_subset.loc[
-            df_location_subset["flag_geocoding_country"] == 1, "location"
-        ].nunique()
+        # flag_country_count = df_location_subset.loc[
+        #     df_location_subset["flag_geocoding_country"] == 1, "location"
+        # ].nunique()
 
-        # Count unique locations where the OSM flag == 1
-        flag_osm_count = df_location_subset.loc[
-            df_location_subset["flag_geocoding_osm"] == 1, "location"
-        ].nunique()
+        # # Count unique locations where the OSM flag == 1
+        # flag_osm_count = df_location_subset.loc[
+        #     df_location_subset["flag_geocoding_osm"] == 1, "location"
+        # ].nunique()
+
+        flag_country = int((df_location_subset["flag_geocoding_country"] == 1).any())
+
+        flag_osm = int((df_location_subset["flag_geocoding_osm"] == 1).any())
 
         df_row_append = pd.DataFrame([row])
         df_row_append["geometry"] = merged_geometry
         df_row_append["locationLowestAdmin"] = layer_name
-        df_row_append["flag_geocoding_country"] = flag_country_count
-        df_row_append["flag_geocoding_osm"] = flag_osm_count
+        df_row_append["flag_geocoding_country"] = flag_country
+        df_row_append["flag_geocoding_osm"] = flag_osm
         df_row_append["locationOsm"] = [
             df_location_subset["locationOsm"].unique().tolist()
         ]

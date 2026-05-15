@@ -91,6 +91,58 @@ COUNTRY_ALIASES = {
     "congo rep": "Republic of the Congo",
 }
 
+# Keyword-based country ISO3 overrides for problematic country names.
+# Add entries here to force specific ISO3 codes based on keyword patterns.
+# Format: {
+#     "description": "Human-readable description",
+#     "keywords": ["keyword1", "keyword2"],  # List of keywords to match
+#     "match_type": "all" or "any",           # "all" = all keywords must match, "any" = at least one
+#     "iso3": "XXX"                            # ISO3 code to return
+# }
+COUNTRY_KEYWORD_OVERRIDES = [
+    {
+        "description": "Democratic Republic of Congo",
+        "keywords": ["democratic", "congo"],
+        "match_type": "all",
+        "iso3": "COD",
+    },
+    {
+        "description": "Democratic Republic of Congo (short form)",
+        "keywords": ["drc"],
+        "match_type": "any",
+        "iso3": "COD",
+    },
+    {
+        "description": "The Bahamas",
+        "keywords": ["bahamas"],
+        "match_type": "all",
+        "iso3": "BHS",
+    },
+]
+
+
+def _check_country_keyword_override(country_str):
+    """
+    Check if country string matches any keyword override pattern.
+    Returns ISO3 code if matched, otherwise None.
+    """
+    country_lower = country_str.lower()
+    
+    for override in COUNTRY_KEYWORD_OVERRIDES:
+        keywords = [kw.lower() for kw in override["keywords"]]
+        match_type = override["match_type"]
+        
+        if match_type == "all":
+            # All keywords must be present
+            if all(kw in country_lower for kw in keywords):
+                return override["iso3"]
+        elif match_type == "any":
+            # At least one keyword must be present
+            if any(kw in country_lower for kw in keywords):
+                return override["iso3"]
+    
+    return None
+
 
 def _normalize_country_key(country_str):
     """Normalize country strings for alias lookup (keeps ascii and spacing simple)."""
@@ -287,81 +339,78 @@ def country_to_iso(
         # --------------------
         # Lookup by name
         # --------------------
-        # Force some country with issues
-        if "democratic" in country_str.lower() and "congo" in country_str.lower():
-            match = pycountry.db.Data(alpha_3="COD")
+        # Check keyword-based overrides first
+        override_iso3 = _check_country_keyword_override(country_str)
+        if override_iso3:
+            match = pycountry.db.Data(alpha_3=override_iso3)
             iso_list.append(getattr(match, representation, None))
             continue
-        elif "drc" in country_str.lower():
-            match = pycountry.db.Data(alpha_3="COD")
-            iso_list.append(getattr(match, representation, None))
-            continue
-        else:
+        
+        try:
+            match = pycountry.countries.lookup(country_str)
+        except LookupError:
             try:
-                match = pycountry.countries.lookup(country_str)
+                match = pycountry.countries.lookup(country_key)
             except LookupError:
                 try:
-                    match = pycountry.countries.lookup(country_key)
+                    match = pycountry.historic_countries.lookup(country_str)
                 except LookupError:
-                    try:
-                        match = pycountry.historic_countries.lookup(country_str)
-                    except LookupError:
-                        # NON ISO REGIONS
-                        c_up = country_str.upper()
-                        c_num = (
-                            country_str.zfill(3)
-                            if country_str.isdigit()
-                            else country_str
-                        )
-                        region = next(
-                            (
-                                c
-                                for c in NONISO_REGIONS
-                                if c_up
-                                and (
-                                    c.get("name", "").upper() == c_up
-                                    or c.get("alpha_2", "").upper() == c_up
-                                    or c.get("alpha_3", "").upper() == c_up
-                                    or c.get("numeric", "") == c_num
-                                )
-                            ),
-                            None,
-                        )
-                        if region:
-                            match = pycountry.db.Data(**region)
-                        else:
+                    # NON ISO REGIONS
+                    c_up = country_str.upper()
+                    c_num = (
+                        country_str.zfill(3)
+                        if country_str.isdigit()
+                        else country_str
+                    )
+                    region = next(
+                        (
+                            c
+                            for c in NONISO_REGIONS
+                            if c_up
+                            and (
+                                c.get("name", "").upper() == c_up
+                                or c.get("alpha_2", "").upper() == c_up
+                                or c.get("alpha_3", "").upper() == c_up
+                                or c.get("numeric", "") == c_num
+                            )
+                        ),
+                        None,
+                    )
+                    if region:
+                        match = pycountry.db.Data(**region)
+                    else:
+                        # --------------------
+                        # country_converter (coco)
+                        # --------------------
+                        try:
+                            iso = coco.convert(
+                                names=country_str,
+                                to="ISO3",
+                                not_found=None,
+                                quiet=True,
+                            )
+                            if (
+                                iso
+                                and isinstance(iso, str)
+                                and iso.upper() not in {"NOT FOUND", "NONE"}
+                            ):
+                                match = pycountry.db.Data(alpha_3=iso)
+                            else:
+                                raise ValueError
+                        except Exception:
                             # --------------------
-                            # country_converter (coco)
+                            # Fuzzy fallback
                             # --------------------
-                            try:
-                                iso = coco.convert(
-                                    names=country_str,
-                                    to="ISO3",
-                                    not_found=None,
-                                    quiet=True,
+                            best, score = fuzzy_country_match(country_str)
+                            if best and score >= fuzzy_threshold_norm:
+                                match = best
+                            elif fillvalue is not None:
+                                match = pycountry.db.Data(
+                                    **{representation: fillvalue}
                                 )
-                                if (
-                                    iso
-                                    and isinstance(iso, str)
-                                    and iso.upper() not in {"NOT FOUND", "NONE"}
-                                ):
-                                    match = pycountry.db.Data(alpha_3=iso)
-                                else:
-                                    raise ValueError
-                            except Exception:
-                                # --------------------
-                                # Fuzzy fallback
-                                # --------------------
-                                best, score = fuzzy_country_match(country_str)
-                                if best and score >= fuzzy_threshold_norm:
-                                    match = best
-                                elif fillvalue is not None:
-                                    match = pycountry.db.Data(
-                                        **{representation: fillvalue}
-                                    )
-                                else:
-                                    iso_list.append(None)
-                                    continue
+                            else:
+                                iso_list.append(None)
+                                continue
 
         # --------------------
         # Extract ISO
