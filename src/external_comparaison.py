@@ -353,16 +353,16 @@ def clean_structure_emdat(df, impactSubtypes=None):
         subset = df[keep_cols + [impact_col]].copy()
         subset = subset.dropna(subset=[impact_col])
 
-        subset["EMDAT_ImpactSubtype"] = subtype
+        subset["EMDAT_impactSubtype"] = subtype
         subset["EMDAT_impactValue"] = subset[impact_col]
 
-        subset = subset[keep_cols + ["EMDAT_ImpactSubtype", "EMDAT_impactValue"]]
+        subset = subset[keep_cols + ["EMDAT_impactSubtype", "EMDAT_impactValue"]]
         rows.append(subset)
 
     if rows:
         return pd.concat(rows, ignore_index=True)
 
-    return pd.DataFrame(columns=keep_cols + ["EMDAT_ImpactSubtype", "EMDAT_impactValue"])
+    return pd.DataFrame(columns=keep_cols + ["EMDAT_impactSubtype", "EMDAT_impactValue"])
 
 def choose_unique_disno(df_llm_em_dat, column_minimize):
     # Count number of impacts per DisNo
