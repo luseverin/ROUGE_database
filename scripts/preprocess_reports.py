@@ -104,10 +104,11 @@ format_numbers = False
 std_units = False
 match_above = False  # whether to select natural hazard impact text from keywords at the top or from the start of the text
 format_report_date = True  # incompatible with json
+informat = "csv"  # csv json
 outformat = "csv"  # csv json
 
 ## Select data
-fname_in = "all_ifrc_reports_info_unnested_with_text_v181125"  #'filtered_report_types_nat_hazards_bugfix'
+fname_in = "df_with_clean_text_all"#"all_ifrc_reports_info_unnested_with_text_v181125"  #'filtered_report_types_nat_hazards_bugfix'
 
 fname_out = f'preproc_text_sel_gaps_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
@@ -137,14 +138,25 @@ LOGGER.info(
     ", ".join(headers_drop) if len(headers_drop) > 1 else headers_drop,
 )
 
-# Open and read the JSON file
-with open(DATA_IN_JSONS / (fname_in + ".json"), "r") as json_file:
-    reports_in_json = json.load(json_file)
+# Open and read the input file
+fname_in_path = Path(fname_in)
+if informat in {".csv", ".json"}:
+    input_path = DATA_IN_JSONS / fname_in_path
+else:
+    input_path = DATA_IN_JSONS / f"{fname_in}.{informat}"
+
+if input_path.suffix == ".json":
+    with open(input_path, "r") as json_file:
+        reports_in = json.load(json_file)
+elif input_path.suffix == ".csv":
+    reports_in = pd.read_csv(input_path).to_dict(orient="records")
+else:
+    raise ValueError("informat must be 'csv' or 'json'")
 
 not_eng = []
 filtered_reports = []
 filtered_reports_hazonly = []
-for report in reports_in_json:
+for report in reports_in:
     # Filter unwanted report
     filter_kw = r"|".join(["MDR", "DREF"] + filter_types)
     allowed_orig_type = re.search(
