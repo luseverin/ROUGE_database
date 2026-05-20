@@ -1846,7 +1846,7 @@ def geocode_df_to_polygon_by_unique_loc(
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
     if not res_savename :
-        geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.csv")
+        geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.gpkg")
     else :  
         geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.gpkg")
     atomic_gpkg_save(
