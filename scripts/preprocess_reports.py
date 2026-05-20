@@ -109,7 +109,7 @@ outformat = "csv"  # csv json
 
 ## Select data
 fname_in = "df_with_clean_text_all"#"all_ifrc_reports_info_unnested_with_text_v181125"  #'filtered_report_types_nat_hazards_bugfix'
-
+fname_metadata_in = "filtered_reports_all"  
 fname_out = f'preproc_text_sel_gaps_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
@@ -149,7 +149,11 @@ if input_path.suffix == ".json":
     with open(input_path, "r") as json_file:
         reports_in = json.load(json_file)
 elif input_path.suffix == ".csv":
-    reports_in = pd.read_csv(input_path).to_dict(orient="records")
+    text_in = pd.read_csv(input_path, index_col=0)
+    text_in = text_in.rename(columns={"clean_text": "text"})
+    metadata_in = pd.read_csv(DATA_IN_JSONS / (fname_metadata_in + ".csv"))
+    reports_in = pd.merge(text_in, metadata_in, on="uid", how="left").to_dict(orient="records")
+
 else:
     raise ValueError("informat must be 'csv' or 'json'")
 
@@ -157,6 +161,10 @@ not_eng = []
 filtered_reports = []
 filtered_reports_hazonly = []
 for report in reports_in:
+    # Remove reports with no origType
+    if pd.isna(report["origType"]):
+        continue
+
     # Filter unwanted report
     filter_kw = r"|".join(["MDR", "DREF"] + filter_types)
     allowed_orig_type = re.search(
