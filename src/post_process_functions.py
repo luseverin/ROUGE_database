@@ -744,7 +744,7 @@ def convert_monetary_units(x, currency_dict=CURRENCY_CONVERTER, DEF_CUR="EUR"):
     unit_raw = x["impactUnit"]
     report_date = pd.to_datetime(x["reportDate"])
     x["flag_currency_conversion"] = False
-    x["flag_failed_currency_conversion"] = False
+    x["flag_currency_conversion_error"] = False
 
     # Check for null unit_raw before regex operations
     if pd.isnull(unit_raw) or unit_raw is None or not isinstance(unit_raw, str):
@@ -766,7 +766,7 @@ def convert_monetary_units(x, currency_dict=CURRENCY_CONVERTER, DEF_CUR="EUR"):
             unit_raw,
             id_currencies,
         )
-        x["flag_failed_currency_conversion"] = True
+        x["flag_currency_conversion_error"] = True
         return x
     else:
         unit_parsed = id_currencies[0]
@@ -794,7 +794,7 @@ def convert_monetary_units(x, currency_dict=CURRENCY_CONVERTER, DEF_CUR="EUR"):
         x["impactUnit"] = units_converted[0]
 
     x["flag_currency_conversion"] = True
-    x["flag_failed_currency_conversion"] = flag_failed_conversion
+    x["flag_currency_conversion_error"] = flag_failed_conversion
     return x
 
 
