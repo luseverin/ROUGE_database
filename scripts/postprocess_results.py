@@ -218,6 +218,12 @@ else:
     if merge_subtypes:
         response_df_proc = response_df_proc.apply(merge_impact_subtypes, axis=1)
 
+    # Filter rows with only Epidemic/Conflict hazards
+    response_df_proc = response_df_proc.apply(remove_hazards_epidemics_conflict, axis=1)
+    n_removed_hazards = response_df_proc["flag_remove_hazards_epidemics_conflict"].sum()
+    LOGGER.info("Found %s rows flagged for removal by epidemic/conflict hazard check",n_removed_hazards)
+    response_df_proc = response_df_proc[~response_df_proc["flag_remove_hazards_epidemics_conflict"]]
+
     # Filter duplicates
     if dedup_cols is not None:
         # stringify dedup_cols to avoid issues with unhashable types in geometry column
