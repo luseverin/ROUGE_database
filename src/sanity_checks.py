@@ -243,6 +243,27 @@ def flag_remove_cat(
     """
     return x["impactSubtype"] in remove_cats
 
+def flag_remove_hazard(x):
+    """
+    Adds a column to the dataframe, "flag_remove_hazard", which is True if the hazard is in the list of hazards to remove, and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    hazards = x["hazards"]
+    x["flag_remove_hazard"] = isinstance(hazards, list) and hazards in (
+        ["Epidemic"],
+        ["Conflict"],
+        ["Epidemic", "Conflict"],
+    )
+    return x
 
 def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):
     """
