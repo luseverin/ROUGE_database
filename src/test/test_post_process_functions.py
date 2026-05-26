@@ -36,6 +36,7 @@ from src.post_process_functions import (
     reclass_subtype_from_unit,
     convert_null_unit,
     classify_damage_degree,
+    remove_hazards_epidemics_conflict,
 )
 
 # Use redefined helpers from data_format for list/format helpers
@@ -961,6 +962,26 @@ class TestPostProcessingPipeline(unittest.TestCase):
         # Verify units are processed correctly
         self.assertEqual(df.loc[0, "impactUnit"], "people")
         self.assertEqual(df.loc[1, "impactUnit"], "null")
+
+    def test_remove_hazards_epidemics_conflict(self):
+        """Test removal flag for epidemic/conflict-only hazard lists"""
+        df = pd.DataFrame(
+            {
+                "hazards": [
+                    ["Epidemic"],
+                    ["Conflict"],
+                    ["Epidemic", "Conflict"],
+                    ["Epidemic", "Flood"],
+                    ["Flood"],
+                ]
+            }
+        )
+        out = df.apply(remove_hazards_epidemics_conflict, axis=1)
+        self.assertTrue(out.loc[0, "flag_remove_hazards_epidemics_conflict"])
+        self.assertTrue(out.loc[1, "flag_remove_hazards_epidemics_conflict"])
+        self.assertTrue(out.loc[2, "flag_remove_hazards_epidemics_conflict"])
+        self.assertFalse(out.loc[3, "flag_remove_hazards_epidemics_conflict"])
+        self.assertFalse(out.loc[4, "flag_remove_hazards_epidemics_conflict"])
 
 
 class TestClassifyDamageDegree(unittest.TestCase):

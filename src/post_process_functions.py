@@ -985,3 +985,53 @@ def merge_annotations(x, annotation_cols):
             seen.add(a)
             unique_ann.append(a)
     return unique_ann
+
+def remove_hazards_epidemics_conflict(x):
+    """
+    Mark rows that should be removed because they only contain
+    epidemics/conflict hazards.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        Row of data to be processed, it should have a "hazards" column.
+
+    Returns
+    -------
+    pandas.Series
+        Row with a new boolean flag column.
+    """
+    x["flag_remove_hazards_epidemics_conflict"] = False
+    if "hazards" not in x.index:
+        return x
+
+    hazards = x["hazards"]
+    if hazards is None or (not isinstance(hazards, (list, tuple, set, np.ndarray)) and pd.isna(hazards)):
+        return x
+
+    if not isinstance(hazards, (list, tuple, set, np.ndarray)):
+        hazards = [hazards]
+
+    # normalized_hazards = [
+    #     str(haz)
+    #     for haz in hazards
+    #     if haz is not None and not pd.isna(haz)
+    # ]
+    if not hazards:
+        return x
+
+    if len(hazards) == 1:
+        x["flag_remove_hazards_epidemics_conflict"] = hazards[0] in {
+            "Epidemic",
+            "Conflict",
+        }
+        return x
+
+    if len(hazards) == 2:
+        x["flag_remove_hazards_epidemics_conflict"] = set(hazards) == {
+            "Epidemic",
+            "Conflict",
+        }
+        return x
+
+    return x
