@@ -36,7 +36,7 @@ from src.post_process_functions import (
     reclass_subtype_from_unit,
     convert_null_unit,
     classify_damage_degree,
-    remove_hazards_epidemics_conflict,
+    flag_remove_hazard,
 )
 
 # Use redefined helpers from data_format for list/format helpers
@@ -963,27 +963,6 @@ class TestPostProcessingPipeline(unittest.TestCase):
         self.assertEqual(df.loc[0, "impactUnit"], "people")
         self.assertEqual(df.loc[1, "impactUnit"], "null")
 
-    def test_remove_hazards_epidemics_conflict(self):
-        """Test removal flag for epidemic/conflict-only hazard lists"""
-        df = pd.DataFrame(
-            {
-                "hazards": [
-                    ["Epidemic"],
-                    ["Conflict"],
-                    ["Epidemic", "Conflict"],
-                    ["Epidemic", "Flood"],
-                    ["Flood"],
-                ]
-            }
-        )
-        out = df.apply(remove_hazards_epidemics_conflict, axis=1)
-        self.assertTrue(out.loc[0, "flag_remove_hazards_epidemics_conflict"])
-        self.assertTrue(out.loc[1, "flag_remove_hazards_epidemics_conflict"])
-        self.assertTrue(out.loc[2, "flag_remove_hazards_epidemics_conflict"])
-        self.assertFalse(out.loc[3, "flag_remove_hazards_epidemics_conflict"])
-        self.assertFalse(out.loc[4, "flag_remove_hazards_epidemics_conflict"])
-
-
 class TestClassifyDamageDegree(unittest.TestCase):
     """Test cases for classify_damage_degree function"""
 
@@ -1144,6 +1123,32 @@ class TestClassifyDamageDegree(unittest.TestCase):
             "fully destroyed",
         ]
         self.assertEqual(result_df["damageDegree"].tolist(), expected)
+
+
+class TestRemoveHazardFlag(unittest.TestCase):
+    """Test cases for flag_remove_hazard function"""
+
+    def test_dataframe_apply_sets_flag_column(self):
+        df = pd.DataFrame(
+            {
+                "hazards": [
+                    ["Epidemic"],
+                    ["Conflict"],
+                    ["Epidemic", "Conflict"],
+                    ["Epidemic", "Flood"],
+                    ["Flood"],
+                ]
+            }
+        )
+
+        result_df = df.apply(flag_remove_hazard, axis=1)
+
+        self.assertIn("flag_remove_hazard", result_df.columns)
+        self.assertTrue(result_df.loc[0, "flag_remove_hazard"])
+        self.assertTrue(result_df.loc[1, "flag_remove_hazard"])
+        self.assertTrue(result_df.loc[2, "flag_remove_hazard"])
+        self.assertFalse(result_df.loc[3, "flag_remove_hazard"])
+        self.assertFalse(result_df.loc[4, "flag_remove_hazard"])
 
     def test_case_insensitivity(self):
         """Test that classification is case-insensitive with Series input"""
