@@ -1775,7 +1775,7 @@ def geocode_df_to_polygon_by_unique_loc(
     gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
 
     # Collect unique locations and associated countries
-    start = time.time()
+    start = time.time() 
     if "country_robust" not in df_geo.columns:
         if "country_kw" in df_geo.columns:
             df_geo = identify_robust_country(
@@ -1828,13 +1828,20 @@ def geocode_df_to_polygon_by_unique_loc(
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
-    if not res_savename : 
-        nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{dt.date.today().strftime('%d%m%y')}.csv")
-    else : 
-        nominatim_save_path = DATA_OUT_PROC / (f"nominatim_output_{res_savename}.csv")
-    unique_loc.to_csv(nominatim_save_path, index=False)
-    # atomic_gpkg_save(unique_loc, nominatim_save_path)
-    LOGGER.info("Nominatim output saved in %s", nominatim_save_path)
+    if not res_savename:
+        unique_loc_save_stem = f"unique_loc_{dt.date.today().strftime('%d%m%y')}"
+    else:
+        unique_loc_save_stem = f"unique_loc_{res_savename}"
+
+    unique_loc_parquet_path = DATA_OUT_PROC / f"{unique_loc_save_stem}.parquet"
+    unique_loc_pkl_path = DATA_OUT_PROC / f"{unique_loc_save_stem}.pkl"
+    unique_loc.to_parquet(unique_loc_parquet_path, index=False)
+    unique_loc.to_pickle(unique_loc_pkl_path)
+    LOGGER.info(
+        "Unique locations saved in %s and %s",
+        unique_loc_parquet_path,
+        unique_loc_pkl_path,
+    )
 
     # Convert nominatim output to polygons
     start = time.time()
@@ -1845,10 +1852,14 @@ def geocode_df_to_polygon_by_unique_loc(
     end = time.time()
     time_open = (end - start) / 60
     LOGGER.info("Time to geocode all locations %.2fmins", time_open)
-    if not res_savename :
-        geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.gpkg")
-    else :  
-        geocode_unique_save_path = DATA_OUT_PROC / (f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.gpkg")
+    if not res_savename:
+        geocode_unique_save_path = DATA_OUT_PROC / (
+            f"geocode_unique_{dt.date.today().strftime('%d%m%y')}.gpkg"
+        )
+    else:
+        geocode_unique_save_path = DATA_OUT_PROC / (
+            f"geocode_unique_{res_savename}.gpkg"
+        )
     atomic_gpkg_save(
         df_geo_individual_locs, geocode_unique_save_path, layer_name="multipolygons"
     )
