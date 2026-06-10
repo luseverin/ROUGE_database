@@ -1,6 +1,13 @@
 ## Script to filter final data
 # 1 drop duplicates
-# 2 select columns
+# 2 Filter unwanted flags
+# 3 gather flag columns
+# 4 gather annotation columns
+# 5 merge infra and service access
+# 6 Filter unwanted columns
+# 7 Rename cols
+# 8 Split per continent
+# 9 Save
 
 import pandas as pd
 import geopandas as gpd
@@ -14,7 +21,7 @@ from src.geocoding_utils import split_continents
 from src.logger_setup import set_logger
 
 ## Parameters
-dedup_cols = [
+dedup_cols = [  # columns to check for duplicates
     "appealCode",
     "impactSubtype",
     "impactValue",
@@ -29,6 +36,28 @@ dedup_cols = [
     "endDay",
     "hazards",
 ]
+unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these flags are False)
+    "flag_remove_cat",
+    "flag_value_no_unit",
+    "flag_unit_nonstd",
+    "flag_response_unit",
+    "flag_unknown_subtype",
+    "flag_all_hazards_unknown",
+    # "flag_hazards_unknown",
+]
+flag_groups = {  # groups of flags to gather into a single flag
+    "flag_unit_std": [
+        "flag_unit_harmonization",
+        "flag_non-SI_unit_standardization",
+    ],
+    "flag_unit_error": [
+        "flag_remove_number_unit_error",
+        "flag_unit_conversion_error",
+        "flag_non-SI_unit_standardization_error",
+        "flag_SI_unit_standardization_error",
+        "flag_failed_currency_conversion",
+    ],
+}
 
 merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
 remove_unknown_hazards = (
@@ -50,10 +79,6 @@ response_df = gpd.read_file(DATA_OUT_PROC / (res_savename + ".gpkg"))
 
 # Sort list columns
 response_df = format_output(response_df)
-
-# for col in LIST_COLS :
-#    if col in response_df.columns :
-#        response_df[col] = response_df[col].apply(sorted)
 
 response_df = delistify_cols(response_df)
 
@@ -87,16 +112,6 @@ if remove_unknown_hazards:
     )
 
 ##Filter unwanted flags
-unwanted_flags = [
-    "flag_remove_cat",
-    "flag_value_no_unit",
-    "flag_unit_nonstd",
-    "flag_response_unit",
-    "flag_unknown_subtype",
-    "flag_all_hazards_unknown",
-    # "flag_hazards_unknown",
-]
-
 for flag in unwanted_flags:
     if flag not in response_df.columns:
         LOGGER.warning(f"Flag {flag} not found in data")
@@ -107,31 +122,13 @@ for flag in unwanted_flags:
     LOGGER.info(f"Filtered {init_len - len(response_df)} entries based on {flag} flag")
 
 ## gather flag columns
-flag_unit_std = ["flag_unit_harmonization", "flag_non-SI_unit_standardization"]
-flag_error_columns = [
-    "flag_remove_number_unit_error",
-    "flag_unit_conversion_error",
-    "flag_non-SI_unit_standardization_error",
-    "flag_SI_unit_standardization_error",
-    "flag_failed_currency_conversion",
-]
-
-response_df = gather_flags(
-    response_df, flag_unit_std, flag_name="flag_non-SI_unit_standardization"
-)
-response_df = gather_flags(
-    response_df, flag_error_columns, flag_name="flag_unit_processing_error"
-)
+if flag_groups is not None:
+    for new_flag, group_flags in flag_groups.items():
+        response_df = gather_flags(response_df, group_flags, flag_name=new_flag)
 
 ## gather annotation columns
-annotation_columns = [
-    "valueAnnotation",
-    "locationAnnotation",
-    "dateAnnotation",
-    "hazardsAnnotation",
-]
 response_df["sourceExcerpts"] = response_df.apply(
-    merge_annotations, args=(annotation_columns,), axis=1
+    merge_annotations, args=(ANNOTATION_COLS,), axis=1
 )
 
 ## merge infra and service access
@@ -141,58 +138,11 @@ if merge_subtypes:
     )
 
 ## Filter unwanted columns
-columns_data_final = [
-    "appealCode",
-    "reportDate",
-    "reportLink",
-    "disasterType",
-    "impactSubtype",
-    "impactValue",
-    "impactValueMin",
-    "impactValueMax",
-    "impactValuePrecision",
-    "impactUnit",
-    "startYear",
-    "startMonth",
-    "startDay",
-    "endYear",
-    "endMonth",
-    "endDay",
-    "hazards",
-    "location",
-    "geometry",
-    "locationPolygon",
-    "locationLowestAdmin",
-    "iso3_code",
-    "sourceExcerpts",
-]
-
-columns_flags_final = [
-    "valid_errors_impactValue",
-    "valid_errors_loc",
-    "valid_errors_dates",
-    "valid_errors_haz",
-    "flag_value_not_in_text",
-    "flag_impactSubtype_reclass",
-    "flag_hazards_reclass",
-    "flag_remove_number_unit",
-    "flag_SI_unit_standardization",
-    "flag_non-SI_unit_standardization",
-    "flag_unit_processing_error",
-    "flag_unit_nonstd",
-    "flag_reclass_subtype_from_unit",
-    "flag_pop_cntry",
-    "flag_value_no_unit",
-    "flag_partial_unit",
-    "flag_geocoding_country",
-    "flag_geocoding_osm",
-]
-
 response_df_filtered = response_df.copy()
 response_df_filtered = response_df_filtered[
     [
         col
-        for col in columns_data_final + columns_flags_final
+        for col in FINAL_DATA_COLS + FINAL_FLAG_COLS
         if col in response_df_filtered.columns
     ]
 ]
