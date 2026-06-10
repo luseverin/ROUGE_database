@@ -18,7 +18,7 @@ from copy import deepcopy
 
 # from itertools import chain
 # from langchain_groq import ChatGroq
-from src.data_format import listify_strings
+from src.data_format import listify_strings, BASE_EXTRACT_COLS
 from src.hazard_def import *
 from src.impact_def import *
 from src.data import *
@@ -544,9 +544,7 @@ def impact_extraction_chain(
     return answer_impact_values, valid_errors_impVal
 
 
-def clean_value_unit(
-    answer_impact_values, valid_errors_impVal, nullify_quali_unit=True
-):
+def clean_value_unit(answer_impact_values, valid_errors_impVal):
     """Clean and validate the impact values and units extracted by the model, ensuring they are in the correct format and contain the required fields.
     This function performs the following steps:
     1. Normalizes the list structure of the impact values, unwrapping singleton lists
@@ -558,36 +556,19 @@ def clean_value_unit(
     """
     answer_impact_values_cleaned = []
     for i, impact in enumerate(answer_impact_values):
-        # normalize list structure
-        if isinstance(impact, list):
-            if len(impact) == 1:
-                impact = impact[0]
-            else:
-                LOGGER.info("discarding impact (list with >1 items): %s", impact)
-                continue
-
-        # validate that impact is a dict with the required key
-        if not isinstance(impact, dict):
-            LOGGER.info("discarding impact (not a dict): %s", impact)
-            continue
-
-        if "impactValue" not in impact:
-            LOGGER.info("discarding impact (missing 'impactValue'): %s", impact)
+        # ensure output is of correct format
+        impact, failed_validation = partial_validation(impact, ImpactValue)
+        if failed_validation:
+            LOGGER.info("Impact value failed validation, skipping impact: %s", impact)
             continue
 
         # extract impact value
         try:
             impact_value = extract_impact_value(pd.DataFrame([impact]))
-            # impact["impactValue"] = impact_value
-            # if nullify_quali_unit and impact_value is None:
-            #    impact["impactUnit"] = None
+            impact["impactValue"] = impact_value
         except TypeError as e:
             print("TypeError in extract_impact_value for impact:", impact)
             LOGGER.info("Error occurred while extracting impact value: %s", e)
-            continue
-
-        if not impact.get("valueAnnotation", None):
-            LOGGER.info("No impact sentences found for impact: %s", impact)
             continue
 
         # track errors in impact extraction
@@ -646,6 +627,29 @@ def impact_extraction_chain_quanti(
         )
 
     return impact_types, answer_impact_values, valid_errors_impVal
+
+
+def partial_validation(answer_dict, output_model):
+    """
+    Perform partial validation of the model output, ensuring that
+    all required fields are present and filling in missing required fields with None.
+    """
+    failed_validation = False
+    if isinstance(answer_dict, list) and len(answer_dict) == 1:
+        answer_dict = answer_dict[0]
+    if isinstance(answer_dict, dict):
+        for key in output_model.model_fields.keys():
+            if key not in answer_dict.keys():
+                answer_dict[key] = None
+        answer_dict = {
+            key: value
+            for key, value in answer_dict.items()
+            if key in output_model.model_fields.keys()
+        }
+    else:
+        answer_dict = {key: None for key in output_model.model_fields.keys()}
+        failed_validation = True
+    return answer_dict, failed_validation
 
 
 def duplicate_impact_by_date_pairs(impact_dict, date_pairs, valid_error_dates):
@@ -721,10 +725,7 @@ def extract_localization_hazards_for_impact(
     _, answer_hazards, valid_errors_haz = get_model_response_retry(
         prompt_impact_hazards, ImpactHazards, **groq_kwargs
     )
-    if isinstance(answer_hazards, list) and len(answer_hazards) == 1:
-        answer_hazards = answer_hazards[0]
-    if not isinstance(answer_hazards, dict):
-        answer_hazards = {"hazards": None, "hazardsAnnotation": None}
+    answer_hazards, _ = partial_validation(answer_hazards, ImpactHazards)
     answer_hazards["valid_errors_haz"] = valid_errors_haz
 
     return answer_hazards
@@ -747,10 +748,7 @@ def extract_locations_for_impact(text, impact_desc, **groq_kwargs):
     _, answer_loc, valid_errors_loc = get_model_response_retry(
         prompt_impact_loc, ImpactLocation, **groq_kwargs
     )
-    if isinstance(answer_loc, list) and len(answer_loc) == 1:
-        answer_loc = answer_loc[0]
-    if not isinstance(answer_loc, dict):
-        answer_loc = {"country": None, "location": None, "locationAnnotation": None}
+    answer_loc, _ = partial_validation(answer_loc, ImpactLocation)
     answer_loc["valid_errors_loc"] = valid_errors_loc
 
     return answer_loc
@@ -796,18 +794,7 @@ def extract_dates_for_impact(
             LOGGER.info(
                 "Failed to extract multiple date pairs, falling back to single date"
             )
-            if isinstance(answer_dates, list) and len(answer_dates) == 1:
-                answer_dates = answer_dates[0]
-            if not isinstance(answer_dates, dict):
-                answer_dates = {
-                    "startYear": None,
-                    "startMonth": None,
-                    "startDay": None,
-                    "endYear": None,
-                    "endMonth": None,
-                    "endDay": None,
-                    "dateAnnotation": None,
-                }
+            answer_dates, _ = partial_validation(answer_dates, ImpactDates)
             answer_dates["valid_errors_dates"] = valid_errors_dates
             return answer_dates, None
     else:
@@ -818,18 +805,7 @@ def extract_dates_for_impact(
         _, answer_dates, valid_errors_dates = get_model_response_retry(
             prompt_impact_dates, ImpactDates, **groq_kwargs
         )
-        if isinstance(answer_dates, list) and len(answer_dates) == 1:
-            answer_dates = answer_dates[0]
-        if not isinstance(answer_dates, dict):
-            answer_dates = {
-                "startYear": None,
-                "startMonth": None,
-                "startDay": None,
-                "endYear": None,
-                "endMonth": None,
-                "endDay": None,
-                "dateAnnotation": None,
-            }
+        answer_dates, _ = partial_validation(answer_dates, ImpactDates)
         answer_dates["valid_errors_dates"] = valid_errors_dates
         return answer_dates, None
 
@@ -968,18 +944,7 @@ def extraction_chain_multiprompt(
                 LOGGER.info(
                     "Failed to extract multiple date pairs for impact: %s", impact
                 )
-                if isinstance(answer_dates, list) and len(answer_dates) == 1:
-                    answer_dates = answer_dates[0]
-                if not isinstance(answer_dates, dict):
-                    answer_dates = {
-                        "startYear": None,
-                        "startMonth": None,
-                        "startDay": None,
-                        "endYear": None,
-                        "endMonth": None,
-                        "endDay": None,
-                        "dateAnnotation": None,
-                    }
+                asnwer_dates, _ = partial_validation(answer_dates, ImpactDates)
                 answer_dates["valid_errors_dates"] = valid_errors_dates
                 impact.update(answer_dates)
                 impact_list = [impact]  # process as single impact without duplication
@@ -993,18 +958,7 @@ def extraction_chain_multiprompt(
             _, answer_dates, valid_errors_dates = get_model_response_retry(
                 prompt_impact_dates, ImpactDates, **groq_kwargs
             )
-            if isinstance(answer_dates, list) and len(answer_dates) == 1:
-                answer_dates = answer_dates[0]
-            if not isinstance(answer_dates, dict):
-                answer_dates = {
-                    "startYear": None,
-                    "startMonth": None,
-                    "startDay": None,
-                    "endYear": None,
-                    "endMonth": None,
-                    "endDay": None,
-                    "dateAnnotation": None,
-                }
+            answer_dates, _ = partial_validation(answer_dates, ImpactDates)
             answer_dates["valid_errors_dates"] = valid_errors_dates
             impact.update(answer_dates)
             impact_list = [impact]  # process as single impact without duplication
@@ -1260,27 +1214,6 @@ def get_event_impacts(
             "nathaz_text": row["nathaz_text"],
         }
 
-        columns = [
-            "appealCode",
-            "country_kw",
-            "reportDate",
-            "disasterType",
-            "impactValue",
-            "impactValuePrecision",
-            "impactValueMin",
-            "impactValueMax",
-            "impactUnit",
-            "country",
-            "location",
-            "startYear",
-            "startMonth",
-            "startDay",
-            "endYear",
-            "endMonth",
-            "endDay",
-            "hazards",
-            "impactsAnnotation",
-        ]
         data = reference_info
         # query impact, value, loc, date haz altogether
 
@@ -1304,7 +1237,7 @@ def get_event_impacts(
                 el for el in answer_impacts if isinstance(el, dict)
             ]  # filter out anything that is not dict or list
             LOGGER.info(
-                "Extracted %s impacts identified in %s, %s",
+                "Extracted %s impacts from %s, %s",
                 len(answer_impacts),
                 reference_info["appealCode"],
                 reference_info["reportDate"],
@@ -1328,7 +1261,7 @@ def get_event_impacts(
                 reference_info["appealCode"],
                 reference_info["reportDate"],
             )
-            new_dfs = pd.DataFrame(columns=columns, data=[reference_info])
+            new_dfs = pd.DataFrame(columns=BASE_EXTRACT_COLS, data=[reference_info])
 
         response_df_list.append(new_dfs)
         all_response_df = pd.concat(response_df_list, ignore_index=True, axis=0)
@@ -1340,7 +1273,7 @@ def get_event_impacts(
     dtime = end_time - start_time
     n_extracted_fields = len(all_response_df) if answer_impacts else 0
     LOGGER.info(
-        "%s; time taken: %.2f seconds, , %i fields extracted in %.2f seconds per report",
+        "%s; time taken: %.2f seconds, %i fields extracted in %.2f seconds per report",
         MODEL_NAME,
         dtime,
         n_extracted_fields,

@@ -29,11 +29,11 @@ class ImpactSubtypes(BaseModel):
 
 class ImpactValue(BaseModel):
     impactSubtype: str
-    impactValue: Optional[float] = None
-    impactValueMin: Optional[float] = None
-    impactValueMax: Optional[float] = None
-    impactValuePrecision: Optional[str] = None
-    impactUnit: Optional[str] = None
+    impactValue: Optional[float]
+    impactValueMin: Optional[float]
+    impactValueMax: Optional[float]
+    impactValuePrecision: Optional[str]
+    impactUnit: Optional[str]
     valueAnnotation: List[str]
 
     _impactSubtypes_list: List[str]
@@ -66,9 +66,9 @@ class ImpactValue(BaseModel):
 class ImpactValueQuanti(BaseModel):
     impactSubtype: str
     impactValue: float
-    impactValueMin: Optional[float] = None
-    impactValueMax: Optional[float] = None
-    impactValuePrecision: Optional[str] = None
+    impactValueMin: Optional[float]
+    impactValueMax: Optional[float]
+    impactValuePrecision: Optional[str]
     impactUnit: str
     valueAnnotation: List[str]
 
@@ -101,29 +101,29 @@ class ImpactValueQuanti(BaseModel):
 
 class ImpactLocation(BaseModel):
     country: List[str]
-    location: Optional[List[str]] = None
+    location: Optional[List[str]]
     locationAnnotation: List[str]
 
 
 class ImpactDates(BaseModel):
-    startYear: Optional[int] = None
-    startMonth: Optional[int] = None
-    startDay: Optional[int] = None
-    endYear: Optional[int] = None
-    endMonth: Optional[int] = None
-    endDay: Optional[int] = None
+    startYear: Optional[int]
+    startMonth: Optional[int]
+    startDay: Optional[int]
+    endYear: Optional[int]
+    endMonth: Optional[int]
+    endDay: Optional[int]
     dateAnnotation: List[str]
 
 
 class DatePair(BaseModel):
     """Represents a single start-end date pair with its annotation"""
 
-    startYear: Optional[int] = None
-    startMonth: Optional[int] = None
-    startDay: Optional[int] = None
-    endYear: Optional[int] = None
-    endMonth: Optional[int] = None
-    endDay: Optional[int] = None
+    startYear: Optional[int]
+    startMonth: Optional[int]
+    startDay: Optional[int]
+    endYear: Optional[int]
+    endMonth: Optional[int]
+    endDay: Optional[int]
     dateAnnotation: List[str]  # Each pair has its own annotation
 
 
@@ -140,14 +140,14 @@ class ImpactDatesMultiple(BaseModel):
 
 
 class ImpactDatesMultipleList(RootModel):
-    root: Optional[ImpactDatesMultiple] = None
+    root: Optional[ImpactDatesMultiple]
 
 
 class ImpactHazards(BaseModel):
-    hazards: Optional[List[str]] = None
+    hazards: Optional[List[str]]
     hazardsAnnotation: List[str]
 
-    _hazardTypes_list: Optional[List[str]] = None
+    _hazardTypes_list: Optional[List[str]]
 
     # marker to do hazard validation or not
     _validate_hazards = True
@@ -238,7 +238,7 @@ class ImpactDetailTypeSubType(ImpactDetail):
     impactType: str
 
     # Dynamic constraints
-    _impactTypes_list: Optional[List[str]] = None
+    _impactTypes_list: Optional[List[str]]
 
     @classmethod
     def set_allowed_classes(
@@ -261,10 +261,10 @@ class ImpactDetailTypeSubType(ImpactDetail):
 
 
 class ImpactDetailConstUnit(ImpactDetail):
-    impactUnitType: Optional[str] = None
+    impactUnitType: Optional[str]
 
     # Dynamic constraints
-    _impactUnits_list: Optional[List[str]] = None
+    _impactUnits_list: Optional[List[str]]
 
     @classmethod
     def set_allowed_classes(
@@ -289,8 +289,8 @@ class ImpactDetailConstUnit(ImpactDetail):
 
 
 class ImpactDetailRange(ImpactDetail):
-    impactValueMin: Optional[float] = None
-    impactValueMax: Optional[float] = None
+    impactValueMin: Optional[float]
+    impactValueMax: Optional[float]
 
 
 class ImpactList(RootModel):

@@ -2,6 +2,28 @@ import pandas as pd
 import numpy as np
 import json_repair
 
+BASE_EXTRACT_COLS = [  # columns to be extracted in the initial extraction step
+    "appealCode",
+    "country_kw",
+    "reportDate",
+    "disasterType",
+    "impactValue",
+    "impactValuePrecision",
+    "impactValueMin",
+    "impactValueMax",
+    "impactUnit",
+    "country",
+    "location",
+    "startYear",
+    "startMonth",
+    "startDay",
+    "endYear",
+    "endMonth",
+    "endDay",
+    "hazards",
+    "impactsAnnotation",
+]
+
 NUM_COLS = [
     "impactValue",
     "impactValueMin",
