@@ -6,11 +6,7 @@ from src.labelling_helpers import take_latest_report, take_longest_report
 from src.logger_setup import set_logger
 
 ## Open and read the JSON file
-file_path = (
-    DATA_IN_JSONS
-    / "preproc_text_sel_gaps_all_ifrc_reports_info_unnested_with_text_v181125_v050326.csv"
-    # preproc_text_sel_nogaps_all_ifrc_reports_info_unnested_with_text_v181125_v050326
-)  # "preproc_filtered_report_types_nat_hazards_bugfix_v250925.csv"
+file_path = DATA_IN_JSONS / "preproc_text_sel_gaps_df_with_clean_text_all_v190526.csv"
 ifrc_reports_df = pd.read_csv(file_path)
 
 # filter reports by report type and date
@@ -27,23 +23,23 @@ labelled_reports_raw = ifrc_reports_df.merge(
 
 # eventually select by appeal code
 appeals_test = [
-    "MDRYE011",
-    "MDRZM022",
-    "MDRSD034",
-    "MDRUG050",
-    "MDRRW022",
+    "MDRBO013",
+    "MDRSY009",
 ]  # ["MDRYE011","MDRZM022", "MDRSD034", "MDRUG050", "MDRRW022"]
-test_reports = labelled_reports_raw[
-    labelled_reports_raw.appealCode.isin(appeals_test)
-]  # ifrc_reports_df_filtered[ifrc_reports_df_filtered.appealCode.isin(appeals_test)]
+# test_reports = labelled_reports_raw[
+#    labelled_reports_raw.appealCode.isin(appeals_test)
+# ]
+test_reports = ifrc_reports_df_filtered[
+    ifrc_reports_df_filtered.appealCode.isin(appeals_test)
+]
 
 # select reports to process
-lreport = 350 + 132
-rreport = len(ifrc_reports_df_filtered)
-reports_in = ifrc_reports_df_filtered.iloc[
-    lreport : rreport + 1
-]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
-# labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+# lreport = 350 + 132
+# rreport = len(ifrc_reports_df_filtered)
+# reports_in = ifrc_reports_df_filtered.iloc[
+#    lreport : rreport + 1
+# ]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+reports_in = test_reports
 nreports = len(reports_in)
 
 ## Parameters
@@ -51,7 +47,7 @@ chunk_size = 1000  # chunk size of input. None to disable
 max_rounds = None  # max number of continuations for impact extraction. None to disable
 multi_dates = False  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
 sim_name = (
-    f"{lreport}-{rreport}_latest_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
+    f"test_stricter_valid_latest_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
 )
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
@@ -62,7 +58,9 @@ impsubtype_dict = IMPACT_DESCRIPTIONS
 impsubtype = IMPACT_SUBTYPES
 # Validation
 dedup_impacts = "quali"  # whether to deduplicate impacts or not. If "quali", only deduplicate qualitative impacts, if "all", deduplicate all impacts, if None, do not deduplicate
-dedup_fields = ["impactSubtype"]
+dedup_fields = [
+    "impactSubtype"
+]  # fields to use for deduplication. Only used if dedup_impacts is not None.
 validate_impSubtypes = False
 validate_hazards = True  # deactivate hazards validation as cause issues
 
@@ -100,6 +98,10 @@ try:
         multi_dates=multi_dates,
         **groq_kwargs,
     )
-    LOGGER.info("Extraction completed successfully.")
+    LOGGER.info(
+        "Extraction completed successfully. File saved as %s in %s",
+        res_savename,
+        DATA_OUT_LLMS,
+    )
 except Exception as e:
     LOGGER.exception(f"Error while processing {res_savename}: {e}")
