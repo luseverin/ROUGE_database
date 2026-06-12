@@ -195,31 +195,23 @@ def flag_percent(x):
     )  # (x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
 
 
-def flag_hazard(extracted_data, hazard_list):
+def flag_hazard_all_unknown(x):
     """
-    Adds a column to the dataframe, "haz_check", which is True if any
-    of the hazards in the report are not in the original hazard_list, and False
-    otherwise.
+    Adds a column to the dataframe, "flag_hazard_all_unknown", which is True if all
+    of the hazards in the report are "Unknown", and False otherwise.
 
     Parameters
     ----------
-    extracted_data : pandas.DataFrame
-        The dataframe containing the extracted data
-    hazard_list : list
-        The list of hazards to check against
+    x : pandas.Series
+        The series containing the extracted data
 
     Returns
     -------
-    pandas.DataFrame
-        The dataframe with the added column
+    pandas.Series
+        The series with the added column
     """
 
-    def check_haz(x):
-        return any(haz not in hazard_list for haz in x["hazards"])
-
-    extracted_data["unknown_haz"] = np.nan
-    extracted_data["unknown_haz"] = extracted_data.apply(check_haz, axis=1)
-    return extracted_data
+    return all(haz == "Unknown" for haz in x["hazards"])
 
 
 def flag_remove_cat(x, remove_cats):
@@ -241,7 +233,7 @@ def flag_remove_cat(x, remove_cats):
     return x["impactSubtype"] in remove_cats
 
 
-def flag_remove_hazard(x):
+def flag_remove_hazard(x, remove_hazards, strict=False):
     """
     Adds a column to the dataframe, "flag_remove_hazard", which is True if the hazard is in the list of hazards to remove, and False otherwise.
 
@@ -249,19 +241,20 @@ def flag_remove_hazard(x):
     ----------
     x : pandas.Series
         The dataframe containing the extracted data
+    remove_hazards : list
+        The list of hazards to remove
+    strict : bool, default False
+        Whether to use strict matching (any hazard in the list) or not (all hazards in the list)
 
     Returns
     -------
     pandas.Series
         The series with the added column
     """
-    hazards = x["hazards"]
-    x["flag_remove_hazard"] = isinstance(hazards, list) and hazards in (
-        ["Epidemic"],
-        ["Conflict"],
-        ["Epidemic", "Conflict"],
-    )
-    return x
+    if strict:
+        return any(haz in remove_hazards for haz in x["hazards"])
+    else:
+        return all(haz in remove_hazards for haz in x["hazards"])
 
 
 def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):

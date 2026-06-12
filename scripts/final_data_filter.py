@@ -43,7 +43,7 @@ unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these f
     "flag_response_unit",
     "flag_unknown_subtype",
     "flag_all_hazards_unknown",
-    # "flag_hazards_unknown",
+    # "flag_remove_hazard",
 ]
 flag_groups = {  # groups of flags to gather into a single flag
     "flag_unit_std": [

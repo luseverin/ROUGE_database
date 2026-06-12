@@ -73,6 +73,8 @@ remove_cats = [
     "Other Human Impacts",
 ]  # list of impactSubtypes to remove
 
+remove_hazards_list = ["Epidemic", "Conflict"]  # list of hazards to remove
+
 dedup_cols = [
     "appealCode",
     "impactSubtype",
@@ -218,14 +220,6 @@ else:
     if merge_subtypes:
         response_df_proc = response_df_proc.apply(merge_impact_subtypes, axis=1)
 
-    # Filter rows with exactly Epidemic/Conflict hazard lists
-    response_df_proc = response_df_proc.apply(
-        flag_remove_hazard, axis=1
-    )
-    n_removed_hazards = response_df_proc["flag_remove_hazard"].sum()
-    LOGGER.info("Found %s rows flagged for removal by epidemic/conflict hazard check",n_removed_hazards)
-    response_df_proc = response_df_proc[~response_df_proc["flag_remove_hazard"]]
-
     # Filter duplicates
     if dedup_cols is not None:
         # stringify dedup_cols to avoid issues with unhashable types in geometry column
@@ -271,7 +265,16 @@ else:
     response_df_proc["flag_response_unit"] = response_df_proc.apply(
         flag_response_unit, axis=1
     )
-
+    # Flag rows with unwanted hazards
+    response_df_proc["flag_remove_hazard"] = response_df_proc.apply(
+        flag_remove_hazard,
+        axis=1,
+        args=(remove_hazards_list,),
+    )
+    # Flag rows with all hazards unknown
+    response_df_proc["flag_all_hazards_unknown"] = response_df_proc.apply(
+        flag_hazard_all_unknown, axis=1
+    )
     if not geocode and not geocode_load:
         response_df_proc["flag_pop_cntry"] = response_df_proc.apply(
             pop_cntry_check, country_pop=country_pop, axis=1
