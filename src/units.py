@@ -102,8 +102,7 @@ UNIT_KW_RECLASS = {
     "cases": r"\b(cases?|cases of|cases of illness|infected)\b",
     "roads": r"\b(roads)\b",
     "transportation structures": r"\b(rail(way|road)?s?|train tracks?|airports?|vehicles?|seaports?)\b",
-    "water points": r"\b((water (points?|sources?|supply|supplies|systems))|wells?|taps?|reservoirs?)\b",
-    "WASH structures": r"\b((sanitation|hygiene|wastewater) (structures|systems|treatment plants?)|water treatment plants?|latrines?|toilets?|aqueducts?)\b",
+    "WASH structures": r"\b((water (points?|sources?|supply|supplies|systems))|wells?|taps?|reservoirs?|(sanitation|hygiene|wastewater) (structures|systems|treatment plants?)|water treatment plants?|latrines?|toilets?|aqueducts?|rainwater (collection|harvesting) systems?)\b",
     "healthcare structures": r"\b((health(care)?|medical) (centers?|centres?|units?|structures?)|hospitals?|clinics?|maternit(y|ies)|posts?)\b",
     "IT and communication structures": r"\b((tele)?communication(s)? (structures?|center?|lines?)|radios?|tv|cell towers?|antennas?)\b",
     "power and energy production structures": r"\b((power|energy|wind|solar|hydro|electric) (structures?|generators?|dams?|poles?|lines?|supply|supplies))\b",
@@ -250,6 +249,10 @@ CURRENCY_CONVERTER = {
     "BTC": r"\b(bitcoin|btc|₿)\b",
     "ETH": r"\b(ethereum|eth|ether)\b",
 }
+
+RESPONSE_UNITS = (
+    r"\b(volunteers?|staff|beneficiaries?|branches?|national societies?|trainers?)\b"
+)
 
 # dictionary of all possible units for unit identification
 ALL_POSSIBLE_UNITS = {}

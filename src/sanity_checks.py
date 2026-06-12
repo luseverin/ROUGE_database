@@ -9,7 +9,7 @@ from src.text_processing_functions import (
     replace_numbers,
     format_number,
 )
-from src.units import STANDARD_UNITS
+from src.units import RESPONSE_UNITS, STANDARD_UNITS
 
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
@@ -139,7 +139,7 @@ def flag_partial_unit(x):
     return x["impactUnit"] == x["unit_type"]
 
 
-def flag_response_unit(x):
+def flag_response_unit(x, response_units=RESPONSE_UNITS):
     """
     Adds a column to the dataframe, "flag_response_unit", which is True if the impactUnit is equal to "responses", and False otherwise.
 
@@ -147,15 +147,14 @@ def flag_response_unit(x):
     ----------
     x : pandas.Series
         The dataframe containing the extracted data
+    response_units : str, default RESPONSE_UNITS
+        A regex pattern containing the response units to check for
 
     Returns
     -------
     pandas.Series
         The series with the added column
     """
-    response_units = (
-        r"\b(volunteers?|staff|beneficiaries?|branches?|national socities?)\b"
-    )
     return re.search(response_units, x["impactUnit"]) is not None
 
 

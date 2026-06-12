@@ -242,7 +242,7 @@ Impacts.register(
     main_type="Service access",
     description="People losing safe, clean, and consistent supply of water for drinking, sanitation, and other essential uses.",
     keyword=r"\bWater Quality and Availability\b",
-    expected_unit="water points",
+    expected_unit="people",
     default_unit="unknown",
 )
 
