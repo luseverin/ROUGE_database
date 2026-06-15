@@ -167,8 +167,8 @@ class TestGeocodingRowHandling(unittest.TestCase):
                 "iso3_code": ["FSM", "PLW"],
                 "geometry": [np.nan, np.nan],
                 "finest_level": [0, 0],
-                "flag_geocoding_country": [0, 0],
-                "flag_geocoding_osm": [0, 0],
+                "flag_location_to_country": [False, False],
+                "flag_osm_polygon": [False, False],
                 "locationOsm": ["western FSM", "western FSM"],
                 "locationPolygon": ["FSM", "PLW"],
             }
