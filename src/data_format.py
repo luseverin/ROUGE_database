@@ -38,8 +38,6 @@ NUM_COLS = [
     "valid_errors_loc",
     "valid_errors_dates",
     "valid_errors_haz",
-    "flag_geocoding_country",
-    "flag_geocoding_osm",
 ]
 
 LIST_COLS = [
@@ -115,8 +113,8 @@ FINAL_FLAG_COLS = [
     "flag_pop_cntry",
     "flag_value_no_unit",
     "flag_partial_unit",
-    "flag_geocoding_country",
-    "flag_geocoding_osm",
+    "flag_location_to_country",
+    "flag_osm_polygon",
 ]
 
 DEF_MIN_YEAR = 1900  # Minimum allowed year in the database
