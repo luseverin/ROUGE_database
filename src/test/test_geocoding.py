@@ -17,6 +17,7 @@ from src.geocoding import (
     identify_unique_locations_v3,
     find_closest_country,
     find_best_match,
+    find_best_nomin,
     fallback_country_union,
     prepare_result_df,
     associate_locations_to_polygons,
@@ -179,6 +180,33 @@ class TestGeocodingRowHandling(unittest.TestCase):
         self.assertIn("geometry", out.columns)
         self.assertEqual(len(out), 1)
 
+    def test_associate_locations_to_polygons_aggregates_nomin_flags(self):
+        row = {
+            "location": ["loc a", "loc b"],
+            "country_robust": ["Micronesia"],
+            "country_robust_iso3": ["FSM"],
+        }
+        df_geo_individual_locs = pd.DataFrame(
+            {
+                "location": ["loc a", "loc b"],
+                "iso3_code": ["FSM", "FSM"],
+                "geometry": [Point(0, 0).buffer(0.1), Point(1, 1).buffer(0.1)],
+                "finest_level": [0, 0],
+                "flag_location_to_country": [False, False],
+                "flag_osm_polygon": [False, False],
+                "flag_nomin_no_result": [False, True],
+                "flag_nomin_sim_below_th": [True, False],
+                "flag_nomin_translate": [False, True],
+                "locationOsm": ["loc a", "loc b"],
+                "locationPolygon": ["A", "B"],
+            }
+        )
+
+        out = associate_locations_to_polygons(row, df_geo_individual_locs, gdf_file={})
+        self.assertTrue(out.loc[0, "flag_nomin_no_result"])
+        self.assertTrue(out.loc[0, "flag_nomin_sim_below_th"])
+        self.assertTrue(out.loc[0, "flag_nomin_translate"])
+
     def test_identify_unique_location_country(self):
         df = pd.DataFrame(
             {
@@ -216,6 +244,61 @@ class TestGeocodingRowHandling(unittest.TestCase):
         info, sim = find_best_match("new york", address, 0.5)
         self.assertGreaterEqual(sim, 0.5)
         self.assertIn("admin_level", info)
+
+    @patch("src.geocoding.query_nominatim", return_value=None)
+    def test_find_best_nomin_sets_no_result_only_when_query_returns_nothing(
+        self, mock_query_nominatim
+    ):
+        row = pd.Series(
+            {
+                "location": "sample place",
+                "country": "Micronesia",
+                "country_iso3": "FSM",
+                "country_iso2": "FM",
+            }
+        )
+
+        out = find_best_nomin(row, similarity_th=0.5)
+        self.assertTrue(out["flag_nomin_no_result"])
+        self.assertFalse(out["flag_nomin_sim_below_th"])
+
+    @patch("src.geocoding.find_best_match", return_value=({"admin_level": 1, "admin_field": "ADMIN_1", "name": "sample place", "sim": 0.1}, 0.1))
+    @patch(
+        "src.geocoding.query_nominatim",
+        return_value=[type("DummyLoc", (), {"latitude": 0.0, "longitude": 0.0, "raw": {"address": {"country_code": "fm", "country": "Micronesia"}}})()],
+    )
+    def test_find_best_nomin_sets_similarity_flag_below_threshold(
+        self, mock_query_nominatim, mock_find_best_match
+    ):
+        row = pd.Series(
+            {
+                "location": "sample place",
+                "country": "Micronesia",
+                "country_iso3": "FSM",
+                "country_iso2": "FM",
+            }
+        )
+
+        out = find_best_nomin(row, similarity_th=0.5)
+        self.assertFalse(out["flag_nomin_no_result"])
+        self.assertTrue(out["flag_nomin_sim_below_th"])
+
+    @patch("src.geocoding.query_nominatim", return_value=None)
+    def test_find_best_nomin_initializes_translate_flag_as_false(
+        self, mock_query_nominatim
+    ):
+        row = pd.Series(
+            {
+                "location": "sample place",
+                "country": "Micronesia",
+                "country_iso3": "FSM",
+                "country_iso2": "FM",
+            }
+        )
+
+        out = find_best_nomin(row, similarity_th=0.5)
+        self.assertFalse(out["flag_nomin_translate"])
+        self.assertIn("flag_nomin_translate", out.index)
 
     def test_prepare_result_df(self):
         df = pd.DataFrame({"ADMIN_1": ["New York"], "geometry": [Point(0, 0)]})
