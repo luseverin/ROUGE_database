@@ -16,3 +16,5 @@ src/test/reverse_geocode_cache.db
 scripts/reverse_geocode_cache.db
 notebooks/reverse_geocode_cache.db
 notebooks/reverse_geocode_cache.db.lock
+scripts/reverse_geocode_cache.db.lock
+analysis/reverse_geocode_cache.db
