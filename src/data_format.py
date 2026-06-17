@@ -111,6 +111,9 @@ FINAL_FLAG_COLS = [
     "flag_pop_cntry",
     "flag_value_no_unit",
     "flag_partial_unit",
+    "flag_nomin_no_result",
+    "flag_nomin_sim_below_th",
+    "flag_nomin_translate",
     "flag_location_to_country",
     "flag_osm_polygon",
 ]
