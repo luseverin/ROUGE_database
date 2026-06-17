@@ -19,7 +19,7 @@ from src.logger_setup import set_logger
 from src.data import *
 from src.text_processing_functions import *
 from src.post_process_functions import *
-from src.data_format import DATE_FIELDS, format_output
+from src.data_format import DATE_FIELDS, DEF_MAX_YEAR, DEF_MIN_YEAR, format_output
 from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
@@ -33,17 +33,13 @@ from src.sanity_checks import *
 # 4. Geocoding
 
 ## Parameters
-filename_in = (
-    "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
-)
+filename_in = "0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426"
 # "labelled_reports_impacts_gaps_v050426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
-# "labelled_reports_gaps_llama-3.3-70b-versatile_v270326"
-# "labelled_reports_gaps_meta-llama_llama-4-scout-17b-16e-instruct_v270326"
-
+# "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
 
 filename_out = (
-    "post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
+    "test_post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
 )  # "post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 # postprocess params
@@ -69,7 +65,8 @@ date_fields = (
     DATE_FIELDS  # list of date fields to check for missing values and inconsistencies
 )
 infer_startYear_method = "most_frequent_startYear"  # method to infer startYear when missing. Options: "most_frequent_startYear", "from_endYear". Use None to disable inference.
-
+min_allowed_year = DEF_MIN_YEAR  # minimum allowed year for startYear and endYear. Use None to disable check.
+max_allowed_year = DEF_MAX_YEAR  # maximum allowed year for startYear and endYear. Use None to disable check.
 remove_cats = [
     "DREF Allocation",
     "DREF Allocation & Funding requirements",
@@ -134,7 +131,7 @@ else:
         response_df = pd.read_csv(data_path / (filename_in + ".csv"))
 
     # copy data
-    response_df_proc = cp.deepcopy(response_df)
+    response_df_proc = cp.deepcopy(response_df).iloc[:10]
 
     ## Formatting
     # convert numerical columns
@@ -171,9 +168,11 @@ else:
     response_df_proc = response_df_proc.apply(
         lambda x: flag_startYear_after_endYear(x), axis=1
     )
-    response_df_proc = response_df_proc.apply(
-        lambda x: flag_inconsistent_year(x), axis=1
-    )
+    if min_allowed_year is not None or max_allowed_year is not None:
+        response_df_proc = response_df_proc.apply(
+            lambda x: flag_inconsistent_year(x, min_allowed_year, max_allowed_year),
+            axis=1,
+        )
     response_df_proc = response_df_proc.apply(
         lambda x: flag_inconsistent_month(x), axis=1
     )

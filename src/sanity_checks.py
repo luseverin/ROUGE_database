@@ -224,13 +224,18 @@ def flag_startYear_after_endYear(x):
 def flag_inconsistent_year(x, min_year, max_year):
     """
     Check for inconsistencies in year fields and create flags for them. For instance,
-    if the year is before 1900 or after the current year, or if startYear is after endYear.
+    if the year is before min_year or after max_year, or if startYear is after endYear.
     """
     x["flag_inconsistent_year"] = False
-    if not pd.isnull(x["startYear"]) and not pd.isnull(x["endYear"]):
-        if x["startYear"] < min_year or x["startYear"] > max_year:
+    if not pd.isnull(x["startYear"]):
+        if min_year is not None and x["startYear"] < min_year:
             x["flag_inconsistent_year"] = True
-        if x["endYear"] < min_year or x["endYear"] > max_year:
+        if max_year is not None and x["startYear"] > max_year:
+            x["flag_inconsistent_year"] = True
+    elif not pd.isnull(x["endYear"]):
+        if min_year is not None and x["endYear"] < min_year:
+            x["flag_inconsistent_year"] = True
+        if max_year is not None and x["endYear"] > max_year:
             x["flag_inconsistent_year"] = True
     else:
         x["flag_inconsistent_year"] = np.nan
