@@ -61,7 +61,7 @@ dedup_impacts = "quali"  # whether to deduplicate impacts or not. If "quali", on
 dedup_fields = [
     "impactSubtype"
 ]  # fields to use for deduplication. Only used if dedup_impacts is not None.
-validate_impSubtypes = False
+validate_impSubtypes = True  # whether to validate impact subtypes or not. If True, only keep impacts with valid subtypes according to impsubtype_dict
 validate_hazards = True  # deactivate hazards validation as cause issues
 
 # api parameters
