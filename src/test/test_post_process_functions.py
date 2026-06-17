@@ -36,6 +36,17 @@ from src.post_process_functions import (
     reclass_subtype_from_unit,
     convert_null_unit,
     classify_damage_degree,
+    infer_from_endYear,
+    infer_startYear,
+)
+from src.sanity_checks import (
+    flag_missing_date_field,
+    flag_startYear_after_endYear,
+    flag_inconsistent_year,
+    is_month,
+    is_day,
+    flag_inconsistent_month,
+    flag_inconsistent_day,
     flag_remove_hazard,
 )
 
@@ -67,8 +78,10 @@ regex_test_cases = {
             "aqueduct",
             "toilets",
             "water treatment plants",
+            "water points",
+            "wells",
         ],
-        "negatives": ["water points", "wells"],
+        "negatives": ["rainwater", "washing machines", "sanity", "harvest"],
     },
     "healthcare structures": {
         "positives": ["hospital destroyed", "medical clinic", "maternity center"],
@@ -494,7 +507,7 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertIsInstance(out["impactValueMin"], (int, float))
             self.assertIsInstance(out["impactValueMax"], (int, float))
             self.assertTrue(out["flag_currency_conversion"])
-            self.assertFalse(out["flag_failed_currency_conversion"])
+            self.assertFalse(out["flag_currency_conversion_error"])
 
     def test_convert_monetary_units_additional_currencies(self):
         # Test some of the newly added currencies
@@ -512,7 +525,7 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertEqual(out["impactUnit"], "EUR")
             self.assertIsInstance(out["impactValue"], (int, float))
             self.assertTrue(out["flag_currency_conversion"])
-            self.assertFalse(out["flag_failed_currency_conversion"])
+            self.assertFalse(out["flag_currency_conversion_error"])
 
     def test_convert_monetary_units_invalid_currency(self):
         x = pd.DataFrame(
@@ -527,6 +540,7 @@ class TestImpactFunctions(unittest.TestCase):
         for i in range(len(x)):
             out = convert_monetary_units(x.iloc[i])
             self.assertFalse(out["flag_currency_conversion"])
+            self.assertTrue(out["flag_currency_conversion_error"])
 
     def test_replace_numbers_unit(self):
         # Test with digits in unit
@@ -763,6 +777,602 @@ class TestFormatOutput(unittest.TestCase):
         self.assertIsInstance(out["annotation"].iloc[0], list)
 
 
+class TestClassifyDamageDegree(unittest.TestCase):
+    """Test cases for classify_damage_degree function"""
+
+    def test_fully_destroyed_with_destroyed_keyword(self):
+        """Test classification with 'destroyed' keyword"""
+        x = pd.Series({"impactUnit": "homes destroyed"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_fully_damaged_keyword(self):
+        """Test classification with 'fully damaged' keyword"""
+        x = pd.Series({"impactUnit": "houses fully damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_collapsed_keyword(self):
+        """Test classification with 'collapsed' keyword"""
+        x = pd.Series({"impactUnit": "buildings collapsed"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_flattened_keyword(self):
+        """Test classification with 'flattened' keyword"""
+        x = pd.Series({"impactUnit": "infrastructure flattened"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_completely_destroyed(self):
+        """Test classification with 'completely destroyed' keyword"""
+        x = pd.Series({"impactUnit": "structures completely destroyed"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_partially_damaged_with_damaged_keyword(self):
+        """Test classification with 'damaged' keyword"""
+        x = pd.Series({"impactUnit": "homes damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "partially damaged")
+
+    def test_partially_damaged_with_partially_damaged_keyword(self):
+        """Test classification with 'partially damaged' keyword"""
+        x = pd.Series({"impactUnit": "houses partially damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "partially damaged")
+
+    def test_partially_damaged_with_infrastructure_damaged(self):
+        """Test classification with infrastructure damage"""
+        x = pd.Series({"impactUnit": "infrastructure partially damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "partially damaged")
+
+    def test_unspecified_with_people_unit(self):
+        """Test classification with people unit (not applicable)"""
+        x = pd.Series({"impactUnit": "people"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_injured_unit(self):
+        """Test classification with injured (not applicable)"""
+        x = pd.Series({"impactUnit": "injured"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_deaths_unit(self):
+        """Test classification with deaths (not applicable)"""
+        x = pd.Series({"impactUnit": "deaths"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_affected_people(self):
+        """Test classification with 'affected people' (not applicable)"""
+        x = pd.Series({"impactUnit": "affected people"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_displaced_individuals(self):
+        """Test classification with 'displaced individuals' (not applicable)"""
+        x = pd.Series({"impactUnit": "displaced individuals"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_families_affected(self):
+        """Test classification with 'families affected' (not applicable)"""
+        x = pd.Series({"impactUnit": "families affected"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_homes_no_damage_qualifier(self):
+        """Test classification with 'homes' without damage qualifier"""
+        x = pd.Series({"impactUnit": "homes"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_buildings_no_damage_qualifier(self):
+        """Test classification with 'buildings' without damage qualifier"""
+        x = pd.Series({"impactUnit": "buildings"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_structures(self):
+        """Test classification with 'structures' without damage qualifier"""
+        x = pd.Series({"impactUnit": "structures"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_houses(self):
+        """Test classification with 'houses' without damage qualifier"""
+        x = pd.Series({"impactUnit": "houses"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_empty_string(self):
+        """Test classification with empty string"""
+        x = pd.Series({"impactUnit": ""})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_null_value(self):
+        """Test classification with null value"""
+        x = pd.Series({"impactUnit": None})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_nan_value(self):
+        """Test classification with NaN value"""
+        x = pd.Series({"impactUnit": np.nan})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_dataframe_apply(self):
+        """Test applying function to dataframe with apply()"""
+        df = pd.DataFrame(
+            {
+                "impactValue": [100, 50, 30, 200, 15, 500],
+                "impactUnit": [
+                    "homes destroyed",
+                    "houses damaged",
+                    "people",
+                    "buildings collapsed",
+                    "families affected",
+                    "infrastructure flattened",
+                ],
+            }
+        )
+
+        result_df = df.apply(classify_damage_degree, axis=1)
+
+        # Verify new column was created
+        self.assertIn("damageDegree", result_df.columns)
+
+        # Verify classifications
+        expected = [
+            "fully destroyed",
+            "partially damaged",
+            "unspecified",
+            "fully destroyed",
+            "unspecified",
+            "fully destroyed",
+        ]
+        self.assertEqual(result_df["damageDegree"].tolist(), expected)
+
+    def test_case_insensitivity(self):
+        """Test that classification is case-insensitive with Series input"""
+        test_cases = [
+            ("HOMES DESTROYED", "fully destroyed"),
+            ("Houses Damaged", "partially damaged"),
+            ("PEOPLE", "unspecified"),
+            ("Injured", "unspecified"),
+        ]
+
+        for unit_str, expected in test_cases:
+            x = pd.Series({"impactUnit": unit_str})
+            result = classify_damage_degree(x)
+            self.assertEqual(
+                result["damageDegree"],
+                expected,
+                f"Failed for '{unit_str}' - got '{result['damageDegree']}' expected '{expected}'",
+            )
+
+
+class TestRemoveHazardFlag(unittest.TestCase):
+    """Test cases for flag_remove_hazard function"""
+
+
+class TestRemoveHazardFlag(unittest.TestCase):
+    """Test cases for flag_remove_hazard function"""
+
+    def setUp(self):
+        self.remove_hazards = ["Epidemic", "Conflict"]
+
+    def test_dataframe_apply_non_strict(self):
+        """
+        Non-strict mode: all hazards must be removable.
+        """
+
+        df = pd.DataFrame(
+            {
+                "hazards": [
+                    ["Epidemic"],
+                    ["Conflict"],
+                    ["Epidemic", "Conflict"],
+                    ["Epidemic", "Flood"],
+                    ["Flood"],
+                ]
+            }
+        )
+
+        result = df.apply(
+            flag_remove_hazard,
+            axis=1,
+            args=(self.remove_hazards,),
+        )
+
+        expected = pd.Series([True, True, True, False, False])
+
+        pd.testing.assert_series_equal(
+            result.reset_index(drop=True),
+            expected,
+            check_names=False,
+        )
+
+    def test_dataframe_apply_strict(self):
+        """
+        Strict mode: any hazard in remove_hazards is enough.
+        """
+
+        df = pd.DataFrame(
+            {
+                "hazards": [
+                    ["Epidemic"],
+                    ["Conflict"],
+                    ["Epidemic", "Conflict"],
+                    ["Epidemic", "Flood"],
+                    ["Flood"],
+                ]
+            }
+        )
+
+        result = df.apply(
+            flag_remove_hazard,
+            axis=1,
+            args=(self.remove_hazards, True),
+        )
+
+        expected = pd.Series([True, True, True, True, False])
+
+        pd.testing.assert_series_equal(
+            result.reset_index(drop=True),
+            expected,
+            check_names=False,
+        )
+
+    def test_single_hazard_non_strict(self):
+        x = pd.Series({"hazards": ["Epidemic"]})
+
+        self.assertTrue(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+            )
+        )
+
+    def test_mixed_hazards_non_strict(self):
+        x = pd.Series(
+            {
+                "hazards": [
+                    "Epidemic",
+                    "Flood",
+                ]
+            }
+        )
+
+        self.assertFalse(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+            )
+        )
+
+    def test_mixed_hazards_strict(self):
+        x = pd.Series(
+            {
+                "hazards": [
+                    "Epidemic",
+                    "Flood",
+                ]
+            }
+        )
+
+        self.assertTrue(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+                strict=True,
+            )
+        )
+
+    def test_no_matching_hazards_strict(self):
+        x = pd.Series(
+            {
+                "hazards": [
+                    "Flood",
+                    "Storm",
+                ]
+            }
+        )
+
+        self.assertFalse(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+                strict=True,
+            )
+        )
+
+
+class TestDateFlagFunctions(unittest.TestCase):
+
+    def test_flag_missing_date_field(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "startMonth": "",
+                "endYear": 2024,
+            }
+        )
+
+        out = flag_missing_date_field(
+            x.copy(),
+            ["startYear", "startMonth", "endYear"],
+        )
+
+        self.assertTrue(out["flag_missing_startYear"])
+        self.assertTrue(out["flag_missing_startMonth"])
+        self.assertFalse(out["flag_missing_endYear"])
+
+        self.assertTrue(pd.isna(out["startYear"]))
+        self.assertTrue(pd.isna(out["startMonth"]))
+
+    def test_flag_startYear_after_endYear_true(self):
+        x = pd.Series(
+            {
+                "startYear": 2024,
+                "endYear": 2023,
+            }
+        )
+
+        out = flag_startYear_after_endYear(x)
+
+        self.assertTrue(out["flag_startYear_after_endYear"])
+
+    def test_flag_startYear_after_endYear_false(self):
+        x = pd.Series(
+            {
+                "startYear": 2023,
+                "endYear": 2024,
+            }
+        )
+
+        out = flag_startYear_after_endYear(x)
+
+        self.assertFalse(out["flag_startYear_after_endYear"])
+
+    def test_flag_startYear_after_endYear_missing(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": 2024,
+            }
+        )
+
+        out = flag_startYear_after_endYear(x)
+
+        self.assertTrue(pd.isna(out["flag_startYear_after_endYear"]))
+
+    def test_flag_inconsistent_year_valid(self):
+        x = pd.Series(
+            {
+                "startYear": 2020,
+                "endYear": 2021,
+            }
+        )
+
+        out = flag_inconsistent_year(
+            x,
+            min_year=1900,
+            max_year=2100,
+        )
+
+        self.assertFalse(out["flag_inconsistent_year"])
+
+    def test_flag_inconsistent_year_invalid_start(self):
+        x = pd.Series(
+            {
+                "startYear": 1800,
+                "endYear": 2020,
+            }
+        )
+
+        out = flag_inconsistent_year(
+            x,
+            min_year=1900,
+            max_year=2100,
+        )
+
+        self.assertTrue(out["flag_inconsistent_year"])
+
+    def test_flag_inconsistent_year_invalid_end(self):
+        x = pd.Series(
+            {
+                "startYear": 2020,
+                "endYear": 2500,
+            }
+        )
+
+        out = flag_inconsistent_year(
+            x,
+            min_year=1900,
+            max_year=2100,
+        )
+
+        self.assertTrue(out["flag_inconsistent_year"])
+
+    def test_flag_inconsistent_year_missing(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": 2020,
+            }
+        )
+
+        out = flag_inconsistent_year(x, min_year=1900, max_year=2100)
+
+        self.assertTrue(pd.isna(out["flag_inconsistent_year"]))
+
+    def test_is_month(self):
+        self.assertTrue(is_month(1))
+        self.assertTrue(is_month("12"))
+        self.assertFalse(is_month(13))
+        self.assertFalse(is_month("abc"))
+        self.assertTrue(pd.isna(is_month(np.nan)))
+
+    def test_is_day(self):
+        self.assertTrue(is_day(1))
+        self.assertTrue(is_day("31"))
+        self.assertFalse(is_day(32))
+        self.assertFalse(is_day("abc"))
+        self.assertTrue(pd.isna(is_day(np.nan)))
+
+    def test_flag_inconsistent_month_valid(self):
+        x = pd.Series(
+            {
+                "startMonth": 1,
+                "endMonth": 12,
+            }
+        )
+
+        out = flag_inconsistent_month(x)
+
+        self.assertFalse(out["flag_inconsistent_month"])
+
+    def test_flag_inconsistent_month_invalid(self):
+        x = pd.Series(
+            {
+                "startMonth": 13,
+                "endMonth": 12,
+            }
+        )
+
+        out = flag_inconsistent_month(x)
+
+        self.assertTrue(out["flag_inconsistent_month"])
+
+    def test_flag_inconsistent_month_missing(self):
+        x = pd.Series(
+            {
+                "startMonth": np.nan,
+                "endMonth": 12,
+            }
+        )
+
+        out = flag_inconsistent_month(x)
+
+        self.assertTrue(pd.isna(out["flag_inconsistent_month"]))
+
+    def test_flag_inconsistent_day_valid(self):
+        x = pd.Series(
+            {
+                "startDay": 1,
+                "endDay": 31,
+            }
+        )
+
+        out = flag_inconsistent_day(x)
+
+        self.assertFalse(out["flag_inconsistent_day"])
+
+    def test_flag_inconsistent_day_invalid(self):
+        x = pd.Series(
+            {
+                "startDay": 35,
+                "endDay": 10,
+            }
+        )
+
+        out = flag_inconsistent_day(x)
+
+        self.assertTrue(out["flag_inconsistent_day"])
+
+    def test_flag_inconsistent_day_missing(self):
+        x = pd.Series(
+            {
+                "startDay": np.nan,
+                "endDay": 10,
+            }
+        )
+
+        out = flag_inconsistent_day(x)
+
+        self.assertTrue(pd.isna(out["flag_inconsistent_day"]))
+
+    def test_infer_from_endYear(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": 2024,
+            }
+        )
+
+        self.assertEqual(infer_from_endYear(x), 2024)
+
+    def test_infer_from_endYear_missing(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": np.nan,
+            }
+        )
+
+        self.assertTrue(pd.isna(infer_from_endYear(x)))
+
+    def test_infer_startYear_most_frequent(self):
+        df = pd.DataFrame(
+            {
+                "appealCode": ["A", "A", "A", "B"],
+                "startYear": [2020, 2020, np.nan, np.nan],
+                "endYear": [2020, 2020, 2021, 2022],
+            }
+        )
+
+        out = infer_startYear(
+            df.copy(),
+            method="most_frequent_startYear",
+        )
+
+        self.assertEqual(out.loc[2, "startYear"], 2020)
+        self.assertTrue(out.loc[2, "flag_inferred_startYear"])
+        self.assertFalse(out.loc[2, "flag_failed_startYear_inference"])
+
+        self.assertTrue(out.loc[3, "flag_failed_startYear_inference"])
+
+    def test_infer_startYear_from_endYear(self):
+        df = pd.DataFrame(
+            {
+                "appealCode": ["A", "B"],
+                "startYear": [np.nan, np.nan],
+                "endYear": [2020, np.nan],
+            }
+        )
+
+        out = infer_startYear(
+            df.copy(),
+            method="infer_from_endYear",
+        )
+
+        self.assertEqual(out.loc[0, "startYear"], 2020)
+        self.assertTrue(out.loc[0, "flag_inferred_startYear"])
+
+        self.assertTrue(out.loc[1, "flag_failed_startYear_inference"])
+
+    def test_infer_startYear_invalid_method(self):
+        df = pd.DataFrame(
+            {
+                "appealCode": ["A"],
+                "startYear": [np.nan],
+                "endYear": [2020],
+            }
+        )
+
+        with self.assertRaises(ValueError):
+            infer_startYear(
+                df.copy(),
+                method="unknown_method",
+            )
+
+
 class TestPostProcessingPipeline(unittest.TestCase):
     """Integration test that verifies the complete postprocessing pipeline"""
 
@@ -962,211 +1572,6 @@ class TestPostProcessingPipeline(unittest.TestCase):
         # Verify units are processed correctly
         self.assertEqual(df.loc[0, "impactUnit"], "people")
         self.assertEqual(df.loc[1, "impactUnit"], "null")
-
-class TestClassifyDamageDegree(unittest.TestCase):
-    """Test cases for classify_damage_degree function"""
-
-    def test_fully_destroyed_with_destroyed_keyword(self):
-        """Test classification with 'destroyed' keyword"""
-        x = pd.Series({"impactUnit": "homes destroyed"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "fully destroyed")
-
-    def test_fully_destroyed_with_fully_damaged_keyword(self):
-        """Test classification with 'fully damaged' keyword"""
-        x = pd.Series({"impactUnit": "houses fully damaged"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "fully destroyed")
-
-    def test_fully_destroyed_with_collapsed_keyword(self):
-        """Test classification with 'collapsed' keyword"""
-        x = pd.Series({"impactUnit": "buildings collapsed"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "fully destroyed")
-
-    def test_fully_destroyed_with_flattened_keyword(self):
-        """Test classification with 'flattened' keyword"""
-        x = pd.Series({"impactUnit": "infrastructure flattened"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "fully destroyed")
-
-    def test_fully_destroyed_with_completely_destroyed(self):
-        """Test classification with 'completely destroyed' keyword"""
-        x = pd.Series({"impactUnit": "structures completely destroyed"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "fully destroyed")
-
-    def test_partially_damaged_with_damaged_keyword(self):
-        """Test classification with 'damaged' keyword"""
-        x = pd.Series({"impactUnit": "homes damaged"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "partially damaged")
-
-    def test_partially_damaged_with_partially_damaged_keyword(self):
-        """Test classification with 'partially damaged' keyword"""
-        x = pd.Series({"impactUnit": "houses partially damaged"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "partially damaged")
-
-    def test_partially_damaged_with_infrastructure_damaged(self):
-        """Test classification with infrastructure damage"""
-        x = pd.Series({"impactUnit": "infrastructure partially damaged"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "partially damaged")
-
-    def test_unspecified_with_people_unit(self):
-        """Test classification with people unit (not applicable)"""
-        x = pd.Series({"impactUnit": "people"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_injured_unit(self):
-        """Test classification with injured (not applicable)"""
-        x = pd.Series({"impactUnit": "injured"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_deaths_unit(self):
-        """Test classification with deaths (not applicable)"""
-        x = pd.Series({"impactUnit": "deaths"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_affected_people(self):
-        """Test classification with 'affected people' (not applicable)"""
-        x = pd.Series({"impactUnit": "affected people"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_displaced_individuals(self):
-        """Test classification with 'displaced individuals' (not applicable)"""
-        x = pd.Series({"impactUnit": "displaced individuals"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_families_affected(self):
-        """Test classification with 'families affected' (not applicable)"""
-        x = pd.Series({"impactUnit": "families affected"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_homes_no_damage_qualifier(self):
-        """Test classification with 'homes' without damage qualifier"""
-        x = pd.Series({"impactUnit": "homes"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_buildings_no_damage_qualifier(self):
-        """Test classification with 'buildings' without damage qualifier"""
-        x = pd.Series({"impactUnit": "buildings"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_structures(self):
-        """Test classification with 'structures' without damage qualifier"""
-        x = pd.Series({"impactUnit": "structures"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_houses(self):
-        """Test classification with 'houses' without damage qualifier"""
-        x = pd.Series({"impactUnit": "houses"})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_empty_string(self):
-        """Test classification with empty string"""
-        x = pd.Series({"impactUnit": ""})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_null_value(self):
-        """Test classification with null value"""
-        x = pd.Series({"impactUnit": None})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_unspecified_with_nan_value(self):
-        """Test classification with NaN value"""
-        x = pd.Series({"impactUnit": np.nan})
-        result = classify_damage_degree(x)
-        self.assertEqual(result["damageDegree"], "unspecified")
-
-    def test_dataframe_apply(self):
-        """Test applying function to dataframe with apply()"""
-        df = pd.DataFrame(
-            {
-                "impactValue": [100, 50, 30, 200, 15, 500],
-                "impactUnit": [
-                    "homes destroyed",
-                    "houses damaged",
-                    "people",
-                    "buildings collapsed",
-                    "families affected",
-                    "infrastructure flattened",
-                ],
-            }
-        )
-
-        result_df = df.apply(classify_damage_degree, axis=1)
-
-        # Verify new column was created
-        self.assertIn("damageDegree", result_df.columns)
-
-        # Verify classifications
-        expected = [
-            "fully destroyed",
-            "partially damaged",
-            "unspecified",
-            "fully destroyed",
-            "unspecified",
-            "fully destroyed",
-        ]
-        self.assertEqual(result_df["damageDegree"].tolist(), expected)
-
-
-class TestRemoveHazardFlag(unittest.TestCase):
-    """Test cases for flag_remove_hazard function"""
-
-    def test_dataframe_apply_sets_flag_column(self):
-        df = pd.DataFrame(
-            {
-                "hazards": [
-                    ["Epidemic"],
-                    ["Conflict"],
-                    ["Epidemic", "Conflict"],
-                    ["Epidemic", "Flood"],
-                    ["Flood"],
-                ]
-            }
-        )
-
-        result_df = df.apply(flag_remove_hazard, axis=1)
-
-        self.assertIn("flag_remove_hazard", result_df.columns)
-        self.assertTrue(result_df.loc[0, "flag_remove_hazard"])
-        self.assertTrue(result_df.loc[1, "flag_remove_hazard"])
-        self.assertTrue(result_df.loc[2, "flag_remove_hazard"])
-        self.assertFalse(result_df.loc[3, "flag_remove_hazard"])
-        self.assertFalse(result_df.loc[4, "flag_remove_hazard"])
-
-    def test_case_insensitivity(self):
-        """Test that classification is case-insensitive with Series input"""
-        test_cases = [
-            ("HOMES DESTROYED", "fully destroyed"),
-            ("Houses Damaged", "partially damaged"),
-            ("PEOPLE", "unspecified"),
-            ("Injured", "unspecified"),
-        ]
-
-        for unit_str, expected in test_cases:
-            x = pd.Series({"impactUnit": unit_str})
-            result = classify_damage_degree(x)
-            self.assertEqual(
-                result["damageDegree"],
-                expected,
-                f"Failed for '{unit_str}' - got '{result['damageDegree']}' expected '{expected}'",
-            )
 
 
 if __name__ == "__main__":
