@@ -195,31 +195,126 @@ def flag_percent(x):
     )  # (x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
 
 
-def flag_hazard(extracted_data, hazard_list):
+def flag_missing_date_field(x, date_fields):
     """
-    Adds a column to the dataframe, "haz_check", which is True if any
-    of the hazards in the report are not in the original hazard_list, and False
-    otherwise.
+    For each date field, check if it's missing (NaN or empty string) and create a flag for it.
+    """
+    for field in date_fields:
+        if pd.isnull(x[field]) or x[field] == "":
+            x[field] = np.nan
+            x[f"flag_missing_{field}"] = True
+        else:
+            x[f"flag_missing_{field}"] = False
+    return x
+
+
+def flag_startYear_after_endYear(x):
+    """
+    Check if startYear is after endYear and create a flag for it.
+    """
+    x["flag_startYear_after_endYear"] = False
+    if not pd.isnull(x["startYear"]) and not pd.isnull(x["endYear"]):
+        if x["startYear"] > x["endYear"]:
+            x["flag_startYear_after_endYear"] = True
+    else:
+        x["flag_startYear_after_endYear"] = np.nan
+    return x
+
+
+def flag_inconsistent_year(x, min_year, max_year):
+    """
+    Check for inconsistencies in year fields and create flags for them. For instance,
+    if the year is before min_year or after max_year, or if startYear is after endYear.
+    """
+    x["flag_inconsistent_year"] = False
+    if not pd.isnull(x["startYear"]):
+        if min_year is not None and x["startYear"] < min_year:
+            x["flag_inconsistent_year"] = True
+        if max_year is not None and x["startYear"] > max_year:
+            x["flag_inconsistent_year"] = True
+    elif not pd.isnull(x["endYear"]):
+        if min_year is not None and x["endYear"] < min_year:
+            x["flag_inconsistent_year"] = True
+        if max_year is not None and x["endYear"] > max_year:
+            x["flag_inconsistent_year"] = True
+    else:
+        x["flag_inconsistent_year"] = np.nan
+    return x
+
+
+def is_month(value):
+    """
+    Check if a value is a valid month (1-12).
+    """
+    if pd.isnull(value):
+        return np.nan
+    try:
+        month = int(value)
+        return 1 <= month <= 12
+    except ValueError:
+        return False
+
+
+def is_day(value):
+    """
+    Check if a value is a valid day (1-31).
+    """
+    if pd.isnull(value):
+        return np.nan
+    try:
+        day = int(value)
+        return 1 <= day <= 31
+    except ValueError:
+        return False
+
+
+def flag_inconsistent_month(x):
+    """
+    Check if month fields are valid and create flags for them.
+    """
+    x["flag_inconsistent_month"] = False
+    for field in ["startMonth", "endMonth"]:
+        if field in x:
+            if not pd.isnull(x[field]):
+                if not is_month(x[field]):
+                    x["flag_inconsistent_month"] = True
+            else:
+                x["flag_inconsistent_month"] = np.nan
+    return x
+
+
+def flag_inconsistent_day(x):
+    """
+    Check if day fields are valid and create flags for them.
+    """
+    x["flag_inconsistent_day"] = False
+    for field in ["startDay", "endDay"]:
+        if field in x:
+            if not pd.isnull(x[field]):
+                if not is_day(x[field]):
+                    x["flag_inconsistent_day"] = True
+            else:
+                x["flag_inconsistent_day"] = np.nan
+    return x
+
+
+def flag_hazard_all_unknown(x):
+    """
+    Adds a column to the dataframe, "flag_hazard_all_unknown", which is True if all
+    of the hazards in the report are "Unknown", and False otherwise.
 
     Parameters
     ----------
-    extracted_data : pandas.DataFrame
-        The dataframe containing the extracted data
-    hazard_list : list
-        The list of hazards to check against
+    x : pandas.Series
+        The series containing the extracted data
 
     Returns
     -------
-    pandas.DataFrame
-        The dataframe with the added column
+    pandas.Series
+        The series with the added column
     """
 
-    def check_haz(x):
-        return any(haz not in hazard_list for haz in x["hazards"])
-
-    extracted_data["unknown_haz"] = np.nan
-    extracted_data["unknown_haz"] = extracted_data.apply(check_haz, axis=1)
-    return extracted_data
+    return all(haz == "Unknown" for haz in x["hazards"])
 
 
 def flag_remove_cat(x, remove_cats):
@@ -241,7 +336,7 @@ def flag_remove_cat(x, remove_cats):
     return x["impactSubtype"] in remove_cats
 
 
-def flag_remove_hazard(x):
+def flag_remove_hazard(x, remove_hazards, strict=False):
     """
     Adds a column to the dataframe, "flag_remove_hazard", which is True if the hazard is in the list of hazards to remove, and False otherwise.
 
@@ -249,19 +344,20 @@ def flag_remove_hazard(x):
     ----------
     x : pandas.Series
         The dataframe containing the extracted data
+    remove_hazards : list
+        The list of hazards to remove
+    strict : bool, default False
+        Whether to use strict matching (any hazard in the list) or not (all hazards in the list)
 
     Returns
     -------
     pandas.Series
         The series with the added column
     """
-    hazards = x["hazards"]
-    x["flag_remove_hazard"] = isinstance(hazards, list) and hazards in (
-        ["Epidemic"],
-        ["Conflict"],
-        ["Epidemic", "Conflict"],
-    )
-    return x
+    if strict:
+        return any(haz in remove_hazards for haz in x["hazards"])
+    else:
+        return all(haz in remove_hazards for haz in x["hazards"])
 
 
 def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):

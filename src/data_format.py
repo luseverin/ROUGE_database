@@ -59,6 +59,8 @@ LIST_COLS = [
     "iso3_code",
 ]
 
+DATE_FIELDS = ["startYear", "endYear", "startMonth", "endMonth", "startDay", "endDay"]
+
 ANNOTATION_COLS = [
     "valueAnnotation",
     "locationAnnotation",
@@ -117,6 +119,9 @@ FINAL_FLAG_COLS = [
     "flag_location_to_country",
     "flag_osm_polygon",
 ]
+
+DEF_MIN_YEAR = 1900  # Minimum allowed year in the database
+DEF_MAX_YEAR = 2026  # Maximum allowed year in the database
 
 
 def delistify_cols(df):

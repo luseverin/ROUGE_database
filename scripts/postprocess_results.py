@@ -19,7 +19,7 @@ from src.logger_setup import set_logger
 from src.data import *
 from src.text_processing_functions import *
 from src.post_process_functions import *
-from src.data_format import format_output
+from src.data_format import DATE_FIELDS, DEF_MAX_YEAR, DEF_MIN_YEAR, format_output
 from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
@@ -33,17 +33,13 @@ from src.sanity_checks import *
 # 4. Geocoding
 
 ## Parameters
-filename_in = (
-    "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
-)
+filename_in = "0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426"
 # "labelled_reports_impacts_gaps_v050426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
-# "labelled_reports_gaps_llama-3.3-70b-versatile_v270326"
-# "labelled_reports_gaps_meta-llama_llama-4-scout-17b-16e-instruct_v270326"
-
+# "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
 
 filename_out = (
-    "post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
+    "test_post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
 )  # "post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 # postprocess params
@@ -65,6 +61,12 @@ filter_unknown_subtype = (
     False  # whether or not we want to filter out unknown impact subtype
 )
 merge_subtypes = True  # whether or not we want to merge impact subtypes
+date_fields = (
+    DATE_FIELDS  # list of date fields to check for missing values and inconsistencies
+)
+infer_startYear_method = "most_frequent_startYear"  # method to infer startYear when missing. Options: "most_frequent_startYear", "from_endYear". Use None to disable inference.
+min_allowed_year = DEF_MIN_YEAR  # minimum allowed year for startYear and endYear. Use None to disable check.
+max_allowed_year = DEF_MAX_YEAR  # maximum allowed year for startYear and endYear. Use None to disable check.
 remove_cats = [
     "DREF Allocation",
     "DREF Allocation & Funding requirements",
@@ -72,6 +74,8 @@ remove_cats = [
     "Assisted People",
     "Other Human Impacts",
 ]  # list of impactSubtypes to remove
+
+remove_hazards_list = ["Epidemic", "Conflict"]  # list of hazards to remove
 
 dedup_cols = [
     "appealCode",
@@ -127,7 +131,7 @@ else:
         response_df = pd.read_csv(data_path / (filename_in + ".csv"))
 
     # copy data
-    response_df_proc = cp.deepcopy(response_df)
+    response_df_proc = cp.deepcopy(response_df).iloc[:10]
 
     ## Formatting
     # convert numerical columns
@@ -152,11 +156,29 @@ else:
     # response_df_proc["startDate"] = response_df_proc.apply(lambda x: pd.to_datetime(f"{int(x.startYear)}-{int(x.startMonth)}-{int(x.startDay)}"),axis=1)
     # response_df_proc["endDate"] = response_df_proc.apply(lambda x: pd.to_datetime(f"{int(x.endYear)}-{int(x.endMonth)}-{int(x.endDay)}"),axis=1)
 
-    # pre conversion flags
+    # pre processing flags
     if check_flag_value_in_text:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(
             flag_value_in_text, axis=1
         )
+    # Process dates
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_missing_date_field(x, date_fields), axis=1
+    )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_startYear_after_endYear(x), axis=1
+    )
+    if min_allowed_year is not None or max_allowed_year is not None:
+        response_df_proc = response_df_proc.apply(
+            lambda x: flag_inconsistent_year(x, min_allowed_year, max_allowed_year),
+            axis=1,
+        )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_inconsistent_month(x), axis=1
+    )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_inconsistent_day(x), axis=1
+    )
 
     # add iso3
     if "country_iso3" not in response_df_proc.columns:
@@ -218,13 +240,11 @@ else:
     if merge_subtypes:
         response_df_proc = response_df_proc.apply(merge_impact_subtypes, axis=1)
 
-    # Filter rows with exactly Epidemic/Conflict hazard lists
-    response_df_proc = response_df_proc.apply(
-        flag_remove_hazard, axis=1
-    )
-    n_removed_hazards = response_df_proc["flag_remove_hazard"].sum()
-    LOGGER.info("Found %s rows flagged for removal by epidemic/conflict hazard check",n_removed_hazards)
-    response_df_proc = response_df_proc[~response_df_proc["flag_remove_hazard"]]
+    # process dates
+    if infer_startYear_method is not None:
+        response_df_proc = infer_startYear(
+            response_df_proc, method=infer_startYear_method
+        )
 
     # Filter duplicates
     if dedup_cols is not None:
@@ -271,7 +291,16 @@ else:
     response_df_proc["flag_response_unit"] = response_df_proc.apply(
         flag_response_unit, axis=1
     )
-
+    # Flag rows with unwanted hazards
+    response_df_proc["flag_remove_hazard"] = response_df_proc.apply(
+        flag_remove_hazard,
+        axis=1,
+        args=(remove_hazards_list,),
+    )
+    # Flag rows with all hazards unknown
+    response_df_proc["flag_all_hazards_unknown"] = response_df_proc.apply(
+        flag_hazard_all_unknown, axis=1
+    )
     if not geocode and not geocode_load:
         response_df_proc["flag_pop_cntry"] = response_df_proc.apply(
             pop_cntry_check, country_pop=country_pop, axis=1
