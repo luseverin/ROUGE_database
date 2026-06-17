@@ -95,6 +95,77 @@ def classify_damage_degree(x):
     return x
 
 
+def most_frequent_startYear(x):
+    """
+    Infers the startYear for a given row x based on the most frequent startYear for the same appealCode.
+    If the startYear is not missing, it returns the existing startYear.
+    If the startYear is missing, it looks for the most frequent startYear among rows with
+    the same appealCode and returns it. If there is no most frequent startYear, it returns NaN.
+    """
+    if not pd.isnull(x["startYear"]):
+        return x["startYear"]
+    else:
+        # get the most frequent startYear for the appealCode
+        most_freq_startYear = x[x.appealCode == x["appealCode"]]["startYear"].mode()
+        if len(most_freq_startYear) > 0:
+            return most_freq_startYear[0]
+        else:
+            return np.nan
+
+
+def infer_from_endYear(x):
+    """
+    Infers the startYear for a given row x based on the endYear.
+     If the startYear is not missing, it returns the existing startYear.
+     If the startYear is missing but the endYear is not missing, it returns the end
+     year as a proxy for the startYear. If both are missing, it returns NaN.
+    """
+    if not pd.isnull(x["endYear"]):
+        return x["endYear"]
+    else:
+        return np.nan
+
+
+def infer_startYear(df, method="most_frequent_startYear"):
+    """
+    Infers the startYear for rows with missing startYear values using the specified method.
+    Parameters:
+    - df: DataFrame containing the data.
+    - method: Method to use for inferring startYear. Options are "most_frequent_startYear" and "infer_from_endYear".
+    Returns:
+    - DataFrame with inferred startYear values and flags indicating which values were inferred and which failed inference.
+    """
+    mask_missing = df["startYear"].isnull()
+    if method == "most_frequent_startYear":
+        appeal_to_year = (
+            df.dropna(subset=["startYear"])
+            .groupby("appealCode")["startYear"]
+            .agg(lambda s: s.mode().iloc[0] if len(s.mode()) else np.nan)
+        )
+
+        df.loc[mask_missing, "startYear"] = df.loc[mask_missing, "appealCode"].map(
+            appeal_to_year
+        )
+
+    elif method == "infer_from_endYear":
+        df["startYear"] = df.apply(
+            lambda x: (
+                infer_from_endYear(x) if pd.isnull(x["startYear"]) else x["startYear"]
+            ),
+            axis=1,
+        )
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    mask_fail = df["startYear"].isnull()
+    mask_success = ~mask_fail & mask_missing
+    df["flag_inferred_startYear"] = False
+    df.loc[mask_success, "flag_inferred_startYear"] = True
+    df["flag_failed_startYear_inference"] = False
+    df.loc[mask_fail, "flag_failed_startYear_inference"] = True
+    return df
+
+
 def consolidate_dates(df, date_field, fill_func):
     """
     Consolidate dates columns by filling None with statistic taken over the  same column

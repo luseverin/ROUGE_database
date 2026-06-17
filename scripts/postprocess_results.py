@@ -19,7 +19,7 @@ from src.logger_setup import set_logger
 from src.data import *
 from src.text_processing_functions import *
 from src.post_process_functions import *
-from src.data_format import format_output
+from src.data_format import DATE_FIELDS, format_output
 from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
@@ -65,6 +65,11 @@ filter_unknown_subtype = (
     False  # whether or not we want to filter out unknown impact subtype
 )
 merge_subtypes = True  # whether or not we want to merge impact subtypes
+date_fields = (
+    DATE_FIELDS  # list of date fields to check for missing values and inconsistencies
+)
+infer_startYear_method = "most_frequent_startYear"  # method to infer startYear when missing. Options: "most_frequent_startYear", "from_endYear". Use None to disable inference.
+
 remove_cats = [
     "DREF Allocation",
     "DREF Allocation & Funding requirements",
@@ -154,11 +159,27 @@ else:
     # response_df_proc["startDate"] = response_df_proc.apply(lambda x: pd.to_datetime(f"{int(x.startYear)}-{int(x.startMonth)}-{int(x.startDay)}"),axis=1)
     # response_df_proc["endDate"] = response_df_proc.apply(lambda x: pd.to_datetime(f"{int(x.endYear)}-{int(x.endMonth)}-{int(x.endDay)}"),axis=1)
 
-    # pre conversion flags
+    # pre processing flags
     if check_flag_value_in_text:
         response_df_proc["flag_value_not_in_text"] = response_df_proc.apply(
             flag_value_in_text, axis=1
         )
+    # Process dates
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_missing_date_field(x, date_fields), axis=1
+    )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_startYear_after_endYear(x), axis=1
+    )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_inconsistent_year(x), axis=1
+    )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_inconsistent_month(x), axis=1
+    )
+    response_df_proc = response_df_proc.apply(
+        lambda x: flag_inconsistent_day(x), axis=1
+    )
 
     # add iso3
     if "country_iso3" not in response_df_proc.columns:
@@ -219,6 +240,12 @@ else:
         )
     if merge_subtypes:
         response_df_proc = response_df_proc.apply(merge_impact_subtypes, axis=1)
+
+    # process dates
+    if infer_startYear_method is not None:
+        response_df_proc = infer_startYear(
+            response_df_proc, method=infer_startYear_method
+        )
 
     # Filter duplicates
     if dedup_cols is not None:

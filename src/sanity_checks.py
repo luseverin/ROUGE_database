@@ -195,6 +195,104 @@ def flag_percent(x):
     )  # (x["flag_partial_unit"] and x["unit_type"] == "percent" and x["impactSubtype"] != "Other Economic Activity & Livelihood Production")
 
 
+def flag_missing_date_field(x, date_fields):
+    """
+    For each date field, check if it's missing (NaN or empty string) and create a flag for it.
+    """
+    for field in date_fields:
+        if pd.isnull(x[field]) or x[field] == "":
+            x[field] = np.nan
+            x[f"flag_missing_{field}"] = True
+        else:
+            x[f"flag_missing_{field}"] = False
+    return x
+
+
+def flag_startYear_after_endYear(x):
+    """
+    Check if startYear is after endYear and create a flag for it.
+    """
+    x["flag_startYear_after_endYear"] = False
+    if not pd.isnull(x["startYear"]) and not pd.isnull(x["endYear"]):
+        if x["startYear"] > x["endYear"]:
+            x["flag_startYear_after_endYear"] = True
+    else:
+        x["flag_startYear_after_endYear"] = np.nan
+    return x
+
+
+def flag_inconsistent_year(x, min_year, max_year):
+    """
+    Check for inconsistencies in year fields and create flags for them. For instance,
+    if the year is before 1900 or after the current year, or if startYear is after endYear.
+    """
+    x["flag_inconsistent_year"] = False
+    if not pd.isnull(x["startYear"]) and not pd.isnull(x["endYear"]):
+        if x["startYear"] < min_year or x["startYear"] > max_year:
+            x["flag_inconsistent_year"] = True
+        if x["endYear"] < min_year or x["endYear"] > max_year:
+            x["flag_inconsistent_year"] = True
+    else:
+        x["flag_inconsistent_year"] = np.nan
+    return x
+
+
+def is_month(value):
+    """
+    Check if a value is a valid month (1-12).
+    """
+    if pd.isnull(value):
+        return np.nan
+    try:
+        month = int(value)
+        return 1 <= month <= 12
+    except ValueError:
+        return False
+
+
+def is_day(value):
+    """
+    Check if a value is a valid day (1-31).
+    """
+    if pd.isnull(value):
+        return np.nan
+    try:
+        day = int(value)
+        return 1 <= day <= 31
+    except ValueError:
+        return False
+
+
+def flag_inconsistent_month(x):
+    """
+    Check if month fields are valid and create flags for them.
+    """
+    x["flag_inconsistent_month"] = False
+    for field in ["startMonth", "endMonth"]:
+        if field in x:
+            if not pd.isnull(x[field]):
+                if not is_month(x[field]):
+                    x["flag_inconsistent_month"] = True
+            else:
+                x["flag_inconsistent_month"] = np.nan
+    return x
+
+
+def flag_inconsistent_day(x):
+    """
+    Check if day fields are valid and create flags for them.
+    """
+    x["flag_inconsistent_day"] = False
+    for field in ["startDay", "endDay"]:
+        if field in x:
+            if not pd.isnull(x[field]):
+                if not is_day(x[field]):
+                    x["flag_inconsistent_day"] = True
+            else:
+                x["flag_inconsistent_day"] = np.nan
+    return x
+
+
 def flag_hazard_all_unknown(x):
     """
     Adds a column to the dataframe, "flag_hazard_all_unknown", which is True if all
