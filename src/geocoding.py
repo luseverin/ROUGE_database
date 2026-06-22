@@ -57,8 +57,7 @@ CACHE_DB = "reverse_geocode_cache.db"
 _conn = sqlite3.connect(CACHE_DB, check_same_thread=False)
 _cur = _conn.cursor()
 
-_cur.execute(
-    """
+_cur.execute("""
 CREATE TABLE IF NOT EXISTS reverse_cache (
     lat REAL,
     lon REAL,
@@ -67,8 +66,7 @@ CREATE TABLE IF NOT EXISTS reverse_cache (
     result TEXT,
     PRIMARY KEY (lat, lon, lang, zoom)
 )
-"""
-)
+""")
 _conn.commit()
 
 # Lock guarantees safe concurrent writes
@@ -207,7 +205,8 @@ def identify_unique_location_country(df_geo):
 
     # Ensure no missing locations: replace missing/empty with country name
     df_unique["location"] = df_unique["location"].where(
-        df_unique["location"].notna() & (df_unique["location"] != ""), df_unique["country"]
+        df_unique["location"].notna() & (df_unique["location"] != ""),
+        df_unique["country"],
     )
 
     return df_unique
@@ -368,27 +367,36 @@ def open_admin_gpd(ADMIN_PATH, polygon_source="GAUL"):
                     "ne_50m_admin_0_countries.shp",
                 )
             )
-            
-            #Add the countries which are missing from the 50m resolution
-            ne_0_10m = gpd.read_file(
-            os.path.join(
-                ADMIN_PATH,
-                "ne_10m_admin_0_countries",
-                "ne_10m_admin_0_countries.shp",
-                )
-            )  
-            missing_iso3 = set(ne_0_10m["ISO_A3"]) - set(ne_0["ISO_A3"]) 
-            missing_countries = ne_0_10m[ne_0_10m["ISO_A3"].isin(missing_iso3)]
-            ne_0 = pd.concat([ne_0, missing_countries],ignore_index=True)
 
-            #Clean the file structure and merge with GAUL
+            # Add the countries which are missing from the 50m resolution
+            ne_0_10m = gpd.read_file(
+                os.path.join(
+                    ADMIN_PATH,
+                    "ne_10m_admin_0_countries",
+                    "ne_10m_admin_0_countries.shp",
+                )
+            )
+            missing_iso3 = set(ne_0_10m["ISO_A3"]) - set(ne_0["ISO_A3"])
+            missing_countries = ne_0_10m[ne_0_10m["ISO_A3"].isin(missing_iso3)]
+            ne_0 = pd.concat([ne_0, missing_countries], ignore_index=True)
+
+            # Clean the file structure and merge with GAUL
             ne_0 = ne_0.rename({"ADMIN": "ADMIN_0", "ISO_A3": "iso3_code"}, axis=1)
             ne_0["gaul1_code"] = None
             ne_0["gaul2_code"] = None
             ne_0 = pd.merge(
                 ne_0, gaul1[["iso3_code", "gaul0_code"]], on="iso3_code", how="left"
             ).drop_duplicates()
-            ne_0 = ne_0[["iso3_code", "gaul0_code", "ADMIN_0", "geometry"]]
+            ne_0 = ne_0[
+                [
+                    "iso3_code",
+                    "gaul0_code",
+                    "gaul1_code",
+                    "gaul2_code",
+                    "ADMIN_0",
+                    "geometry",
+                ]
+            ]
             gpd_files["ADM_0"] = ne_0
 
         except Exception as e:
@@ -494,6 +502,7 @@ def find_closest_country(curr_country, gpd_files, threshold=0.5):
     else:
         return None
 
+
 def get_polygon(
     gdf_file,
     country_name,
@@ -572,6 +581,7 @@ def get_polygon(
         LOGGER.error("[get_polygon] Error: %s", e)
     return None
 
+
 def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
     """
     Find the administrative polygon containing the geometry at the specified level.
@@ -623,6 +633,7 @@ def get_polygon_for_geometry(geom, country_name, gpd_files, level=2):
         # Find ADM_2 polygons intersecting the geometry
         adm2_match = adm2_candidates[adm2_candidates.intersects(geom)]
         return adm2_match if not adm2_match.empty else None
+
 
 def fallback_country_union(gdf_file, location, countries, iso_countries):
     """Fallback: Combine polygons of all possible countries"""
@@ -686,7 +697,9 @@ def attach_nomin_flags(
         flag_nomin_translate=bool(flag_nomin_translate),
     )
 
+
 #### Queries nominatim and find best match
+
 
 def query_nominatim(location, country_iso2, max_retries=2, initial_delay=1):
     """
@@ -731,6 +744,7 @@ def query_nominatim(location, country_iso2, max_retries=2, initial_delay=1):
         "[query_nominatim] All %i attempts failed for '%s'", max_retries, location
     )
     return None
+
 
 def query_reverse_geocode(coords, lang="en", zoom=13, max_retries=2, initial_delay=1):
     """
@@ -804,6 +818,7 @@ def query_reverse_geocode(coords, lang="en", zoom=13, max_retries=2, initial_del
             return None
 
     return None
+
 
 def find_best_match(loc_clean, address, similarity_th, print_info=False):
     """
@@ -927,6 +942,7 @@ def atomic_gpkg_save(gdf, target_path, layer_name="multipolygons"):
         except:
             pass
 
+
 def save_df_geo(df_geo, save_path, res_savename):
     """Save a GeoDataFrame to a GeoPackage file with standardized CRS and naming."""
     save_df = df_geo.copy()
@@ -945,9 +961,11 @@ def save_df_geo(df_geo, save_path, res_savename):
         except Exception as e:
             LOGGER.error("[GeoPackage Save Error] %s", e)
 
+
 #### Optimize geocoding and work per unique location found
 
 ##### Functions for nominatim
+
 
 def find_best_nomin(row, similarity_th, print_info=False):
     """Query Nominatim for a location across candidate countries and
@@ -1066,12 +1084,14 @@ def find_best_nomin(row, similarity_th, print_info=False):
         }
     )
 
+
 ##### Convert individual locations to polygons
+
 
 def try_fallback_strategies(gdf_file, best_nomin, best_result, adm_lev):
     """Attempt alternative strategies to match an administrative polygon
     when the direct lookup fails (alternative Nominatim keys, language-based fallbacks).
-    
+
     Returns:
         tuple: (result_gdf, used_language_fallback) where used_language_fallback is True
                if the result came from language-based reverse geocoding.
@@ -1273,7 +1293,9 @@ def geocode_from_nominatim_output_optimized(row, gdf_file, print_info=False):
         )
         flag_nomin_no_result = bool(row.get("flag_nomin_no_result", False))
         flag_nomin_sim_below_th = bool(row.get("flag_nomin_sim_below_th", False))
-        flag_nomin_translate = False  # Will be set to True if language fallback succeeds
+        flag_nomin_translate = (
+            False  # Will be set to True if language fallback succeeds
+        )
         # print(f"[geocode] Processing location={location} country={countries} iso3={iso_countries}, best result={best_result}")
 
         if not best_result:
@@ -1918,7 +1940,7 @@ def geocode_df_to_polygon_by_unique_loc(
     gpd_files = open_admin_gpd(ADMIN_PATH, polygon_source)
 
     # Collect unique locations and associated countries
-    start = time.time() 
+    start = time.time()
     if "country_robust" not in df_geo.columns:
         if "country_kw" in df_geo.columns:
             df_geo = identify_robust_country(
