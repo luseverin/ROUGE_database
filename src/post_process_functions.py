@@ -460,8 +460,8 @@ def convert_unit(
     """Convert units that can be converted e.g. families => people"""
 
     unit = x["impactUnit"]
-    x["flag_unit_conversion"] = False
-    x["flag_unit_conversion_error"] = False
+    x["flag_non_currency_unit_conversion"] = False
+    x["flag_non_currency_unit_conversion_error"] = False
     if not isinstance(unit, str):
         return x  # skip if unit is None or not a string
     elif pd.isnull(unit) or unit in ["", "null"]:
@@ -475,7 +475,7 @@ def convert_unit(
         if re.search(old_unit_pattern, unit, re.IGNORECASE) and not re.search(
             r"\b(people)\b", unit, re.IGNORECASE
         ):  # avoid conversion when people already in unit e.g. people per household
-            x["flag_unit_conversion"] = True
+            x["flag_non_currency_unit_conversion"] = True
             try:
                 for key in ["impactValueMin", "impactValueMax", "impactValue"]:
                     conv_val[key] = float(x[key])  # force conversion to float
@@ -489,10 +489,10 @@ def convert_unit(
                     "impactValue",
                 ]:  # do assignement after all conversions to avoid partial conversion
                     x[key] = conv_val[key]
-                x["flag_unit_conversion_error"] = False
+                x["flag_non_currency_unit_conversion_error"] = False
             except Exception as e:
                 LOGGER.error("Skipping unit conversion for row due to error: %s", e)
-                x["flag_unit_conversion_error"] = True
+                x["flag_non_currency_unit_conversion_error"] = True
     return x
 
 

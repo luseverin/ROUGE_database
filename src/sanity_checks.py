@@ -298,6 +298,17 @@ def flag_inconsistent_day(x):
     return x
 
 
+def flag_years_missing(x):
+    """
+    Check if both startYear and endYear are missing and create a flag for it.
+    """
+
+    if pd.isnull(x["startYear"]) and pd.isnull(x["endYear"]):
+        return True
+    else:
+        return False
+
+
 def flag_hazard_all_unknown(x):
     """
     Adds a column to the dataframe, "flag_hazard_all_unknown", which is True if all
@@ -360,7 +371,7 @@ def flag_remove_hazard(x, remove_hazards, strict=False):
         return all(haz in remove_hazards for haz in x["hazards"])
 
 
-def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):
+def flag_remove_unit(x, remove_units):
     """
     Adds a column to the dataframe, "flag_remove_unit", which is True if the impact
     unit contains any of the units in the list of units to remove, and False otherwise.
@@ -370,8 +381,8 @@ def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):
     ----------
     x : pandas.Series
         The dataframe containing the extracted data
-    remove_units : list (optional)
-        The list of units to remove (default is ["children", "women", "male", "female"])
+    remove_units : list
+        The list of units to remove
 
     Returns
     -------
@@ -382,6 +393,32 @@ def flag_remove_unit(x, remove_units=["children", "women", "male", "female"]):
         return False
     remove_units_pattern = "|".join([re.escape(unit) for unit in remove_units])
     return re.search(remove_units_pattern, x["impactUnit"]) is not None
+
+
+def flag_missing_country_and_location(x):
+    """
+    Adds a column to the dataframe, "flag_missing_country_and_location",
+    which is True if both the country and location fields are missing
+    (empty list), and False otherwise.
+
+    Parameters
+    ----------
+    x : pandas.Series
+        The dataframe containing the extracted data
+
+    Returns
+    -------
+    pandas.Series
+        The series with the added column
+    """
+    if not isinstance(x["country"], list) or not isinstance(x["location"], list):
+        LOGGER.warning(
+            "Expected a list for country and location, got %s and %s",
+            type(x["country"]).__name__,
+            type(x["location"]).__name__,
+        )
+        return np.nan
+    return len(x["country"]) == 0 and len(x["location"]) == 0
 
 
 def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):

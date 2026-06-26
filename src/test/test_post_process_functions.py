@@ -291,7 +291,7 @@ class TestImpactFunctions(unittest.TestCase):
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "people")
         self.assertEqual(out["impactValue"], 30)
-        self.assertTrue(out["flag_unit_conversion"])
+        self.assertTrue(out["flag_non_currency_unit_conversion"])
 
     def test_convert_unit_no_match(self):
         x = pd.Series(
@@ -305,7 +305,7 @@ class TestImpactFunctions(unittest.TestCase):
         )
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "kg")
-        self.assertFalse(out["flag_unit_conversion"])
+        self.assertFalse(out["flag_non_currency_unit_conversion"])
 
     def test_convert_unit_non_people_subtype(self):
         # Test that conversion is skipped when default unit for subtype is not 'people'
@@ -321,7 +321,7 @@ class TestImpactFunctions(unittest.TestCase):
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "households")  # Should not convert
         self.assertEqual(out["impactValue"], 10)  # Should not multiply
-        self.assertFalse(out["flag_unit_conversion"])
+        self.assertFalse(out["flag_non_currency_unit_conversion"])
 
     def test_assign_unit_type(self):
         x = pd.Series({"impactUnit": "kg"})
@@ -1468,7 +1468,7 @@ class TestPostProcessingPipeline(unittest.TestCase):
         self.assertEqual(df.loc[0, "impactUnit"], "people")
         self.assertEqual(df.loc[0, "impactValue"], 360)  # 120 families * 3
         self.assertEqual(df.loc[0, "impactSubtype"], "Affected People")
-        self.assertTrue(df.loc[0, "flag_unit_conversion"])
+        self.assertTrue(df.loc[0, "flag_non_currency_unit_conversion"])
 
         # Row 1: houses with number extraction
         self.assertEqual(df.loc[1, "impactUnit"], "homes")
