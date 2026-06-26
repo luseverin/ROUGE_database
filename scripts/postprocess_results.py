@@ -33,13 +33,14 @@ from src.sanity_checks import *
 # 4. Geocoding
 
 ## Parameters
+### !! fix no_location_no_country flagging
 filename_in = "0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426"
 # "labelled_reports_impacts_gaps_v050426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
 
 filename_out = (
-    "test_post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
+    "post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
 )  # "post_processed_" + filename_in#post_processed_flags_
 data_path = DATA_OUT_LLMS  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 # postprocess params
@@ -76,7 +77,13 @@ remove_cats = [
 ]  # list of impactSubtypes to remove
 
 remove_hazards_list = ["Epidemic", "Conflict"]  # list of hazards to remove
-
+strict_remove_hazards = False  # whether to remove impacts with any of the hazards in remove_hazards_list (True) or only if all hazards are in the list (False)
+remove_units_list = [
+    "children",
+    "women",
+    "male",
+    "female",
+]  # list of units to remove Note: children are not removed if the impactSubtype is "Education"
 dedup_cols = [
     "appealCode",
     "impactSubtype",
@@ -131,7 +138,7 @@ else:
         response_df = pd.read_csv(data_path / (filename_in + ".csv"))
 
     # copy data
-    response_df_proc = cp.deepcopy(response_df).iloc[:10]
+    response_df_proc = cp.deepcopy(response_df)
 
     ## Formatting
     # convert numerical columns
@@ -286,7 +293,7 @@ else:
         flag_remove_cat, remove_cats=remove_cats, axis=1
     )
     response_df_proc["flag_remove_unit"] = response_df_proc.apply(
-        flag_remove_unit, axis=1
+        flag_remove_unit, axis=1, args=(remove_units_list,)
     )
     response_df_proc["flag_response_unit"] = response_df_proc.apply(
         flag_response_unit, axis=1
@@ -295,12 +302,22 @@ else:
     response_df_proc["flag_remove_hazard"] = response_df_proc.apply(
         flag_remove_hazard,
         axis=1,
-        args=(remove_hazards_list,),
+        args=(remove_hazards_list, strict_remove_hazards),
     )
     # Flag rows with all hazards unknown
     response_df_proc["flag_all_hazards_unknown"] = response_df_proc.apply(
         flag_hazard_all_unknown, axis=1
     )
+
+    # Flag rows with missing country and location
+    response_df_proc["flag_country_location_missing"] = response_df_proc.apply(
+        flag_missing_country_and_location, axis=1
+    )
+    # Flag rows with missing years
+    response_df_proc["flag_years_missing"] = response_df_proc.apply(
+        flag_years_missing, axis=1
+    )
+
     if not geocode and not geocode_load:
         response_df_proc["flag_pop_cntry"] = response_df_proc.apply(
             pop_cntry_check, country_pop=country_pop, axis=1

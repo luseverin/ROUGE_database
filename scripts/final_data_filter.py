@@ -36,15 +36,7 @@ dedup_cols = [  # columns to check for duplicates
     "endDay",
     "hazards",
 ]
-unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these flags are False)
-    "flag_remove_cat",
-    "flag_value_no_unit",
-    "flag_unit_nonstd",
-    "flag_response_unit",
-    "flag_unknown_subtype",
-    "flag_all_hazards_unknown",
-    # "flag_remove_hazard",
-]
+
 flag_groups = {  # groups of flags to gather into a single flag
     "flag_unit_std": [
         "flag_unit_harmonization",
@@ -52,12 +44,25 @@ flag_groups = {  # groups of flags to gather into a single flag
     ],
     "flag_unit_error": [
         "flag_remove_number_unit_error",
-        "flag_unit_conversion_error",
+        "flag_non_currency_unit_conversion_error",
         "flag_non-SI_unit_standardization_error",
         "flag_SI_unit_standardization_error",
         "flag_failed_currency_conversion",
     ],
 }
+
+unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these flags are False)
+    "flag_remove_cat",
+    # "flag_value_no_unit",
+    # "flag_unit_nonstd",
+    "flag_response_unit",
+    "flag_unknown_subtype",
+    "flag_all_hazards_unknown",
+    "flag_pop_cntry",
+    "flag_value_not_in_text",
+    "flag_remove_unit",
+    # "flag_remove_hazard",
+]
 
 merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
 remove_unknown_hazards = (
