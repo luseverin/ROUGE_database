@@ -34,7 +34,7 @@ from src.sanity_checks import *
 
 ## Parameters
 ### !! fix no_location_no_country flagging
-filename_in = "0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426"
+filename_in = "labelled_reports_all_v26062026"
 # "labelled_reports_impacts_gaps_v050426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
@@ -42,13 +42,13 @@ filename_in = "0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama
 filename_out = (
     "post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
 )  # "post_processed_" + filename_in#post_processed_flags_
-data_path = DATA_OUT_LLMS  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_LABELLED  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 # postprocess params
 post_proc = (
     True  # whether or not we want to process the LLM output or the labelled data
 )
 check_flag_value_in_text = (
-    True  # whether or not we want to check if the value is in the original text
+    False  # whether or not we want to check if the value is in the original text
 )
 convert_to_people = True  # whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False  # whether or not we want to force unit to default unit of subtype when unknown unit

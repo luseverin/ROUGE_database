@@ -13,9 +13,7 @@ ifrc_reports_df = pd.read_csv(file_path)
 ifrc_reports_df_filtered = take_latest_report(ifrc_reports_df)
 
 # eventually load labelled reports
-labelled_reports = pd.read_csv(
-    DATA_LABELLED / "labelled_reports_impacts_gaps_v270326.csv"
-)
+labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_all_v26062026.csv")
 keys = labelled_reports[["appealCode", "reportDate"]].drop_duplicates()
 labelled_reports_raw = ifrc_reports_df.merge(
     keys, on=["appealCode", "reportDate"], how="inner"
@@ -23,15 +21,36 @@ labelled_reports_raw = ifrc_reports_df.merge(
 
 # eventually select by appeal code
 appeals_test = [
-    "MDRBO013",
-    "MDRSY009",
+    "MDRKZ010",
+    "MDREC019",
+    "MDRPK018",
+    "MDRPG008",
+    "MDRYE011",
+    "MDRIQ014",
+    "MDRKE058",
+    "MDRNG041",
+    "MDRUG050",
+    "MDRDZ011",
+    "MDRPK026",
+    "MDRCM039",
+    "MDRBJ019",
+    "MDRSD034",
+    "MDRRW022",
+    "MDRMZ024",
+    "MDRCM036",
+    "MDRDZ008",
+    "MDRPH036",
+    "MDRJO003",
+    "MDR55001",
+    "MDRHU005",
+    "MDRLB013",
+    "MDRID013",
+    "MDRVU012",
 ]  # ["MDRYE011","MDRZM022", "MDRSD034", "MDRUG050", "MDRRW022"]
 # test_reports = labelled_reports_raw[
 #    labelled_reports_raw.appealCode.isin(appeals_test)
 # ]
-test_reports = ifrc_reports_df_filtered[
-    ifrc_reports_df_filtered.appealCode.isin(appeals_test)
-]
+test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
 
 # select reports to process
 # lreport = 350 + 132
@@ -46,9 +65,7 @@ nreports = len(reports_in)
 chunk_size = 1000  # chunk size of input. None to disable
 max_rounds = None  # max number of continuations for impact extraction. None to disable
 multi_dates = False  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
-sim_name = (
-    f"test_stricter_valid_latest_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
-)
+sim_name = f"test_labelled_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
