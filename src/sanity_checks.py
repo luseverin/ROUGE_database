@@ -395,30 +395,38 @@ def flag_remove_unit(x, remove_units):
     return re.search(remove_units_pattern, x["impactUnit"]) is not None
 
 
-def flag_missing_country_and_location(x):
+def flag_missing_country_and_location(
+    x, country_col="country_iso3", location_col="location"
+):
     """
     Adds a column to the dataframe, "flag_missing_country_and_location",
-    which is True if both the country and location fields are missing
+    which is True if both the country_col and location_col fields are missing
     (empty list), and False otherwise.
 
     Parameters
     ----------
     x : pandas.Series
         The dataframe containing the extracted data
+    country_col : str, default "country_iso3"
+        The column name in x containing the country iso3 code
+    location_col : str, default "location"
+        The column name in x containing the location
 
     Returns
     -------
     pandas.Series
         The series with the added column
     """
-    if not isinstance(x["country"], list) or not isinstance(x["location"], list):
+    if not isinstance(x[country_col], list) or not isinstance(x[location_col], list):
         LOGGER.warning(
-            "Expected a list for country and location, got %s and %s",
-            type(x["country"]).__name__,
-            type(x["location"]).__name__,
+            "Expected a list for %s and %s, got %s and %s",
+            country_col,
+            location_col,
+            type(x[country_col]).__name__,
+            type(x[location_col]).__name__,
         )
         return np.nan
-    return len(x["country"]) == 0 and len(x["location"]) == 0
+    return len(x[country_col]) == 0 and len(x[location_col]) == 0
 
 
 def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
