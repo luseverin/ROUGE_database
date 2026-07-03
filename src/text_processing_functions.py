@@ -493,12 +493,12 @@ def check_disaster_type_keyword(text):
 
     hazard_patterns = {
         "Drought": r"\b(drought|dry spell)s?\b",
-        "Flood": r"\b(flood|inundation)s?\b",
+        "Flood": r"\b(flood|inundation|rain(fall)?)s?\b",
         "Glacial lake outburst": r"\b(glacial lake outburst)s?\b",
         "Cyclone": r"\b(cyclone|tropical cyclone)s?\b",
         "Hurricane": r"\b(hurricane)s?\b",
         "Typhoon": r"\b(typhoon)s?\b",
-        "Storm": r"\b(superstorm|windstorm|snowstorm|snowfall|blizzard|derecho|winterstorm|hail|extra tropical storm|thunderstorm|storm surge|storm|strong wind)s?\b",
+        "Storm": r"\b(superstorm|windstorm|snowstorm|snowfall|blizzard|derecho|winterstorm|hail(storm)?|extra tropical storm|thunderstorm|storm surge|storm|strong wind)s?\b",
         "Tornado": r"\b(tornado(es)?)\b",
         "Heatwave": r"\b(heat wave|heatwave|heat episode|heat stress|extreme heat|(hot|heat) spell)s?\b",
         "Coldwave": r"\b(cold wave|coldwave|cold spell|severe winter conditions?|extreme winter conditions?|severe winter|extreme winter)\b",
@@ -519,7 +519,7 @@ def check_disaster_type_keyword(text):
 
 
 # function from tais
-def reclass_disaster_type(element):
+def reclass_disaster_type(element, text_col="text"):
     initial_disaster_type = element["disasterType"]
     disaster_type_reclassified = check_disaster_type_keyword(
         element["disasterType"] + " " + element["reportName"]
@@ -531,8 +531,10 @@ def reclass_disaster_type(element):
 
     # If there is no hazard detected in the original classification or in the title, check part of the report text
     if disaster_type == "None":
-        if ("text" in element) and (element.get("text") is not None):
-            disaster_type_text = check_disaster_type_keyword(element.get("text")[:200])
+        if (text_col in element) and (element.get(text_col) is not None):
+            disaster_type_text = check_disaster_type_keyword(
+                element.get(text_col)[:200]
+            )
             if disaster_type_text != "None":
                 disaster_type = disaster_type_text
                 element["secondaryDisasterType"] = disaster_type
