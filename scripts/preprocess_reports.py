@@ -26,6 +26,7 @@ from src.post_process_functions import country_name_to_iso3
 from src.logger_setup import set_logger
 
 ## Parameters
+text_field = "clean_text"  # "text" "clean_text"
 filter_types = [
     "Emergency Appeal",
     "Emergency Appeal Revision",
@@ -111,8 +112,8 @@ informat = "csv"  # csv json
 outformat = "csv"  # csv json
 
 ## Select data
-fname_in = "df_with_clean_text_all"  # "all_ifrc_reports_info_unnested_with_text_v181125"  #'filtered_report_types_nat_hazards_bugfix'
-fname_metadata_in = "filtered_reports_all_30062026"
+fname_in = "all_reports_with_pdf_status_020726_with_clean_text"
+fname_metadata_in = "all_reports_with_pdf_status_020726"
 fname_out = f'preproc_text_sel_gaps_{fname_in}_v{dt.date.today().strftime("%d%m%y")}'
 
 if format_numbers:
@@ -160,7 +161,6 @@ if input_path.suffix == ".json":
         reports_in = json.load(json_file)
 elif input_path.suffix == ".csv":
     text_in = pd.read_csv(input_path, index_col=0)
-    text_in = text_in.rename(columns={"clean_text": "text"})
     if fname_metadata_in is not None:
         metadata_in = pd.read_csv(DATA_IN_JSONS / (fname_metadata_in + ".csv"))
         reports_in = pd.merge(text_in, metadata_in, on="uid", how="left").to_dict(
@@ -175,10 +175,17 @@ not_eng = []
 missing_origType = []
 removed_reportName = []
 removed_appealType = []
-removed_no_nathaz = []
 removed_no_text = []
+removed_no_nathaz = []
+removed_no_nathaz_text = []
 filtered_reports = []
 filtered_reports_hazonly = []
+# reports_in = [
+#    report
+#    for report in reports_in
+#    if report["appealCode"]
+#    in ["MDRGW003", "MDRMY003", "MDRCN006", "MDRHU005", "MDRSV012", "MDRBD022"]
+# ]
 for report in reports_in:
     # Remove reports with no origType
     if pd.isna(report["origType"]):
@@ -197,8 +204,6 @@ for report in reports_in:
         )  # avoid undesired reports to be processed
     else:
         allowed_name = True
-    # filter out unwanted disaster types
-    report = reclass_disaster_type(report)
 
     if not allowed_name:
         removed_reportName.append(report)
@@ -218,6 +223,18 @@ for report in reports_in:
             report["appealType"],
         )
         continue
+    if pd.isnull(report[text_field]) or len(report[text_field]) == 0:
+        removed_no_text.append(report)
+        LOGGER.info(
+            "Report %s %s has no text, skipping.",
+            report["appealCode"],
+            report["date"],
+        )
+        continue
+
+    # filter out unwanted disaster types
+    report = reclass_disaster_type(report, text_col=text_field)
+
     if not report["naturalHazard"] == 1:
         removed_no_nathaz.append(report)
         LOGGER.info(
@@ -227,7 +244,7 @@ for report in reports_in:
         )
         continue
     if id_language and "language" not in report.keys():
-        report["language"] = detect_language(report["text"])
+        report["language"] = detect_language(report[text_field])
     else:
         report["language"] = "unknown"
 
@@ -251,7 +268,7 @@ for report in reports_in:
             report["reportDate"] = report["date"]
         del report["date"]
         report["text_processed"] = clean_text(
-            report["text"],
+            report[text_field],
             remove_newlines=False,
             remove_numbers=False,
             remove_stopwords=False,
@@ -271,7 +288,7 @@ for report in reports_in:
                 report["appealCode"],
                 report["reportDate"],
             )
-            removed_no_text.append(report)
+            removed_no_nathaz_text.append(report)
             continue
         report["nathaz_text"] = sent_tokenize(report["nathaz_text"])
         report["nathaz_text"] = remove_newlines(report["nathaz_text"])
@@ -289,6 +306,7 @@ dropped_reports = (
     missing_origType
     + removed_reportName
     + removed_appealType
+    + removed_no_nathaz_text
     + removed_no_nathaz
     + not_eng
     + removed_no_text
@@ -316,6 +334,11 @@ LOGGER.info(
     [report["appealCode"] for report in removed_appealType],
 )
 LOGGER.info(
+    "%i reports with no text: %s",
+    len(removed_no_text),
+    [report["appealCode"] for report in removed_no_text],
+)
+LOGGER.info(
     "%i reports with no natural hazard identified: %s",
     len(removed_no_nathaz),
     [report["appealCode"] for report in removed_no_nathaz],
@@ -327,8 +350,8 @@ LOGGER.info(
 )
 LOGGER.info(
     "%i reports with no natural hazard impact text: %s",
-    len(removed_no_text),
-    [report["appealCode"] for report in removed_no_text],
+    len(removed_no_nathaz_text),
+    [report["appealCode"] for report in removed_no_nathaz_text],
 )
 
 ## Save data
