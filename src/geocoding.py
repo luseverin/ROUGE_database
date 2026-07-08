@@ -1982,6 +1982,18 @@ def geocode_df_to_polygon_by_unique_loc(
         else:
             df_geo["country_robust_iso3"] = df_geo["country_iso3"]
 
+    # Flag rows with missing iso3 codes before correction
+    df_geo["flag_fail_country_iso"] = df_geo["country_robust_iso3"].apply(
+        lambda x: isinstance(x, list) and len(x) == 0
+    )
+
+    # Flag rows with missing robust country and location 
+    df_geo["flag_no_location_no_country"] = (
+        df_geo["country_robust"].apply(lambda x: isinstance(x, list) and len(x) == 0)
+        &
+        df_geo["location"].apply(lambda x: isinstance(x, list) and len(x) == 0)
+    )
+
     # For rows with missing iso3_code, use the union of all iso3_codes
     df_geo = (
         df_geo
