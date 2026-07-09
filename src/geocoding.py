@@ -141,7 +141,6 @@ def identify_robust_country(df_geo, ctr_col1, ctr_col2, output_col):
 
     return df
 
-
 def identify_unique_location_country(df_geo):
     rows = {}  # key -> row data, deduplicates automatically and keeps flags
 
@@ -210,6 +209,27 @@ def identify_unique_location_country(df_geo):
     )
 
     return df_unique
+
+def fill_iso3_with_appeal_union(group, iso3_col="country_robust_iso3"):
+    # Collect all unique iso3 codes from non-empty lists
+    iso3_union = list({
+        code
+        for codes in group[iso3_col]
+        if isinstance(codes, list) and len(codes) > 0
+        for code in codes
+    })
+
+    # Find empty lists
+    mask = group[iso3_col].apply(
+        lambda x: isinstance(x, list) and len(x) == 0
+    )
+
+    # Assign using a Series to preserve object dtype
+    group.loc[mask, iso3_col] = pd.Series(
+        [iso3_union.copy()] * mask.sum(),
+        index=group.index[mask]
+    )
+    return group
 
 
 def identify_unique_locations_v2(df_geo):
@@ -1961,6 +1981,25 @@ def geocode_df_to_polygon_by_unique_loc(
             )
         else:
             df_geo["country_robust_iso3"] = df_geo["country_iso3"]
+
+    # Flag rows with missing iso3 codes before correction
+    df_geo["flag_fail_country_iso"] = df_geo["country_robust_iso3"].apply(
+        lambda x: isinstance(x, list) and len(x) == 0
+    )
+
+    # Flag rows with missing robust country and location 
+    df_geo["flag_no_location_no_country"] = (
+        df_geo["country_robust"].apply(lambda x: isinstance(x, list) and len(x) == 0)
+        &
+        df_geo["location"].apply(lambda x: isinstance(x, list) and len(x) == 0)
+    )
+
+    # For rows with missing iso3_code, use the union of all iso3_codes
+    df_geo = (
+        df_geo
+        .groupby("appealCode", group_keys=False)
+        .apply(fill_iso3_with_appeal_union, iso3_col="country_robust_iso3")
+    )
 
     # Derive ISO2 from the robust ISO3 column
     if "country_robust_iso2" not in df_geo.columns:

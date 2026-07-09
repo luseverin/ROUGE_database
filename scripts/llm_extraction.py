@@ -6,66 +6,74 @@ from src.labelling_helpers import take_latest_report, take_longest_report
 from src.logger_setup import set_logger
 
 ## Open and read the JSON file
-file_path = DATA_IN_JSONS / "preproc_text_sel_gaps_df_with_clean_text_all_v190526.csv"
+# file_path = DATA_IN_JSONS / "preproc_text_sel_gaps_df_with_clean_text_all_v190526.csv"
+file_path = DATA_IN_JSONS /"preproc_text_sel_gaps_df_with_clean_text_all_combined_v300626_v060726.csv"
 ifrc_reports_df = pd.read_csv(file_path)
 
 # filter reports by report type and date
 ifrc_reports_df_filtered = take_latest_report(ifrc_reports_df)
 
+# filter year 
+ymin = 2016
+ymax = 2025
+ifrc_reports_df_filtered["reportYear"] = pd.to_datetime(ifrc_reports_df_filtered["reportDate"], errors="coerce", infer_datetime_format=True).dt.year
+ifrc_reports_df_filtered = ifrc_reports_df_filtered.loc[(ifrc_reports_df_filtered["reportYear"]>=ymin) & (ifrc_reports_df_filtered["reportYear"]<=ymax)]
+
 # eventually load labelled reports
-labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_all_v26062026.csv")
+# labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_all_v26062026.csv")
+labelled_reports = pd.read_csv(DATA_LABELLED / "combined_labelled_reports.csv")
 keys = labelled_reports[["appealCode", "reportDate"]].drop_duplicates()
 labelled_reports_raw = ifrc_reports_df.merge(
     keys, on=["appealCode", "reportDate"], how="inner"
 )
 
 # eventually select by appeal code
-appeals_test = [
-    "MDRKZ010",
-    "MDREC019",
-    "MDRPK018",
-    "MDRPG008",
-    "MDRYE011",
-    "MDRIQ014",
-    "MDRKE058",
-    "MDRNG041",
-    "MDRUG050",
-    "MDRDZ011",
-    "MDRPK026",
-    "MDRCM039",
-    "MDRBJ019",
-    "MDRSD034",
-    "MDRRW022",
-    "MDRMZ024",
-    "MDRCM036",
-    "MDRDZ008",
-    "MDRPH036",
-    "MDRJO003",
-    "MDR55001",
-    "MDRHU005",
-    "MDRLB013",
-    "MDRID013",
-    "MDRVU012",
-]  # ["MDRYE011","MDRZM022", "MDRSD034", "MDRUG050", "MDRRW022"]
-# test_reports = labelled_reports_raw[
-#    labelled_reports_raw.appealCode.isin(appeals_test)
-# ]
-test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
+# appeals_test = [
+#     "MDRKZ010",
+#     "MDREC019",
+#     "MDRPK018",
+#     "MDRPG008",
+#     "MDRYE011",
+#     "MDRIQ014",
+#     "MDRKE058",
+#     "MDRNG041",
+#     "MDRUG050",
+#     "MDRDZ011",
+#     "MDRPK026",
+#     "MDRCM039",
+#     "MDRBJ019",
+#     "MDRSD034",
+#     "MDRRW022",
+#     "MDRMZ024",
+#     "MDRCM036",
+#     "MDRDZ008",
+#     "MDRPH036",
+#     "MDRJO003",
+#     "MDR55001",
+#     "MDRHU005",
+#     "MDRLB013",
+#     "MDRID013",
+#     "MDRVU012",
+# ]  # ["MDRYE011","MDRZM022", "MDRSD034", "MDRUG050", "MDRRW022"]
+# # test_reports = labelled_reports_raw[
+# #    labelled_reports_raw.appealCode.isin(appeals_test)
+# # ]
+# test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
 
 # select reports to process
-# lreport = 350 + 132
-# rreport = len(ifrc_reports_df_filtered)
-# reports_in = ifrc_reports_df_filtered.iloc[
-#    lreport : rreport + 1
-# ]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
-reports_in = test_reports
+lreport = 0
+rreport = len(ifrc_reports_df_filtered)
+reports_in = ifrc_reports_df_filtered.iloc[
+   lreport : rreport + 1
+]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+# reports_in = test_reports
 nreports = len(reports_in)
 
 ## Parameters
 chunk_size = 1000  # chunk size of input. None to disable
 max_rounds = None  # max number of continuations for impact extraction. None to disable
 multi_dates = False  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
-sim_name = f"test_labelled_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
+sim_name = f"{lreport}-{rreport}_llm_response_preproc_text_sel_gaps_combined_v300626_v060726_{ymin}-{ymax}"#f"test_labelled_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats
