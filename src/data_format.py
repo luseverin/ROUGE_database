@@ -173,8 +173,8 @@ def listify_strings(x):
         except:
             x = [x]
         return x
-    elif isinstance(x, list):
-        return x
+    elif isinstance(x, (list, np.ndarray)):
+        return list(x)
     elif pd.isna(x) or x is None:
         return []
     else:
