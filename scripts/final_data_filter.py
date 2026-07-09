@@ -47,21 +47,23 @@ flag_groups = {  # groups of flags to gather into a single flag
         "flag_non_currency_unit_conversion_error",
         "flag_non-SI_unit_standardization_error",
         "flag_SI_unit_standardization_error",
-        "flag_failed_currency_conversion",
+        "flag_currency_conversion_error",
     ],
 }
 
 unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these flags are False)
     "flag_remove_cat",
-    # "flag_value_no_unit",
-    # "flag_unit_nonstd",
+    "flag_value_no_unit",
+    "flag_unit_nonstd",
     "flag_response_unit",
     "flag_unknown_subtype",
     "flag_all_hazards_unknown",
     "flag_pop_cntry",
-    "flag_value_not_in_text",
     "flag_remove_unit",
-    # "flag_remove_hazard",
+    "flag_remove_hazard",
+    "flag_failed_startYear_inference",
+    "flag_inconsistent_year",
+    "flag_no_location_no_country"
 ]
 
 merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
@@ -69,7 +71,7 @@ remove_unknown_hazards = (
     True  # whether to remove impacts for which all hazards are unknown
 )
 ##load data (model)
-res_savename = "post_processed_0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426_v230426_geo"
+res_savename = "merged_post_processed_0-778_llm_response_preproc_text_sel_gaps_combined_v300626_v060726_2016-2025_meta-llama_llama-4-scout-17b-16e-instruct_v060726_v080726_geo"
 
 # Set up final name
 filename_out = "filter_" + res_savename
@@ -80,7 +82,8 @@ log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ## Load data
-response_df = gpd.read_file(DATA_OUT_PROC / (res_savename + ".gpkg"))
+# response_df = gpd.read_file(DATA_OUT_PROC / (res_savename + ".gpkg"))
+response_df = gpd.read_parquet(DATA_OUT_PROC / (res_savename + ".parquet"))
 
 # Sort list columns
 response_df = format_output(response_df)
