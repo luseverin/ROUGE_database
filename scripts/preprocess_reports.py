@@ -194,6 +194,7 @@ for report in reports_in:
             report["appealCode"],
             report["date"],
         )
+        report["processing_error"] = "missing origType"
         missing_origType.append(report)
         continue
 
@@ -213,6 +214,7 @@ for report in reports_in:
             report["date"],
             report["reportName"],
         )
+        report["processing_error"] = "invalid reportName"
         continue
     if filter_types is not None and not report["appealType"].lower() in filter_types:
         removed_appealType.append(report)
@@ -222,6 +224,7 @@ for report in reports_in:
             report["date"],
             report["appealType"],
         )
+        report["processing_error"] = "invalid appealType"
         continue
     if pd.isnull(report[text_field]) or len(report[text_field]) == 0:
         removed_no_text.append(report)
@@ -230,6 +233,7 @@ for report in reports_in:
             report["appealCode"],
             report["date"],
         )
+        report["processing_error"] = "no text"
         continue
 
     # filter out unwanted disaster types
@@ -242,6 +246,7 @@ for report in reports_in:
             report["appealCode"],
             report["date"],
         )
+        report["processing_error"] = "no natural hazard"
         continue
     if id_language and "language" not in report.keys():
         report["language"] = detect_language(report[text_field])
@@ -256,6 +261,7 @@ for report in reports_in:
             report["date"],
             report["language"],
         )
+        report["processing_error"] = "not in English"
         continue
     else:
         report["iso_code"] = country_name_to_iso3(report.get("location"))
@@ -288,6 +294,7 @@ for report in reports_in:
                 report["appealCode"],
                 report["reportDate"],
             )
+            report["processing_error"] = "no impact text"
             removed_no_nathaz_text.append(report)
             continue
         report["nathaz_text"] = sent_tokenize(report["nathaz_text"])
