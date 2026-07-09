@@ -1,3 +1,4 @@
+from numpy import negative
 import pandas as pd
 
 MODEL_NAMES_MAP = {  # short names for model
@@ -100,3 +101,30 @@ def filter_matches(matched_df, value_error_th=0.05, sim_th=0.6, match_cat=None):
             ]
         ).sort_index()
     return pd.concat([matched_df_filter_qt, matched_df_filter_ql], axis=0)
+
+
+def normalize_flags(x, output_type="bool"):
+    """Normalize flags to boolean values (0 or 1)"""
+    if output_type == "bool":
+        pos = True
+        neg = False
+    elif output_type == "int":
+        pos = 1
+        neg = 0
+    else:
+        raise ValueError("output_type must be 'bool' or 'int'")
+    if pd.isna(x):
+        return neg
+    elif x in [0, 0.0, "0", "0.0", "np.nan", "null", False]:
+        return neg
+    elif x in [1, 1.0, "1", "1.0", True]:
+        return pos
+    else:
+        return x
+
+
+def get_flag_cols(df):
+    """Get all columns in the dataframe that are flags (start with 'flag_' or 'valid_)"""
+    return [
+        col for col in df.columns if col.startswith("flag_") or col.startswith("valid_")
+    ]
