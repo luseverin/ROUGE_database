@@ -21,11 +21,11 @@ ifrc_reports_df_filtered = ifrc_reports_df_filtered.loc[(ifrc_reports_df_filtere
 
 # eventually load labelled reports
 # labelled_reports = pd.read_csv(DATA_LABELLED / "labelled_reports_all_v26062026.csv")
-labelled_reports = pd.read_csv(DATA_LABELLED / "combined_labelled_reports.csv")
-keys = labelled_reports[["appealCode", "reportDate"]].drop_duplicates()
-labelled_reports_raw = ifrc_reports_df.merge(
-    keys, on=["appealCode", "reportDate"], how="inner"
-)
+# labelled_reports = pd.read_csv(DATA_LABELLED / "combined_labelled_reports.csv")
+# keys = labelled_reports[["appealCode", "reportDate"]].drop_duplicates()
+# labelled_reports_raw = ifrc_reports_df.merge(
+#     keys, on=["appealCode", "reportDate"], how="inner"
+# )
 
 # eventually select by appeal code
 # appeals_test = [
@@ -61,12 +61,11 @@ labelled_reports_raw = ifrc_reports_df.merge(
 # test_reports = labelled_reports_raw[labelled_reports_raw.appealCode.isin(appeals_test)]
 
 # select reports to process
-lreport = 0
-rreport = len(ifrc_reports_df_filtered)
-reports_in = ifrc_reports_df_filtered.iloc[
-   lreport : rreport + 1
-]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
+lreport = 664
+rreport =  len(ifrc_reports_df_filtered)#len(ifrc_reports_df_filtered) #len(labelled_reports_raw)
+reports_in = ifrc_reports_df_filtered.iloc[lreport : rreport + 1]  # labelled_reports_raw#ifrc_reports_df_filtered.iloc[:nreports] #test_reports
 # reports_in = test_reports
+# reports_in = labelled_reports_raw
 nreports = len(reports_in)
 
 ## Parameters
@@ -74,6 +73,7 @@ chunk_size = 1000  # chunk size of input. None to disable
 max_rounds = None  # max number of continuations for impact extraction. None to disable
 multi_dates = False  # whether to allow multiple date pairs per impact or not (only for qualitative impacts)
 sim_name = f"{lreport}-{rreport}_llm_response_preproc_text_sel_gaps_combined_v300626_v060726_{ymin}-{ymax}"#f"test_labelled_reports_1quali_chunksize{chunk_size}_{max_rounds}it"
+# sim_name = f"{lreport}-{rreport}_labelled_reports"
 res_savename = f"{sim_name}_{MODEL_NAME.replace('/', '_')}_v{dt.date.today().strftime('%d%m%y')}"  # model to be changed in src.client
 
 # choose hazard and impact cats

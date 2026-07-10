@@ -34,7 +34,8 @@ from src.sanity_checks import *
 
 ## Parameters
 ### !! fix no_location_no_country flagging
-filename_in = "labelled_reports_all_v26062026"
+filename_in = "0-778_llm_response_preproc_text_sel_gaps_combined_v300626_v060726_2016-2025_meta-llama_llama-4-scout-17b-16e-instruct_v060726"
+# "0-39_labelled_reports_meta-llama_llama-4-scout-17b-16e-instruct_v070726"
 # "labelled_reports_impacts_gaps_v050426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_llama-3.3-70b-versatile_v060426"  # name of file to process (without extension)
 # "test_reports_gaps_chunksize1000_meta-llama_llama-4-scout-17b-16e-instruct_v070426"
@@ -42,13 +43,13 @@ filename_in = "labelled_reports_all_v26062026"
 filename_out = (
     "post_processed_" + filename_in + f"_v{dt.datetime.now().strftime('%d%m%y')}"
 )  # "post_processed_" + filename_in#post_processed_flags_
-data_path = DATA_LABELLED  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
+data_path = DATA_OUT_LLMS  # DATA_LABELLED DATA_OUT_LLMS  (depending on whether we want to process the LLM output or the labelled data)
 # postprocess params
 post_proc = (
     True  # whether or not we want to process the LLM output or the labelled data
 )
 check_flag_value_in_text = (
-    False  # whether or not we want to check if the value is in the original text
+    True  # whether or not we want to check if the value is in the original text
 )
 convert_to_people = True  # whether or not we want to convert convertible units to people (e.g. families -> 3 people)
 force_unit_to_subtype_default = False  # whether or not we want to force unit to default unit of subtype when unknown unit
@@ -323,16 +324,17 @@ else:
             pop_cntry_check, country_pop=country_pop, axis=1
         )
         ## Save pre-geocoding results
-        response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+        # response_df_proc.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+        response_df_proc.to_parquet(DATA_OUT_PROC / (filename_out + ".parquet"), compression="zstd", index=False)
     elif geocode_load:
         response_df_proc["flag_pop_cntry"] = response_df_proc.apply(
             pop_cntry_check, country_pop=country_pop, country_col="iso3_code", axis=1
         )
         ## Save post-geocoding results
-        save_df_geo(response_df_proc, DATA_OUT_PROC, filename_out)
-        response_df_proc.drop(columns=["geometry"]).to_csv(
-            DATA_OUT_PROC / (filename_out + ".csv"), index=False
-        )
+        # save_df_geo(response_df_proc, DATA_OUT_PROC, filename_out)
+        response_df_proc.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
+        response_df_proc_gpd = gpd.GeoDataFrame(response_df_proc,geometry="geometry",crs="EPSG:4326")
+        response_df_proc_gpd.to_parquet(DATA_OUT_PROC / (filename_out + ".parquet"), compression="zstd", index=False)
 
 ## Geocoding
 if geocode and not geocode_load:
@@ -367,16 +369,17 @@ if geocode and not geocode_load:
     )
 
     # save without geometry column
-    df_geo_output.drop(columns=["geometry"]).to_csv(
-        DATA_OUT_PROC / (filename_out + "_geo.csv"), index=False
-    )
-    df_geo_output_split.drop(columns=["geometry"]).to_csv(
-        DATA_OUT_PROC / (filename_out + "_geo_split_lowest.csv"), index=False
-    )
+    df_geo_output.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + "_geo.csv"), index=False)
+    df_geo_output_split.drop(columns=["geometry"]).to_csv(DATA_OUT_PROC / (filename_out + "_geo_split_lowest.csv"), index=False)
 
     # save with geometry column
-    save_df_geo(df_geo_output, DATA_OUT_PROC, filename_out + "_geo")
-    save_df_geo(df_geo_output_split, DATA_OUT_PROC, filename_out + "_geo_split_lowest")
+    # save_df_geo(df_geo_output, DATA_OUT_PROC, filename_out + "_geo")
+    df_geo_output_gpd = gpd.GeoDataFrame(df_geo_output, geometry="geometry",crs="EPSG:4326")
+    df_geo_output_gpd.to_parquet(DATA_OUT_PROC / (filename_out + "_geo" + ".parquet"), compression="zstd", index=False)
+    # save_df_geo(df_geo_output_split, DATA_OUT_PROC, filename_out + "_geo_split_lowest")
+    df_geo_output_split_gpd = gpd.GeoDataFrame(df_geo_output_split, geometry="geometry",crs="EPSG:4326")
+    df_geo_output_split_gpd.to_parquet(DATA_OUT_PROC / (filename_out + "_geo_split_lowest" + ".parquet"), compression="zstd", index=False)
+    
 
 end_time = time.time()
 
