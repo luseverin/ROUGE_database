@@ -82,7 +82,6 @@ flag_groups = {  # groups of flags to gather into a single flag
     "flag_unit_conversion": (
         [
             "flag_currency_conversion",
-            "flag_unit_conversion",
             "flag_non_currency_unit_conversion",
         ],
         "any",
@@ -104,7 +103,6 @@ flag_groups = {  # groups of flags to gather into a single flag
     ),
     "flag_unit_conversion_error": (
         [
-            "flag_unit_conversion_error",
             "flag_currency_conversion_error",
             "flag_non_currency_unit_conversion_error",
         ],
@@ -192,7 +190,9 @@ response_df[flag_cols] = response_df[flag_cols].map(normalize_flags)
 # gather flag columns
 if flag_groups is not None:
     for new_flag, (flags, how) in flag_groups.items():
-        response_df = gather_flags(response_df, flags, flag_name=new_flag, how=how)
+        response_df = gather_flags(
+            response_df, flags, flag_name=new_flag, how=how, drop=False
+        )
 
 # Filter unwanted flags
 for flag in unwanted_flags:
