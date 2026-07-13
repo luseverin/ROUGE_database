@@ -38,39 +38,28 @@ dedup_cols = [  # columns to check for duplicates
 ]
 
 flag_groups = {  # groups of flags to gather into a single flag
-    "flag_unit_harmonization": [
-        "flag_people_unit_normalization",
-        "flag_non-SI_unit_standardization",
-        "flag_SI_unit_standardization",
+    "flag_unit_std": [
         "flag_unit_harmonization",
-        "flag_remove_number_unit",
+        "flag_non-SI_unit_standardization",
     ],
-    "flag_unit_conversion": [
-        "flag_currency_conversion",
-        "flag_unit_conversion",
-        # "flag_non_currency_unit_conversion",
-    ],
-    "flag_unit_harmonization_error": [
+    "flag_unit_error": [
         "flag_remove_number_unit_error",
-        "flag_SI_unit_standardization_error",
+        "flag_non_currency_unit_conversion_error",
         "flag_non-SI_unit_standardization_error",
-    ],
-    "flag_unit_conversion_error": [
-        "flag_unit_conversion_error",
-        "flag_currency_conversion_error",
-        # "flag_non_currency_unit_conversion_error",
+        "flag_SI_unit_standardization_error",
+        "flag_failed_currency_conversion",
     ],
 }
 
 unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these flags are False)
     "flag_remove_cat",
-    "flag_value_no_unit",
-    "flag_unit_nonstd",
+    # "flag_value_no_unit",
+    # "flag_unit_nonstd",
     "flag_response_unit",
     "flag_unknown_subtype",
     "flag_all_hazards_unknown",
     "flag_pop_cntry",
-    # "flag_value_not_in_text",
+    "flag_value_not_in_text",
     "flag_remove_unit",
     # "flag_remove_hazard",
 ]
@@ -80,7 +69,7 @@ remove_unknown_hazards = (
     True  # whether to remove impacts for which all hazards are unknown
 )
 ##load data (model)
-res_savename = "post_processed_0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426_v170626_geo"
+res_savename = "post_processed_0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426_v230426_geo"
 
 # Set up final name
 filename_out = "filter_" + res_savename

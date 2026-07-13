@@ -10,7 +10,7 @@ from src.logger_setup import set_logger
 
 ##load data (model)
 res_savename = (
-    "post_processed_labelled_reports_gaps_llama-3.3-70b-versatile_v270326_v270326_geo"
+    "post_processed_0-778_llm_response_preproc_text_sel_gaps_combined_v300626_v060726_2016-2025_meta-llama_llama-4-scout-17b-16e-instruct_v060726_v080726_geo"
 )
 
 # "post_processed_labelled_reports_impacts_nogaps_v270326_v270326_geo"
@@ -20,10 +20,11 @@ res_savename = (
 suffix = ""
 res_savename_geo = res_savename
 response_df = pd.read_csv(DATA_OUT_PROC / (res_savename + ".csv"))
-response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo + ".gpkg"))
+# response_df_geo = gpd.read_file(DATA_OUT_PROC / (res_savename_geo + ".gpkg"))
+response_df_geo = gpd.read_parquet(DATA_OUT_PROC / (res_savename_geo + ".parquet"))
 
-filename_out = res_savename
-filename_out_geo = res_savename_geo
+filename_out = "merged_"+res_savename
+filename_out_geo = "merged_"+res_savename_geo
 
 # set up logger
 logger_name = "subtypes_merger"
@@ -39,5 +40,6 @@ response_df = response_df.apply(
 )
 
 ## save
-atomic_gpkg_save(response_df_geo, DATA_OUT_PROC / (filename_out_geo + ".gpkg"))
+# atomic_gpkg_save(response_df_geo, DATA_OUT_PROC / (filename_out_geo + ".gpkg"))
+response_df_geo.to_parquet(DATA_OUT_PROC / (filename_out + ".parquet"), compression="zstd", index=False)
 response_df.to_csv(DATA_OUT_PROC / (filename_out + ".csv"), index=False)
