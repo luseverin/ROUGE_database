@@ -19,6 +19,7 @@ from src.utils import normalize_flags, get_flag_cols, gather_flags
 from src.geocoding import atomic_gpkg_save
 from src.geocoding_utils import split_continents
 from src.logger_setup import set_logger
+from src.impact_def import IMPACT_TYPES_MERGED
 
 ## Parameters
 dedup_cols = [  # columns to check for duplicates
@@ -131,7 +132,7 @@ unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these f
     # "flag_inconsistent_year",
 ]
 
-
+add_impactType = True  # whether to add impactType based on impactSubtype
 merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
 remove_unknown_hazards = (
     False  # whether to remove impacts for which all hazards are unknown
@@ -214,6 +215,9 @@ if merge_subtypes:
     response_df = response_df.apply(
         merge_impact_subtypes, impact_kw_reclass=IMPACT_SUBTYPE_MERGER, axis=1
     )
+
+if add_impactType:
+    response_df["impactType"] = response_df["impactSubtype"].map(IMPACT_TYPES_MERGED)
 
 ## Filter unwanted columns
 response_df_filtered = response_df.copy()
