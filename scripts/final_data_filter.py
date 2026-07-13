@@ -15,7 +15,7 @@ from src.data import *
 from src.data_format import *
 from src.post_process_functions import merge_annotations, merge_impact_subtypes
 from src.impact_def import IMPACT_SUBTYPE_MERGER
-from src.sanity_checks import gather_flags
+from src.utils import normalize_flags, get_flag_cols, gather_flags
 from src.geocoding import atomic_gpkg_save
 from src.geocoding_utils import split_continents
 from src.logger_setup import set_logger
@@ -38,38 +38,106 @@ dedup_cols = [  # columns to check for duplicates
 ]
 
 flag_groups = {  # groups of flags to gather into a single flag
-    "flag_unit_std": [
-        "flag_unit_harmonization",
-        "flag_non-SI_unit_standardization",
-    ],
-    "flag_unit_error": [
-        "flag_remove_number_unit_error",
-        "flag_non_currency_unit_conversion_error",
-        "flag_non-SI_unit_standardization_error",
-        "flag_SI_unit_standardization_error",
-        "flag_failed_currency_conversion",
-    ],
+    "flag_impactSubtype_reclass": (
+        [
+            "flag_impactSubtype_reclass",
+            "flag_reclass_subtype_from_unit",
+            "flag_impactSubtype_merged",
+        ],
+        "any",
+    ),
+    "flag_years_missing_after_inference": (
+        [
+            "flag_failed_startYear_inference",
+            "flag_years_missing",
+        ],
+        "all",
+    ),
+    "flag_remove_unit": (
+        [
+            "flag_remove_unit",
+            "flag_response_unit",
+        ],
+        "any",
+    ),
+    "flag_incorrect_unit": (
+        [
+            "flag_partial_unit",
+            "flag_unit_nonstd",
+            "flag_percent",
+        ],
+        "any",
+    ),
+    "flag_unit_harmonization": (
+        [
+            "flag_people_unit_normalization",
+            "flag_non-SI_unit_standardization",
+            "flag_SI_unit_standardization",
+            "flag_unit_harmonization",
+            "flag_remove_number_unit",
+        ],
+        "any",
+    ),
+    "flag_unit_conversion": (
+        [
+            "flag_currency_conversion",
+            "flag_unit_conversion",
+            "flag_non_currency_unit_conversion",
+        ],
+        "any",
+    ),
+    "flag_unit_harmonization_error": (
+        [
+            "flag_remove_number_unit_error",
+            "flag_SI_unit_standardization_error",
+            "flag_non-SI_unit_standardization_error",
+        ],
+        "any",
+    ),
+    "flag_country_location_missing": (
+        [
+            "flag_no_location_no_country",
+            "flag_country_location_missing",
+        ],
+        "any",
+    ),
+    "flag_unit_conversion_error": (
+        [
+            "flag_unit_conversion_error",
+            "flag_currency_conversion_error",
+            "flag_non_currency_unit_conversion_error",
+        ],
+        "any",
+    ),
 }
+
 
 unwanted_flags = [  # flags to filter out (i.e. keep only rows for which these flags are False)
     "flag_remove_cat",
     # "flag_value_no_unit",
+    "flag_incorrect_unit",
     # "flag_unit_nonstd",
-    "flag_response_unit",
+    # "flag_response_unit",
     "flag_unknown_subtype",
     "flag_all_hazards_unknown",
     "flag_pop_cntry",
-    "flag_value_not_in_text",
+    # "flag_value_not_in_text",
+    # "flag_no_location_no_country",
+    "flag_country_location_missing",
     "flag_remove_unit",
-    # "flag_remove_hazard",
+    "flag_remove_hazard",
+    "flag_years_missing_after_inference",
+    # "flag_failed_startYear_inference",
+    # "flag_inconsistent_year",
 ]
+
 
 merge_subtypes = False  # whether to merge impact subtypes based on keywords (e.g. infra and service access)
 remove_unknown_hazards = (
-    True  # whether to remove impacts for which all hazards are unknown
+    False  # whether to remove impacts for which all hazards are unknown
 )
 ##load data (model)
-res_savename = "post_processed_0-717_latest_reports_1quali_chunksize1000_Noneit_meta-llama_llama-4-scout-17b-16e-instruct_v230426_v230426_geo"
+res_savename = "post_processed_0-778_llm_response_preproc_text_sel_gaps_combined_v300626_v060726_2016-2025_meta-llama_llama-4-scout-17b-16e-instruct_v060726_v080726_geo"
 
 # Set up final name
 filename_out = "filter_" + res_savename
@@ -80,7 +148,7 @@ log_file = DATA_LOGS / f"LOGS_{logger_name}_{filename_out}.txt"
 LOGGER = set_logger(log_file, logger_name=logger_name)
 
 ## Load data
-response_df = gpd.read_file(DATA_OUT_PROC / (res_savename + ".gpkg"))
+response_df = gpd.read_parquet(DATA_OUT_PROC / (res_savename + ".parquet"))
 
 # Sort list columns
 response_df = format_output(response_df)
@@ -110,13 +178,22 @@ LOGGER.info(f"Dropped {init_len - len(response_df)} duplicates")
 response_df = format_output(response_df)
 
 # hot fix, replace nan of null with null
-response_df["impactUnit"] = response_df["impactUnit"].replace({"nan of null": "null"})
-if remove_unknown_hazards:
-    response_df["flag_all_hazards_unknown"] = response_df.apply(
-        lambda x: all(haz == "Unknown" for haz in x["hazards"]), axis=1
-    )
+# response_df["impactUnit"] = response_df["impactUnit"].replace({"nan of null": "null"})
+# if remove_unknown_hazards:
+#    response_df["flag_all_hazards_unknown"] = response_df.apply(
+#        lambda x: all(haz == "Unknown" for haz in x["hazards"]), axis=1
+#    )
 
-##Filter unwanted flags
+## Process flags
+flag_cols = get_flag_cols(response_df, startswith="flag")
+response_df[flag_cols] = response_df[flag_cols].map(normalize_flags)
+
+# gather flag columns
+if flag_groups is not None:
+    for new_flag, (flags, how) in flag_groups.items():
+        response_df = gather_flags(response_df, flags, flag_name=new_flag, how=how)
+
+# Filter unwanted flags
 for flag in unwanted_flags:
     if flag not in response_df.columns:
         LOGGER.warning(f"Flag {flag} not found in data")
@@ -126,10 +203,6 @@ for flag in unwanted_flags:
     response_df = response_df[response_df[flag] == False]
     LOGGER.info(f"Filtered {init_len - len(response_df)} entries based on {flag} flag")
 
-## gather flag columns
-if flag_groups is not None:
-    for new_flag, group_flags in flag_groups.items():
-        response_df = gather_flags(response_df, group_flags, flag_name=new_flag)
 
 ## gather annotation columns
 response_df["sourceExcerpts"] = response_df.apply(
