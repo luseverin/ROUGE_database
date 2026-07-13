@@ -123,48 +123,57 @@ def normalize_flags(x, output_type="bool"):
         return x
 
 
-def get_flag_cols(df):
+def get_flag_cols(df, startswith="both"):
     """Get all columns in the dataframe that are flags (start with 'flag_' or 'valid_)"""
-    return [
-        col for col in df.columns if col.startswith("flag_") or col.startswith("valid_")
-    ]
+    if startswith == "flag":
+        return [col for col in df.columns if col.startswith("flag_")]
+    elif startswith == "valid":
+        return [col for col in df.columns if col.startswith("valid_")]
+    else:
+        return [
+            col
+            for col in df.columns
+            if col.startswith("flag_") or col.startswith("valid_")
+        ]
 
 
-def gather_flags(extracted_data, flag_columns, flag_name, how="any"):
+def gather_flags(df, flag_columns, flag_name, how="any", warn_missing=True):
     """
-    Gathers all flag columns into a single column "any_flag", which is True if any of the flag columns are True, and False otherwise.
+    Combine several boolean flags into a new flag.
 
     Parameters
     ----------
-    extracted_data : pandas.DataFrame
-        The dataframe containing the extracted data
-    flag_columns : list
-        The list of flag columns to gather
-    flag_name : str, default "any_flag"
-        The name of the column to store the gathered flags
-
-    Returns
-    -------
-    pandas.DataFrame
-        The dataframe with the added column
+    df : pd.DataFrame
+    flag_name : str
+        Name of the output flag.
+    flag_columns : list[str]
+        Flags to combine.
+    how : {"any", "all"}
+        Aggregation method.
+    warn_missing : bool
+        Whether to warn about missing source flags.
     """
 
-    def check_any_flag(x):
-        return any(x[flag] for flag in flag_columns if flag in x.index)
+    flags_in = [f for f in flag_columns if f in df.columns]
 
-    def check_all_flags(x):
-        return all(x[flag] for flag in flag_columns if flag in x.index)
+    if warn_missing:
+        missing = sorted(set(flag_columns) - set(flags_in))
+        if missing:
+            print(f"Warning: Missing flags for '{flag_name}': {missing}")
 
-    if how == "any":
-        gather_func = check_any_flag
-    elif how == "all":
-        gather_func = check_all_flags
+    if not flags_in:
+        df[flag_name] = False
+        return df
+
+    values = df[flags_in].fillna(False).astype(bool)
+
+    if how == "all":
+        df[flag_name] = values.all(axis=1)
+    elif how == "any":
+        df[flag_name] = values.any(axis=1)
     else:
-        raise ValueError("Invalid value for 'how'. Must be 'any' or 'all'.")
-
-    extracted_data[flag_name] = np.nan
-    extracted_data[flag_name] = extracted_data.apply(gather_func, axis=1)
+        raise ValueError(f"Unknown aggregation method: {how}")
     # drop individual flag columns
     flags_drop = [flag for flag in flag_columns if flag != flag_name]
-    extracted_data = extracted_data.drop(columns=flags_drop)
-    return extracted_data
+    df = df.drop(columns=flags_drop)
+    return df
