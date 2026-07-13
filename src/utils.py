@@ -137,7 +137,7 @@ def get_flag_cols(df, startswith="both"):
         ]
 
 
-def gather_flags(df, flag_columns, flag_name, how="any", warn_missing=True):
+def gather_flags(df, flag_columns, flag_name, how="any", warn_missing=True, drop=True):
     """
     Combine several boolean flags into a new flag.
 
@@ -174,6 +174,7 @@ def gather_flags(df, flag_columns, flag_name, how="any", warn_missing=True):
     else:
         raise ValueError(f"Unknown aggregation method: {how}")
     # drop individual flag columns
-    flags_drop = [flag for flag in flag_columns if flag != flag_name]
-    df = df.drop(columns=flags_drop)
+    if drop:
+        flags_drop = [flag for flag in flag_columns if flag != flag_name]
+        df = df.drop(columns=flags_drop)
     return df
