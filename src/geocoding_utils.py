@@ -31,7 +31,7 @@ LOGGER = logging.getLogger("postprocessing")
 
 unique_countries_ISO = [country.alpha_3 for country in pycountry.countries]
 unique_country_names = [country.name for country in pycountry.countries]
-pattern_country = '|'.join(map(re.escape, unique_country_names))
+pattern_country = "|".join(map(re.escape, unique_country_names))
 
 NONISO_REGIONS = [
     # Dummy region for numeric 0 (or empty string), sometimes used for oceans
@@ -64,22 +64,178 @@ NONISO_REGIONS = [
 working, e.g. with Natural Earth shape files. The alpha-2, alpha-3 and numeric representations are
 unofficial and for internal use only."""
 
+# Common aliases seen in IFRC/OSM data that do not always resolve directly.
+COUNTRY_ALIASES = {
+    "micronesia": "Federated States of Micronesia",
+    "swaziland": "Eswatini",
+    "cape verde": "Cabo Verde",
+    "ivory coast": "Cote d'Ivoire",
+    "cote d’ivoire": "Cote d'Ivoire",
+    "east timor": "Timor-Leste",
+    "vatican": "Holy See",
+    "south korea": "Korea, Republic of",
+    "north korea": "Korea, Democratic People's Republic of",
+    "dprk": "Korea, Democratic People's Republic of",
+    "lao pdr": "Lao People's Democratic Republic",
+    "lao p d r": "Lao People's Democratic Republic",
+    "i r of iran": "Iran, Islamic Republic of",
+    "st lucia": "Saint Lucia",
+    "st kitts and nevis": "Saint Kitts and Nevis",
+    "st vincent and the grenadines": "Saint Vincent and the Grenadines",
+    "the bahamas": "Bahamas",
+    "the gambia": "Gambia",
+    "brunei": "Brunei Darussalam",
+    "palestine": "State of Palestine",
+    "turkey": "Türkiye",
+    "congo dem rep": "Democratic Republic of the Congo",
+    "congo rep": "Republic of the Congo",
+}
+
+# Keyword-based country ISO3 overrides for problematic country names.
+# Add entries here to force specific ISO3 codes based on keyword patterns.
+# Format: {
+#     "description": "Human-readable description",
+#     "keywords": ["keyword1", "keyword2"],  # List of keywords to match
+#     "match_type": "all" or "any",           # "all" = all keywords must match, "any" = at least one
+#     "iso3": "XXX"                            # ISO3 code to return
+# }
+COUNTRY_KEYWORD_OVERRIDES = [
+    {
+        "description": "Democratic Republic of Congo",
+        "keywords": ["democratic", "congo"],
+        "match_type": "all",
+        "iso3": "COD",
+    },
+    {
+        "description": "Democratic Republic of Congo (short form)",
+        "keywords": ["drc"],
+        "match_type": "any",
+        "iso3": "COD",
+    },
+    {
+        "description": "The Bahamas",
+        "keywords": ["bahamas"],
+        "match_type": "all",
+        "iso3": "BHS",
+    },
+]
+
+
+
+def _check_country_keyword_override(country_str):
+    """
+    Check if country string matches any keyword override pattern.
+    Returns ISO3 code if matched, otherwise None.
+    """
+    country_lower = country_str.lower()
+    
+    for override in COUNTRY_KEYWORD_OVERRIDES:
+        keywords = [kw.lower() for kw in override["keywords"]]
+        match_type = override["match_type"]
+        
+        if match_type == "all":
+            # All keywords must be present
+            if all(kw in country_lower for kw in keywords):
+                return override["iso3"]
+        elif match_type == "any":
+            # At least one keyword must be present
+            if any(kw in country_lower for kw in keywords):
+                return override["iso3"]
+    
+    return None
+
+
+def _normalize_country_key(country_str):
+    """Normalize country strings for alias lookup (keeps ascii and spacing simple)."""
+    key = country_str.strip().lower()
+    key = key.replace("’", "'")
+    key = key.replace(".", " ")
+    key = key.replace(",", " ")
+    key = key.replace("-", " ")
+    key = key.replace("(", " ").replace(")", " ")
+    key = re.sub(r"\s+", " ", key).strip()
+    if key.startswith("the "):
+        key = key[4:]
+    return key
+
+
 LOCATION_LEVEL_MAPPING = {
-    'admin2': {'admin_level': 2, 'nominatim_keys': ['city', 'town', 'village', 'municipality',
-                                                    'city_district', 'district', 'borough', 'suburb', 'subdivision',
-                                                    'hamlet', 'croft', 'isolated_dwelling']},
-    'admin1': {'admin_level': 1, 'nominatim_keys': ['state', 'province', 'region', 'county', 'territory', 'department', 'governorate', 'autonomous_region', 'state_district', 'district', 'metropolitan_area', 'subregion', 'zone']},
-    'admin0': {'admin_level': 0, 'nominatim_keys': ['country']}
+    "admin2": {
+        "admin_level": 2,
+        "nominatim_keys": [
+            "city",
+            "town",
+            "village",
+            "municipality",
+            "city_district",
+            "district",
+            "borough",
+            "suburb",
+            "subdivision",
+            "hamlet",
+            "croft",
+            "isolated_dwelling",
+        ],
+    },
+    "admin1": {
+        "admin_level": 1,
+        "nominatim_keys": [
+            "state",
+            "province",
+            "region",
+            "county",
+            "territory",
+            "department",
+            "governorate",
+            "autonomous_region",
+            "state_district",
+            "district",
+            "metropolitan_area",
+            "subregion",
+            "zone",
+        ],
+    },
+    "admin0": {"admin_level": 0, "nominatim_keys": ["country"]},
 }
 
 LIST_ADMIN_WORDS = [
-    "Regency", "Province", "State", "Department", "Region", "River",
-    "Territory", "County", "Sub-County", "Sub County", "District", "Municipality", "Prefecture",
-    "Canton", "Commune", "Borough", "Parish", "Metropolitan Area",
-    "Subregion", "Zone", "Subdivision", "Ward", "Township", "City",
-    "Village", "Hamlet", "Governorate", "Autonomous Region", "Council",
-    "County Borough", "Council Area", "Federal District", "Locality", "Town", "Community"
+    "Regency",
+    "Province",
+    "State",
+    "Department",
+    "Region",
+    "River",
+    "Territory",
+    "County",
+    "Sub-County",
+    "Sub County",
+    "District",
+    "Municipality",
+    "Prefecture",
+    "Canton",
+    "Commune",
+    "Borough",
+    "Parish",
+    "Metropolitan Area",
+    "Subregion",
+    "Zone",
+    "Subdivision",
+    "Ward",
+    "Township",
+    "City",
+    "Village",
+    "Hamlet",
+    "Governorate",
+    "Autonomous Region",
+    "Council",
+    "County Borough",
+    "Council Area",
+    "Federal District",
+    "Locality",
+    "Town",
+    "Community",
 ]
+
 
 def fuzzy_country_match(query):
     """
@@ -105,12 +261,13 @@ def fuzzy_country_match(query):
         query,
         choices.keys(),
         # scorer=fuzz.WRatio
-        scorer = lambda q, c, **_: rotated_levenshtein_similarity(q, c)
+        scorer=lambda q, c, **_: rotated_levenshtein_similarity(q, c),
     )
     if result:
         best_name, score, _ = result
         return choices[best_name], score
     return None, 0
+
 
 import re
 import numpy as np
@@ -125,6 +282,9 @@ def country_to_iso(
     fillvalue=None,
     fuzzy_threshold=80,
 ):
+    if countries is None or (isinstance(countries, float) and np.isnan(countries)):
+        return fillvalue if fillvalue is not None else None
+
     return_single = np.isscalar(countries)
     countries = [countries] if return_single else countries
 
@@ -135,14 +295,38 @@ def country_to_iso(
 
     iso_list = []
 
+    fuzzy_threshold_norm = (
+        fuzzy_threshold / 100
+        if fuzzy_threshold is not None and fuzzy_threshold > 1
+        else fuzzy_threshold
+    )
+
     for country in countries:
         match = None
+
+        # --------------------
+        # Null / empty handling
+        # --------------------
+        if country is None or (isinstance(country, float) and np.isnan(country)):
+            iso_list.append(fillvalue if fillvalue is not None else None)
+            continue
+
+        country_str = str(country).strip()
+        if country_str.lower() in {"", "none", "nan", "null"}:
+            iso_list.append(fillvalue if fillvalue is not None else None)
+            continue
+
+        country_key = _normalize_country_key(country_str)
+        country_str = COUNTRY_ALIASES.get(country_key, country_str)
+
+        # Normalize common saint abbreviations (e.g., St. Lucia -> Saint Lucia)
+        country_str = re.sub(r"^st\s+", "Saint ", country_str, flags=re.IGNORECASE)
 
         # --------------------
         # Already ISO code
         # --------------------
         if isinstance(country, str):
-            c_up = country.strip().upper()
+            c_up = country_str.upper()
 
             if len(c_up) == 2:
                 obj = pycountry.countries.get(alpha_2=c_up)
@@ -173,27 +357,41 @@ def country_to_iso(
         # --------------------
         # Lookup by name
         # --------------------
-        country_str = str(country).strip()
-
-        # Force some country with issues
-        if "democratic" in country_str.lower() and "congo" in country_str.lower():
-            match = pycountry.db.Data(alpha_3="COD")
+        # Check keyword-based overrides first
+        override_iso3 = _check_country_keyword_override(country_str)
+        if override_iso3:
+            match = pycountry.db.Data(alpha_3=override_iso3)
             iso_list.append(getattr(match, representation, None))
             continue
-        elif "drc" in country_str.lower() :
-            match = pycountry.db.Data(alpha_3="COD")
-            iso_list.append(getattr(match, representation, None))
-            continue
-        else : 
+        
+        try:
+            match = pycountry.countries.lookup(country_str)
+        except LookupError:
             try:
-                match = pycountry.countries.lookup(country_str)
+                match = pycountry.countries.lookup(country_key)
             except LookupError:
                 try:
                     match = pycountry.historic_countries.lookup(country_str)
                 except LookupError:
                     # NON ISO REGIONS
+                    c_up = country_str.upper()
+                    c_num = (
+                        country_str.zfill(3)
+                        if country_str.isdigit()
+                        else country_str
+                    )
                     region = next(
-                        (c for c in NONISO_REGIONS if country_str in c.values()),
+                        (
+                            c
+                            for c in NONISO_REGIONS
+                            if c_up
+                            and (
+                                c.get("name", "").upper() == c_up
+                                or c.get("alpha_2", "").upper() == c_up
+                                or c.get("alpha_3", "").upper() == c_up
+                                or c.get("numeric", "") == c_num
+                            )
+                        ),
                         None,
                     )
                     if region:
@@ -207,9 +405,13 @@ def country_to_iso(
                                 names=country_str,
                                 to="ISO3",
                                 not_found=None,
-                                quiet=True
+                                quiet=True,
                             )
-                            if iso:
+                            if (
+                                iso
+                                and isinstance(iso, str)
+                                and iso.upper() not in {"NOT FOUND", "NONE"}
+                            ):
                                 match = pycountry.db.Data(alpha_3=iso)
                             else:
                                 raise ValueError
@@ -218,7 +420,7 @@ def country_to_iso(
                             # Fuzzy fallback
                             # --------------------
                             best, score = fuzzy_country_match(country_str)
-                            if best and score >= fuzzy_threshold:
+                            if best and score >= fuzzy_threshold_norm:
                                 match = best
                             elif fillvalue is not None:
                                 match = pycountry.db.Data(
@@ -239,11 +441,21 @@ def country_to_iso(
 
     return iso_list[0] if return_single else iso_list
 
+
+def country_list_to_iso3(c):
+    if c is None:
+        return []
+    if not isinstance(c, list):
+        c = [c]
+    iso_values = [country_to_iso(ci, representation="alpha3") for ci in c]
+    return [iso for iso in iso_values if iso is not None]
+
+
 def get_iso2_from_iso3(iso3):
     """Convert ISO3 to ISO2, handling lists and single values."""
     if iso3 is None:
         return None
-    
+
     # Handle list elements
     if isinstance(iso3, list):
         results = []
@@ -255,7 +467,7 @@ def get_iso2_from_iso3(iso3):
                 results.append(None)
         # Return list or single value depending on input
         return results
-    
+
     # Handle single value
     try:
         country = pycountry.countries.get(alpha_3=str(iso3).upper())
@@ -263,13 +475,16 @@ def get_iso2_from_iso3(iso3):
     except Exception:
         return None
 
+
 #### Helpers functions
 
 p = inflect.engine()
 
+
 def singularize_word(word):
     singular = p.singular_noun(word)
     return singular if singular else word
+
 
 def get_country_languages_dict():
     """Build a dictionary mapping each country name to its primary language code."""
@@ -283,7 +498,9 @@ def get_country_languages_dict():
             continue
     return country_languages
 
+
 LANGUAGES = get_country_languages_dict()
+
 
 def rotated_levenshtein_similarity(str1, str2):
     """Compute the best Levenshtein similarity considering all rotations of words."""
@@ -298,9 +515,14 @@ def rotated_levenshtein_similarity(str1, str2):
     permutations2 = [" ".join(p) for p in itertools.permutations(words2)]
 
     # Compute the max similarity considering all orderings
-    max_similarity = max(Levenshtein.normalized_similarity(p1, p2) for p1 in permutations1 for p2 in permutations2)
+    max_similarity = max(
+        Levenshtein.normalized_similarity(p1, p2)
+        for p1 in permutations1
+        for p2 in permutations2
+    )
 
     return max_similarity
+
 
 def remove_admin_words(location_str):
     """Remove predefined administrative words from a location string without affecting substrings."""
@@ -312,12 +534,17 @@ def remove_admin_words(location_str):
     location_str = " ".join(words)
 
     # Create a regex pattern that matches whole words only, case-insensitive
-    pattern = r'\b(?:' + '|'.join(re.escape(word.lower()) for word in LIST_ADMIN_WORDS) + r')\b'
+    pattern = (
+        r"\b(?:"
+        + "|".join(re.escape(word.lower()) for word in LIST_ADMIN_WORDS)
+        + r")\b"
+    )
     # Substitute matches with empty string
-    location_str = re.sub(pattern, '', location_str, flags=re.IGNORECASE)
+    location_str = re.sub(pattern, "", location_str, flags=re.IGNORECASE)
     # Remove extra spaces
-    location_str = ' '.join(location_str.split())
+    location_str = " ".join(location_str.split())
     return location_str
+
 
 def get_country_languages_dict():
     """Build a dictionary mapping each country name to its primary language code."""
@@ -331,6 +558,7 @@ def get_country_languages_dict():
             continue
     return country_languages
 
+
 def clean_geometry(geom):
     """Fix invalid geometries using buffer(0)."""
     if geom is None or geom.is_empty:
@@ -343,6 +571,7 @@ def clean_geometry(geom):
         LOGGER.error("[clean_geometry] Failed to buffer geometry: %s", e)
         return None
     return geom
+
 
 def to_flat_multipolygon(geometries):
     """
@@ -394,6 +623,7 @@ def to_flat_multipolygon(geometries):
         return None
 
     return MultiPolygon(flat_polys)
+
 
 def sanitize_and_merge_geometries(geometries):
     """
@@ -453,6 +683,7 @@ def sanitize_and_merge_geometries(geometries):
     return MultiPolygon(list(unique.values()))
     # return MultiPolygon(polys)
 
+
 def get_continent(iso_code, world):
     """
     Retrieve the continent for a given ISO-3166 alpha-3 country code.
@@ -475,11 +706,12 @@ def get_continent(iso_code, world):
         Continent name corresponding to the ISO code, or None if not found.
     """
     try:
-        return world[world['ISO_A3'] == iso_code]['CONTINENT'].values[0]
+        return world[world["ISO_A3"] == iso_code]["CONTINENT"].values[0]
     except IndexError:
         return None
 
-def split_continents(df_geom, world) :
+
+def split_continents(df_geom, world):
     """
     Split a GeoDataFrame into multiple GeoDataFrames by continent.
 
@@ -508,8 +740,16 @@ def split_continents(df_geom, world) :
     )
 
     df_geom["continent"] = df_geom["country_iso3"].apply(
-        lambda iso_list: sorted(
-            {iso_to_continent.get(iso) for iso in iso_list if iso in iso_to_continent}
-        ) if isinstance(iso_list, list) else []
+        lambda iso_list: (
+            sorted(
+                {
+                    iso_to_continent.get(iso)
+                    for iso in iso_list
+                    if iso in iso_to_continent
+                }
+            )
+            if isinstance(iso_list, list)
+            else []
+        )
     )
     return df_geom

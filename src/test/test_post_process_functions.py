@@ -7,21 +7,47 @@ from price_parser import Price
 from currency_converter import CurrencyConverter
 from datetime import datetime
 
-from src.units import *   # adjust to your file name
+from src.units import *  # adjust to your file name
 from src.impact_def import *
 from src.hazard_def import *
 
 # import your functions
 from src.post_process_functions import (
-    country_name_to_iso3, list_country_name_to_iso3,
-    separate_locs, remove_startspace, label_quanti_quali,
+    country_name_to_iso3,
+    list_country_name_to_iso3,
+    separate_locs,
+    remove_startspace,
+    label_quanti_quali,
     parse_impact_value_precision,
-    reclassify_impact_subtype, reclassify_hazard,
-    convert_unit, assign_unit_type, reclassify_units,
-    standardize_metric_units, join_value_units, split_value_units,
-    convert_monetary_units, replace_numbers_unit,
-    make_date, harmonize_units, normalize_people_unit,
-    force_unit_to_subtype, reclass_subtype_from_unit, convert_null_unit
+    reclassify_impact_subtype,
+    reclassify_hazard,
+    convert_unit,
+    assign_unit_type,
+    reclassify_units,
+    standardize_metric_units,
+    join_value_units,
+    split_value_units,
+    convert_monetary_units,
+    replace_numbers_unit,
+    make_date,
+    harmonize_units,
+    normalize_people_unit,
+    force_unit_to_subtype,
+    reclass_subtype_from_unit,
+    convert_null_unit,
+    classify_damage_degree,
+    infer_from_endYear,
+    infer_startYear,
+)
+from src.sanity_checks import (
+    flag_missing_date_field,
+    flag_startYear_after_endYear,
+    flag_inconsistent_year,
+    is_month,
+    is_day,
+    flag_inconsistent_month,
+    flag_inconsistent_day,
+    flag_remove_hazard,
 )
 
 # Use redefined helpers from data_format for list/format helpers
@@ -29,62 +55,99 @@ from src.data_format import delistify_cols, listify_strings, format_output
 
 # Define positive and negative test cases for each category
 regex_test_cases = {
-    'people': {
+    "people": {
         "positives": ["100 people", "people affected", "of people"],
-        "negatives": ["peopledom", "personal", "evacuate"]
+        "negatives": ["peopledom", "personal", "evacuate"],
     },
-    'roads': {
+    "roads": {
         "positives": ["roads damaged", "roads", "roads destroyed"],
-        "negatives": ["broadway show", "offroaders"]
+        "negatives": ["broadway show", "offroaders"],
     },
-    'transportation structures': {
+    "transportation structures": {
         "positives": ["railway", "train tracks", "airport damaged", "seaports"],
-        "negatives": ["trail", "training"]
+        "negatives": ["trail", "training"],
     },
-    'water points': {
+    "water points": {
         "positives": ["water sources", "wells", "taps", "reservoir", "water supply"],
-        "negatives": ["watershed", "hydropower"]
+        "negatives": ["watershed", "hydropower"],
     },
-    'WASH structures': {
-        "positives": ["latrines built", "sanitation systems", "aqueduct", "toilets", "water treatment plants"],
-        "negatives": ["water points", "wells"]
+    "WASH structures": {
+        "positives": [
+            "latrines built",
+            "sanitation systems",
+            "aqueduct",
+            "toilets",
+            "water treatment plants",
+            "water points",
+            "wells",
+        ],
+        "negatives": ["rainwater", "washing machines", "sanity", "harvest"],
     },
-    'healthcare structures': {
+    "healthcare structures": {
         "positives": ["hospital destroyed", "medical clinic", "maternity center"],
-        "negatives": ["healthiness", "medicine"]
+        "negatives": ["healthiness", "medicine"],
     },
-    'IT and communication structures': {
-        "positives": ["radio station", "cell tower down", "antenna", "telecommunication center"],
-        "negatives": ["communication skills", "televisionary"]
+    "IT and communication structures": {
+        "positives": [
+            "radio station",
+            "cell tower down",
+            "antenna",
+            "telecommunication center",
+        ],
+        "negatives": ["communication skills", "televisionary"],
     },
-    'power and energy production structures': {
-        "positives": ["power lines", "solar generators", "hydro dams", "electric poles", "electric supply"],
-        "negatives": ["empowered", "energetic"]
+    "power and energy production structures": {
+        "positives": [
+            "power lines",
+            "solar generators",
+            "hydro dams",
+            "electric poles",
+            "electric supply",
+        ],
+        "negatives": ["empowered", "energetic"],
     },
-    'homes': {
+    "homes": {
         "positives": ["homes destroyed", "home", "residential structures"],
-        "negatives": ["homeostasis", "building up momentum"]
+        "negatives": ["homeostasis", "building up momentum"],
     },
-    'education structures': {
+    "education structures": {
         "positives": ["schools collapsed", "universities closed", "college damaged"],
-        "negatives": ["schooling fish", "educationalist"]
+        "negatives": ["schooling fish", "educationalist"],
     },
-    'crop production and forestry': {
-        "positives": ["crop loss", "rice fields", "forest fire", "coffee plantations", "maize production"],
-        "negatives": ["treetop adventure", "bananarama band"]
+    "crop production and forestry": {
+        "positives": [
+            "crop loss",
+            "rice fields",
+            "forest fire",
+            "coffee plantations",
+            "maize production",
+        ],
+        "negatives": ["treetop adventure", "bananarama band"],
     },
-    'agricultural structures': {
+    "agricultural structures": {
         "positives": ["barn collapsed", "irrigation channel", "farms flooded"],
-        "negatives": ["farming practice", "barnacle", "farmlands"]
+        "negatives": ["farming practice", "barnacle", "farmlands"],
     },
-    'affected animals': {
-        "positives": ["livestock lost", "dead cows", "sheep killed", "poultry disease", "cattle evacuated"],
-        "negatives": ["dog", "animalistic"]
+    "affected animals": {
+        "positives": [
+            "livestock lost",
+            "dead cows",
+            "sheep killed",
+            "poultry disease",
+            "cattle evacuated",
+        ],
+        "negatives": ["dog", "animalistic"],
     },
-    'informal settlements': {
-        "positives": ["refugee camp", "tent", "informal settlement", "huts", "idp site"],
-        "negatives": ["campus", "camping gear"]
-    }
+    "informal settlements": {
+        "positives": [
+            "refugee camp",
+            "tent",
+            "informal settlement",
+            "huts",
+            "idp site",
+        ],
+        "negatives": ["campus", "camping gear"],
+    },
 }
 
 
@@ -98,10 +161,15 @@ class TestUnitKwReclass(unittest.TestCase):
                 test_data = regex_test_cases.get(category, {})
 
                 for text in test_data.get("positives", []):
-                    self.assertRegex(text.lower(), regex, msg=f"{category} should match: {text}")
+                    self.assertRegex(
+                        text.lower(), regex, msg=f"{category} should match: {text}"
+                    )
 
                 for text in test_data.get("negatives", []):
-                    self.assertNotRegex(text.lower(), regex, msg=f"{category} should NOT match: {text}")
+                    self.assertNotRegex(
+                        text.lower(), regex, msg=f"{category} should NOT match: {text}"
+                    )
+
 
 class TestCountryFunctions(unittest.TestCase):
     def test_country_name_to_iso3(self):
@@ -110,8 +178,7 @@ class TestCountryFunctions(unittest.TestCase):
 
     def test_list_country_name_to_iso3(self):
         self.assertEqual(
-            list_country_name_to_iso3(["France", "Germany"]),
-            ["FRA", "DEU"]
+            list_country_name_to_iso3(["France", "Germany"]), ["FRA", "DEU"]
         )
         self.assertEqual(list_country_name_to_iso3("Spain"), "ESP")
 
@@ -159,10 +226,13 @@ class TestDataFrameHelpers(unittest.TestCase):
         self.assertEqual(listify_strings(np.nan), [])
 
     def test_format_output(self):
-        df = pd.DataFrame({"impactValue": ["1", "2", None], "annotation": ["[1,2]", "x", None]})
+        df = pd.DataFrame(
+            {"impactValue": ["1", "2", None], "annotation": ["[1,2]", "x", None]}
+        )
         out = format_output(df, num_cols=["impactValue"], list_cols=["annotation"])
         self.assertTrue(np.issubdtype(out["impactValue"].dtype, np.floating))
         self.assertIsInstance(out["annotation"].iloc[0], list)
+
 
 class TestImpactFunctions(unittest.TestCase):
     def test_parse_impact_value_precision(self):
@@ -189,7 +259,13 @@ class TestImpactFunctions(unittest.TestCase):
 
     def test_reclassify_hazard(self):
         hazard_in = ["flood", "earth", "tornado", "tornadoes", "landslide"]
-        hazard_reclassed = ["Flood", "Unknown", "Convective storm", "Convective storm", "Mass movement"]
+        hazard_reclassed = [
+            "Flood",
+            "Unknown",
+            "Convective storm",
+            "Convective storm",
+            "Mass movement",
+        ]
         x = pd.Series({"hazards": hazard_in})
         out = reclassify_hazard(x, hazard_kw_reclass)
         self.assertEqual(out["hazards"], hazard_reclassed)
@@ -203,25 +279,49 @@ class TestImpactFunctions(unittest.TestCase):
 
     def test_convert_unit(self):
         # Note: In the full pipeline, 'families' is first harmonized to 'households' by harmonize_units()
-        x = pd.Series({"impactValue": 10, "impactUnit": "households", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Affected People"})
+        x = pd.Series(
+            {
+                "impactValue": 10,
+                "impactUnit": "households",
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+                "impactSubtype": "Affected People",
+            }
+        )
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "people")
         self.assertEqual(out["impactValue"], 30)
-        self.assertTrue(out["flag_unit_conversion"])
+        self.assertTrue(out["flag_non_currency_unit_conversion"])
 
     def test_convert_unit_no_match(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "kg", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Affected People"})
+        x = pd.Series(
+            {
+                "impactValue": 10,
+                "impactUnit": "kg",
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+                "impactSubtype": "Affected People",
+            }
+        )
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "kg")
-        self.assertFalse(out["flag_unit_conversion"])
+        self.assertFalse(out["flag_non_currency_unit_conversion"])
 
     def test_convert_unit_non_people_subtype(self):
         # Test that conversion is skipped when default unit for subtype is not 'people'
-        x = pd.Series({"impactValue": 10, "impactUnit": "households", "impactValueMin": np.nan, "impactValueMax": np.nan, "impactSubtype": "Damaged Structures"})
+        x = pd.Series(
+            {
+                "impactValue": 10,
+                "impactUnit": "households",
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+                "impactSubtype": "Damaged Structures",
+            }
+        )
         out = convert_unit(x.copy())
         self.assertEqual(out["impactUnit"], "households")  # Should not convert
         self.assertEqual(out["impactValue"], 10)  # Should not multiply
-        self.assertFalse(out["flag_unit_conversion"])
+        self.assertFalse(out["flag_non_currency_unit_conversion"])
 
     def test_assign_unit_type(self):
         x = pd.Series({"impactUnit": "kg"})
@@ -237,17 +337,25 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(result["unit_type"], "other")
 
     def test_reclassify_units(self):
-        xin = pd.DataFrame({"impactValue": [10, 10],
-                       "impactValueMin": [np.nan, np.nan],
-                       "impactValueMax": [20, 20],
-                       "unit_type": ["other", "km**2"],
-                       "impactUnit": ["households", "km**2 of banana plantations"],
-                       "impactSubtype": ["Affected People", "agricultural infrastructure"]})
-        xexp = pd.DataFrame({"impactValue": [10, 10],
-                            "impactValueMin": [np.nan, np.nan],
-                            "impactValueMax": [20, 20],
-                            "impactUnit": ["households", "km**2 of crop production and forestry"],
-                            "impactSubtype": ["Affected People", "Crop Production and Forestry"]})
+        xin = pd.DataFrame(
+            {
+                "impactValue": [10, 10],
+                "impactValueMin": [np.nan, np.nan],
+                "impactValueMax": [20, 20],
+                "unit_type": ["other", "km**2"],
+                "impactUnit": ["households", "km**2 of banana plantations"],
+                "impactSubtype": ["Affected People", "agricultural infrastructure"],
+            }
+        )
+        xexp = pd.DataFrame(
+            {
+                "impactValue": [10, 10],
+                "impactValueMin": [np.nan, np.nan],
+                "impactValueMax": [20, 20],
+                "impactUnit": ["households", "km**2 of crop production and forestry"],
+                "impactSubtype": ["Affected People", "Crop Production and Forestry"],
+            }
+        )
 
         for i in range(len(xin)):
             out = reclassify_units(xin.iloc[i])
@@ -260,16 +368,20 @@ class TestImpactFunctions(unittest.TestCase):
     def test_reclassify_units_reclass_subtype(self):
         # Note: In the full pipeline, 'families' would first be harmonized to 'households'
         # Unit contains 'idp' → reclassify to 'displaced', then subtype inferred to 'Displaced People'
-        x = pd.Series({
-            "impactValue": 10,
-            "impactValueMin": np.nan,
-            "impactValueMax": 20,
-            "impactUnit": "idp households",
-            "unit_type": "other",
-            "impactSubtype": "Affected People"
-        })
+        x = pd.Series(
+            {
+                "impactValue": 10,
+                "impactValueMin": np.nan,
+                "impactValueMax": 20,
+                "impactUnit": "idp households",
+                "unit_type": "other",
+                "impactSubtype": "Affected People",
+            }
+        )
         out_units = reclassify_units(x.copy())
-        self.assertEqual("displaced", out_units["impactUnit"])  # reclassify_units collapses to keyword
+        self.assertEqual(
+            "displaced", out_units["impactUnit"]
+        )  # reclassify_units collapses to keyword
         self.assertTrue(out_units["flag_non-SI_unit_standardization"])  # unit changed
 
         out_subtype = reclass_subtype_from_unit(out_units.copy())
@@ -277,34 +389,63 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(out_subtype["flag_reclass_subtype_from_unit"])
 
     def test_standardize_metric_units(self):
-        xin = pd.DataFrame({"impactValue": [10, 20, 20, 30], "impactUnit": ["liters", "square meter", "meter square", "ha"], "impactValueMin": [np.nan, 20, 20, 30], "impactValueMax": [20, 20, 20, 30]})
-        xexp = pd.DataFrame({"impactValue": [0.01, 0.00002, 0.00002, 0.3], "impactUnit": ["m**3", "km**2", "km**2", "km**2"], "impactValueMin": [np.nan, 0.00002, 0.00002, 0.3], "impactValueMax": [0.02, 0.00002, 0.00002, 0.3]})
+        xin = pd.DataFrame(
+            {
+                "impactValue": [10, 20, 20, 30],
+                "impactUnit": ["liters", "square meter", "meter square", "ha"],
+                "impactValueMin": [np.nan, 20, 20, 30],
+                "impactValueMax": [20, 20, 20, 30],
+            }
+        )
+        xexp = pd.DataFrame(
+            {
+                "impactValue": [0.01, 0.00002, 0.00002, 0.3],
+                "impactUnit": ["m**3", "km**2", "km**2", "km**2"],
+                "impactValueMin": [np.nan, 0.00002, 0.00002, 0.3],
+                "impactValueMax": [0.02, 0.00002, 0.00002, 0.3],
+            }
+        )
         for i in range(len(xin)):
             out = standardize_metric_units(xin.iloc[i])
             self.assertEqual(out["impactUnit"], xexp["impactUnit"].iloc[i])
-            self.assertAlmostEqual(out["impactValue"], xexp["impactValue"].iloc[i], places=5)
+            self.assertAlmostEqual(
+                out["impactValue"], xexp["impactValue"].iloc[i], places=5
+            )
             if pd.isna(xexp["impactValueMin"].iloc[i]):
                 self.assertTrue(pd.isna(out["impactValueMin"]))
             else:
-                self.assertAlmostEqual(out["impactValueMin"], xexp["impactValueMin"].iloc[i], places=5)
-            self.assertAlmostEqual(out["impactValueMax"], xexp["impactValueMax"].iloc[i], places=5)
+                self.assertAlmostEqual(
+                    out["impactValueMin"], xexp["impactValueMin"].iloc[i], places=5
+                )
+            self.assertAlmostEqual(
+                out["impactValueMax"], xexp["impactValueMax"].iloc[i], places=5
+            )
             self.assertTrue(out["flag_SI_unit_standardization"])
 
     def test_standardize_metric_units_invalid(self):
-        x = pd.Series({"impactValue": 10, "impactUnit": "unknown", "impactValueMin": np.nan, "impactValueMax": np.nan})
+        x = pd.Series(
+            {
+                "impactValue": 10,
+                "impactUnit": "unknown",
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+            }
+        )
         out = standardize_metric_units(x)
         self.assertFalse(out["flag_SI_unit_standardization"])
 
     def test_force_unit_to_subtype_applies(self):
         # When unit is unknown and subtype is known, force unit to default subtype unit
-        x = pd.Series({
-            "impactValue": 1,
-            "impactValueMin": np.nan,
-            "impactValueMax": np.nan,
-            "impactUnit": "unknown_unit",
-            "unit_type": "other",
-            "impactSubtype": "Education Infrastructure"
-        })
+        x = pd.Series(
+            {
+                "impactValue": 1,
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+                "impactUnit": "unknown_unit",
+                "unit_type": "other",
+                "impactSubtype": "Education Infrastructure",
+            }
+        )
         out = force_unit_to_subtype(x.copy())
         self.assertEqual(out["impactUnit"], "education structures")
         self.assertTrue(out["flag_force_unit_to_subtype"])
@@ -312,28 +453,32 @@ class TestImpactFunctions(unittest.TestCase):
     def test_force_unit_to_subtype_skips_people_or_null(self):
         # Should not force when unit is already people or empty/null
         for unit in ["people", "", "null"]:
-            x = pd.Series({
-                "impactValue": 1,
-                "impactValueMin": np.nan,
-                "impactValueMax": np.nan,
-                "impactUnit": unit,
-                "unit_type": "other",
-                "impactSubtype": "Affected People"
-            })
+            x = pd.Series(
+                {
+                    "impactValue": 1,
+                    "impactValueMin": np.nan,
+                    "impactValueMax": np.nan,
+                    "impactUnit": unit,
+                    "unit_type": "other",
+                    "impactSubtype": "Affected People",
+                }
+            )
             out = force_unit_to_subtype(x.copy())
             self.assertEqual(out["impactUnit"], unit)
             self.assertFalse(out["flag_force_unit_to_subtype"])
 
     def test_reclass_subtype_from_unit(self):
         # If unit equals expected unit for a different subtype, subtype should be updated
-        x = pd.Series({
-            "impactValue": 5,
-            "impactValueMin": np.nan,
-            "impactValueMax": np.nan,
-            "impactUnit": "displaced",
-            "unit_type": "other",
-            "impactSubtype": "Affected People"
-        })
+        x = pd.Series(
+            {
+                "impactValue": 5,
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+                "impactUnit": "displaced",
+                "unit_type": "other",
+                "impactSubtype": "Affected People",
+            }
+        )
         out = reclass_subtype_from_unit(x.copy())
         self.assertEqual(out["impactSubtype"], "Displaced People")
         self.assertTrue(out["flag_reclass_subtype_from_unit"])
@@ -346,13 +491,15 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertEqual(split_value_units(y), ["5", "kg"])
 
     def test_convert_monetary_units(self):
-        x = pd.DataFrame({
-            "impactValue": [1500, 1500, 10],
-            "impactValueMin": [1000, 1000, 10],
-            "impactValueMax": [2000, 2000, 10],
-            "impactUnit": ["us $", "chf", "euro"],
-            "reportDate": ["2020-01-01", "", "2019-06-15"]
-        })
+        x = pd.DataFrame(
+            {
+                "impactValue": [1500, 1500, 10],
+                "impactValueMin": [1000, 1000, 10],
+                "impactValueMax": [2000, 2000, 10],
+                "impactUnit": ["us $", "chf", "euro"],
+                "reportDate": ["2020-01-01", "", "2019-06-15"],
+            }
+        )
         for i in range(len(x)):
             out = convert_monetary_units(x.iloc[i])
             self.assertEqual(out["impactUnit"], "EUR")
@@ -360,39 +507,51 @@ class TestImpactFunctions(unittest.TestCase):
             self.assertIsInstance(out["impactValueMin"], (int, float))
             self.assertIsInstance(out["impactValueMax"], (int, float))
             self.assertTrue(out["flag_currency_conversion"])
-            self.assertFalse(out["flag_failed_currency_conversion"])
+            self.assertFalse(out["flag_currency_conversion_error"])
 
     def test_convert_monetary_units_additional_currencies(self):
         # Test some of the newly added currencies
-        x = pd.DataFrame({
-            "impactValue": [1000, 5000, 200],
-            "impactValueMin": [800, 4000, 150],
-            "impactValueMax": [1200, 6000, 250],
-            "impactUnit": ["indian rupees", "japanese yen", "british pounds"],
-            "reportDate": ["2020-01-01", "2020-01-01", "2020-01-01"]
-        })
+        x = pd.DataFrame(
+            {
+                "impactValue": [1000, 5000, 200],
+                "impactValueMin": [800, 4000, 150],
+                "impactValueMax": [1200, 6000, 250],
+                "impactUnit": ["indian rupees", "japanese yen", "british pounds"],
+                "reportDate": ["2020-01-01", "2020-01-01", "2020-01-01"],
+            }
+        )
         for i in range(len(x)):
             out = convert_monetary_units(x.iloc[i])
             self.assertEqual(out["impactUnit"], "EUR")
             self.assertIsInstance(out["impactValue"], (int, float))
             self.assertTrue(out["flag_currency_conversion"])
-            self.assertFalse(out["flag_failed_currency_conversion"])
+            self.assertFalse(out["flag_currency_conversion_error"])
 
     def test_convert_monetary_units_invalid_currency(self):
-        x = pd.DataFrame({
-            "impactValue": [1500, 1500],
-            "impactValueMin": [1000, 1000],
-            "impactValueMax": [2000, 2000],
-            "impactUnit": ["people", "europe"],
-            "reportDate": ["2020-01-01", "2019-06-15"]
-        })
+        x = pd.DataFrame(
+            {
+                "impactValue": [1500, 1500],
+                "impactValueMin": [1000, 1000],
+                "impactValueMax": [2000, 2000],
+                "impactUnit": ["people", "europe"],
+                "reportDate": ["2020-01-01", "2019-06-15"],
+            }
+        )
         for i in range(len(x)):
             out = convert_monetary_units(x.iloc[i])
             self.assertFalse(out["flag_currency_conversion"])
+            self.assertTrue(out["flag_currency_conversion_error"])
 
     def test_replace_numbers_unit(self):
         # Test with digits in unit
-        x = pd.Series({"impactValue": 5, "impactUnit": "2 houses", "impactValueMin": 2, "impactValueMax": np.nan})
+        x = pd.Series(
+            {
+                "impactValue": 5,
+                "impactUnit": "2 houses",
+                "impactValueMin": 2,
+                "impactValueMax": np.nan,
+            }
+        )
         out = replace_numbers_unit(x)
         self.assertEqual("houses", out["impactUnit"])
         self.assertEqual(out["impactValue"], 10)
@@ -400,7 +559,14 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(pd.isna(out["impactValueMax"]))
         self.assertTrue(out["flag_remove_number_unit"])
 
-        x = pd.Series({"impactValue": 5, "impactUnit": "two houses", "impactValueMin": 2, "impactValueMax": np.nan})
+        x = pd.Series(
+            {
+                "impactValue": 5,
+                "impactUnit": "two houses",
+                "impactValueMin": 2,
+                "impactValueMax": np.nan,
+            }
+        )
         out = replace_numbers_unit(x)
         self.assertEqual("houses", out["impactUnit"])
         self.assertEqual(out["impactValue"], 10)
@@ -408,7 +574,14 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(pd.isna(out["impactValueMax"]))
         self.assertTrue(out["flag_remove_number_unit"])
 
-        x = pd.Series({"impactValue": 5, "impactUnit": "thousands people", "impactValueMin": 2, "impactValueMax": np.nan})
+        x = pd.Series(
+            {
+                "impactValue": 5,
+                "impactUnit": "thousands people",
+                "impactValueMin": 2,
+                "impactValueMax": np.nan,
+            }
+        )
         out = replace_numbers_unit(x)
         self.assertEqual("people", out["impactUnit"])
         self.assertEqual(out["impactValue"], 5000)
@@ -417,36 +590,62 @@ class TestImpactFunctions(unittest.TestCase):
         self.assertTrue(out["flag_remove_number_unit"])
 
     def test_replace_numbers_unit_none(self):
-        x = pd.Series({"impactValue": 5, "impactUnit": None, "impactValueMin": np.nan, "impactValueMax": np.nan})
+        x = pd.Series(
+            {
+                "impactValue": 5,
+                "impactUnit": None,
+                "impactValueMin": np.nan,
+                "impactValueMax": np.nan,
+            }
+        )
         out = replace_numbers_unit(x)
         self.assertFalse(out["flag_remove_number_unit"])
 
     def test_make_date(self):
-        df = pd.DataFrame({
-            "startYear": [2020], "startMonth": [1], "startDay": [1],
-            "endYear": [2020], "endMonth": [12], "endDay": [31]
-        })
+        df = pd.DataFrame(
+            {
+                "startYear": [2020],
+                "startMonth": [1],
+                "startDay": [1],
+                "endYear": [2020],
+                "endMonth": [12],
+                "endDay": [31],
+            }
+        )
         out = make_date(df.copy())
         self.assertEqual(out["startDate"].iloc[0], "2020-1-1")
         self.assertEqual(out["endDate"].iloc[0], "2020-12-31")
 
     def test_make_date_partial(self):
-        df = pd.DataFrame({
-            "startYear": [2020], "startMonth": [6], "startDay": [None],
-            "endYear": [2020], "endMonth": [None], "endDay": [None]
-        })
+        df = pd.DataFrame(
+            {
+                "startYear": [2020],
+                "startMonth": [6],
+                "startDay": [None],
+                "endYear": [2020],
+                "endMonth": [None],
+                "endDay": [None],
+            }
+        )
         out = make_date(df.copy())
         self.assertEqual(out["startDate"].iloc[0], "2020-6")
         self.assertEqual(out["endDate"].iloc[0], "2020")
 
     def test_make_date_year_only(self):
-        df = pd.DataFrame({
-            "startYear": [2020], "startMonth": [None], "startDay": [None],
-            "endYear": [2021], "endMonth": [None], "endDay": [None]
-        })
+        df = pd.DataFrame(
+            {
+                "startYear": [2020],
+                "startMonth": [None],
+                "startDay": [None],
+                "endYear": [2021],
+                "endMonth": [None],
+                "endDay": [None],
+            }
+        )
         out = make_date(df.copy())
         self.assertEqual(out["startDate"].iloc[0], "2020")
         self.assertEqual(out["endDate"].iloc[0], "2021")
+
 
 class TestAdditionalLocationFunctions(unittest.TestCase):
     def test_separate_locs_with_spaces(self):
@@ -459,6 +658,7 @@ class TestAdditionalLocationFunctions(unittest.TestCase):
         self.assertEqual(result[0], "Paris")
         self.assertEqual(result[1], "Lyon")
         self.assertEqual(result[2], "Rome")
+
 
 class TestConvertNullUnit(unittest.TestCase):
     def test_convert_null_unit_with_nan(self):
@@ -503,7 +703,10 @@ class TestConvertNullUnit(unittest.TestCase):
         for unit in test_units:
             x = pd.Series({"impactUnit": unit})
             out = convert_null_unit(x)
-            self.assertEqual(out["impactUnit"], unit, f"Unit '{unit}' should be preserved")
+            self.assertEqual(
+                out["impactUnit"], unit, f"Unit '{unit}' should be preserved"
+            )
+
 
 class TestAdditionalUnitFunctions(unittest.TestCase):
     def test_harmonize_units(self):
@@ -547,6 +750,7 @@ class TestAdditionalUnitFunctions(unittest.TestCase):
         out = normalize_people_unit(x)
         self.assertEqual(out["impactUnit"], "kg")
 
+
 class TestFormatOutput(unittest.TestCase):
     def test_format_output_numeric_conversion(self):
         df = pd.DataFrame({"impactValue": ["1", "2", None], "b": ["x", "y", "z"]})
@@ -554,19 +758,619 @@ class TestFormatOutput(unittest.TestCase):
         self.assertTrue(np.issubdtype(out["impactValue"].dtype, np.floating))
 
     def test_format_output_list_conversion(self):
-        df = pd.DataFrame({"impactValue": [1, 2, 3], "annotation": ["[1,2]", "x", "[]"]})
+        df = pd.DataFrame(
+            {"impactValue": [1, 2, 3], "annotation": ["[1,2]", "x", "[]"]}
+        )
         out = format_output(df, list_cols=["annotation"])
         self.assertIsInstance(out["annotation"].iloc[0], list)
         self.assertEqual(out["annotation"].iloc[0], [1, 2])
 
     def test_format_output_mixed(self):
-        df = pd.DataFrame({
-            "impactValue": ["1", "2", None],
-            "annotation": ["['a','b']", "hello", None]
-        })
+        df = pd.DataFrame(
+            {
+                "impactValue": ["1", "2", None],
+                "annotation": ["['a','b']", "hello", None],
+            }
+        )
         out = format_output(df, num_cols=["impactValue"], list_cols=["annotation"])
         self.assertTrue(np.issubdtype(out["impactValue"].dtype, np.floating))
         self.assertIsInstance(out["annotation"].iloc[0], list)
+
+
+class TestClassifyDamageDegree(unittest.TestCase):
+    """Test cases for classify_damage_degree function"""
+
+    def test_fully_destroyed_with_destroyed_keyword(self):
+        """Test classification with 'destroyed' keyword"""
+        x = pd.Series({"impactUnit": "homes destroyed"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_fully_damaged_keyword(self):
+        """Test classification with 'fully damaged' keyword"""
+        x = pd.Series({"impactUnit": "houses fully damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_collapsed_keyword(self):
+        """Test classification with 'collapsed' keyword"""
+        x = pd.Series({"impactUnit": "buildings collapsed"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_flattened_keyword(self):
+        """Test classification with 'flattened' keyword"""
+        x = pd.Series({"impactUnit": "infrastructure flattened"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_fully_destroyed_with_completely_destroyed(self):
+        """Test classification with 'completely destroyed' keyword"""
+        x = pd.Series({"impactUnit": "structures completely destroyed"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "fully destroyed")
+
+    def test_partially_damaged_with_damaged_keyword(self):
+        """Test classification with 'damaged' keyword"""
+        x = pd.Series({"impactUnit": "homes damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "partially damaged")
+
+    def test_partially_damaged_with_partially_damaged_keyword(self):
+        """Test classification with 'partially damaged' keyword"""
+        x = pd.Series({"impactUnit": "houses partially damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "partially damaged")
+
+    def test_partially_damaged_with_infrastructure_damaged(self):
+        """Test classification with infrastructure damage"""
+        x = pd.Series({"impactUnit": "infrastructure partially damaged"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "partially damaged")
+
+    def test_unspecified_with_people_unit(self):
+        """Test classification with people unit (not applicable)"""
+        x = pd.Series({"impactUnit": "people"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_injured_unit(self):
+        """Test classification with injured (not applicable)"""
+        x = pd.Series({"impactUnit": "injured"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_deaths_unit(self):
+        """Test classification with deaths (not applicable)"""
+        x = pd.Series({"impactUnit": "deaths"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_affected_people(self):
+        """Test classification with 'affected people' (not applicable)"""
+        x = pd.Series({"impactUnit": "affected people"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_displaced_individuals(self):
+        """Test classification with 'displaced individuals' (not applicable)"""
+        x = pd.Series({"impactUnit": "displaced individuals"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_families_affected(self):
+        """Test classification with 'families affected' (not applicable)"""
+        x = pd.Series({"impactUnit": "families affected"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_homes_no_damage_qualifier(self):
+        """Test classification with 'homes' without damage qualifier"""
+        x = pd.Series({"impactUnit": "homes"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_buildings_no_damage_qualifier(self):
+        """Test classification with 'buildings' without damage qualifier"""
+        x = pd.Series({"impactUnit": "buildings"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_structures(self):
+        """Test classification with 'structures' without damage qualifier"""
+        x = pd.Series({"impactUnit": "structures"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_houses(self):
+        """Test classification with 'houses' without damage qualifier"""
+        x = pd.Series({"impactUnit": "houses"})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_empty_string(self):
+        """Test classification with empty string"""
+        x = pd.Series({"impactUnit": ""})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_null_value(self):
+        """Test classification with null value"""
+        x = pd.Series({"impactUnit": None})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_unspecified_with_nan_value(self):
+        """Test classification with NaN value"""
+        x = pd.Series({"impactUnit": np.nan})
+        result = classify_damage_degree(x)
+        self.assertEqual(result["damageDegree"], "unspecified")
+
+    def test_dataframe_apply(self):
+        """Test applying function to dataframe with apply()"""
+        df = pd.DataFrame(
+            {
+                "impactValue": [100, 50, 30, 200, 15, 500],
+                "impactUnit": [
+                    "homes destroyed",
+                    "houses damaged",
+                    "people",
+                    "buildings collapsed",
+                    "families affected",
+                    "infrastructure flattened",
+                ],
+            }
+        )
+
+        result_df = df.apply(classify_damage_degree, axis=1)
+
+        # Verify new column was created
+        self.assertIn("damageDegree", result_df.columns)
+
+        # Verify classifications
+        expected = [
+            "fully destroyed",
+            "partially damaged",
+            "unspecified",
+            "fully destroyed",
+            "unspecified",
+            "fully destroyed",
+        ]
+        self.assertEqual(result_df["damageDegree"].tolist(), expected)
+
+    def test_case_insensitivity(self):
+        """Test that classification is case-insensitive with Series input"""
+        test_cases = [
+            ("HOMES DESTROYED", "fully destroyed"),
+            ("Houses Damaged", "partially damaged"),
+            ("PEOPLE", "unspecified"),
+            ("Injured", "unspecified"),
+        ]
+
+        for unit_str, expected in test_cases:
+            x = pd.Series({"impactUnit": unit_str})
+            result = classify_damage_degree(x)
+            self.assertEqual(
+                result["damageDegree"],
+                expected,
+                f"Failed for '{unit_str}' - got '{result['damageDegree']}' expected '{expected}'",
+            )
+
+
+class TestRemoveHazardFlag(unittest.TestCase):
+    """Test cases for flag_remove_hazard function"""
+
+
+class TestRemoveHazardFlag(unittest.TestCase):
+    """Test cases for flag_remove_hazard function"""
+
+    def setUp(self):
+        self.remove_hazards = ["Epidemic", "Conflict"]
+
+    def test_dataframe_apply_non_strict(self):
+        """
+        Non-strict mode: all hazards must be removable.
+        """
+
+        df = pd.DataFrame(
+            {
+                "hazards": [
+                    ["Epidemic"],
+                    ["Conflict"],
+                    ["Epidemic", "Conflict"],
+                    ["Epidemic", "Flood"],
+                    ["Flood"],
+                ]
+            }
+        )
+
+        result = df.apply(
+            flag_remove_hazard,
+            axis=1,
+            args=(self.remove_hazards,),
+        )
+
+        expected = pd.Series([True, True, True, False, False])
+
+        pd.testing.assert_series_equal(
+            result.reset_index(drop=True),
+            expected,
+            check_names=False,
+        )
+
+    def test_dataframe_apply_strict(self):
+        """
+        Strict mode: any hazard in remove_hazards is enough.
+        """
+
+        df = pd.DataFrame(
+            {
+                "hazards": [
+                    ["Epidemic"],
+                    ["Conflict"],
+                    ["Epidemic", "Conflict"],
+                    ["Epidemic", "Flood"],
+                    ["Flood"],
+                ]
+            }
+        )
+
+        result = df.apply(
+            flag_remove_hazard,
+            axis=1,
+            args=(self.remove_hazards, True),
+        )
+
+        expected = pd.Series([True, True, True, True, False])
+
+        pd.testing.assert_series_equal(
+            result.reset_index(drop=True),
+            expected,
+            check_names=False,
+        )
+
+    def test_single_hazard_non_strict(self):
+        x = pd.Series({"hazards": ["Epidemic"]})
+
+        self.assertTrue(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+            )
+        )
+
+    def test_mixed_hazards_non_strict(self):
+        x = pd.Series(
+            {
+                "hazards": [
+                    "Epidemic",
+                    "Flood",
+                ]
+            }
+        )
+
+        self.assertFalse(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+            )
+        )
+
+    def test_mixed_hazards_strict(self):
+        x = pd.Series(
+            {
+                "hazards": [
+                    "Epidemic",
+                    "Flood",
+                ]
+            }
+        )
+
+        self.assertTrue(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+                strict=True,
+            )
+        )
+
+    def test_no_matching_hazards_strict(self):
+        x = pd.Series(
+            {
+                "hazards": [
+                    "Flood",
+                    "Storm",
+                ]
+            }
+        )
+
+        self.assertFalse(
+            flag_remove_hazard(
+                x,
+                self.remove_hazards,
+                strict=True,
+            )
+        )
+
+
+class TestDateFlagFunctions(unittest.TestCase):
+
+    def test_flag_missing_date_field(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "startMonth": "",
+                "endYear": 2024,
+            }
+        )
+
+        out = flag_missing_date_field(
+            x.copy(),
+            ["startYear", "startMonth", "endYear"],
+        )
+
+        self.assertTrue(out["flag_missing_startYear"])
+        self.assertTrue(out["flag_missing_startMonth"])
+        self.assertFalse(out["flag_missing_endYear"])
+
+        self.assertTrue(pd.isna(out["startYear"]))
+        self.assertTrue(pd.isna(out["startMonth"]))
+
+    def test_flag_startYear_after_endYear_true(self):
+        x = pd.Series(
+            {
+                "startYear": 2024,
+                "endYear": 2023,
+            }
+        )
+
+        out = flag_startYear_after_endYear(x)
+
+        self.assertTrue(out["flag_startYear_after_endYear"])
+
+    def test_flag_startYear_after_endYear_false(self):
+        x = pd.Series(
+            {
+                "startYear": 2023,
+                "endYear": 2024,
+            }
+        )
+
+        out = flag_startYear_after_endYear(x)
+
+        self.assertFalse(out["flag_startYear_after_endYear"])
+
+    def test_flag_startYear_after_endYear_missing(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": 2024,
+            }
+        )
+
+        out = flag_startYear_after_endYear(x)
+
+        self.assertTrue(pd.isna(out["flag_startYear_after_endYear"]))
+
+    def test_flag_inconsistent_year_valid(self):
+        x = pd.Series(
+            {
+                "startYear": 2020,
+                "endYear": 2021,
+            }
+        )
+
+        out = flag_inconsistent_year(
+            x,
+            min_year=1900,
+            max_year=2100,
+        )
+
+        self.assertFalse(out["flag_inconsistent_year"])
+
+    def test_flag_inconsistent_year_invalid_start(self):
+        x = pd.Series(
+            {
+                "startYear": 1800,
+                "endYear": 2020,
+            }
+        )
+
+        out = flag_inconsistent_year(
+            x,
+            min_year=1900,
+            max_year=2100,
+        )
+
+        self.assertTrue(out["flag_inconsistent_year"])
+
+    def test_flag_inconsistent_year_invalid_end(self):
+        x = pd.Series(
+            {
+                "startYear": 2020,
+                "endYear": 2500,
+            }
+        )
+
+        out = flag_inconsistent_year(
+            x,
+            min_year=1900,
+            max_year=2100,
+        )
+
+        self.assertTrue(out["flag_inconsistent_year"])
+
+    def test_flag_inconsistent_year_missing(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": 2020,
+            }
+        )
+
+        out = flag_inconsistent_year(x, min_year=1900, max_year=2100)
+
+        self.assertTrue(pd.isna(out["flag_inconsistent_year"]))
+
+    def test_is_month(self):
+        self.assertTrue(is_month(1))
+        self.assertTrue(is_month("12"))
+        self.assertFalse(is_month(13))
+        self.assertFalse(is_month("abc"))
+        self.assertTrue(pd.isna(is_month(np.nan)))
+
+    def test_is_day(self):
+        self.assertTrue(is_day(1))
+        self.assertTrue(is_day("31"))
+        self.assertFalse(is_day(32))
+        self.assertFalse(is_day("abc"))
+        self.assertTrue(pd.isna(is_day(np.nan)))
+
+    def test_flag_inconsistent_month_valid(self):
+        x = pd.Series(
+            {
+                "startMonth": 1,
+                "endMonth": 12,
+            }
+        )
+
+        out = flag_inconsistent_month(x)
+
+        self.assertFalse(out["flag_inconsistent_month"])
+
+    def test_flag_inconsistent_month_invalid(self):
+        x = pd.Series(
+            {
+                "startMonth": 13,
+                "endMonth": 12,
+            }
+        )
+
+        out = flag_inconsistent_month(x)
+
+        self.assertTrue(out["flag_inconsistent_month"])
+
+    def test_flag_inconsistent_month_missing(self):
+        x = pd.Series(
+            {
+                "startMonth": np.nan,
+                "endMonth": 12,
+            }
+        )
+
+        out = flag_inconsistent_month(x)
+
+        self.assertTrue(pd.isna(out["flag_inconsistent_month"]))
+
+    def test_flag_inconsistent_day_valid(self):
+        x = pd.Series(
+            {
+                "startDay": 1,
+                "endDay": 31,
+            }
+        )
+
+        out = flag_inconsistent_day(x)
+
+        self.assertFalse(out["flag_inconsistent_day"])
+
+    def test_flag_inconsistent_day_invalid(self):
+        x = pd.Series(
+            {
+                "startDay": 35,
+                "endDay": 10,
+            }
+        )
+
+        out = flag_inconsistent_day(x)
+
+        self.assertTrue(out["flag_inconsistent_day"])
+
+    def test_flag_inconsistent_day_missing(self):
+        x = pd.Series(
+            {
+                "startDay": np.nan,
+                "endDay": 10,
+            }
+        )
+
+        out = flag_inconsistent_day(x)
+
+        self.assertTrue(pd.isna(out["flag_inconsistent_day"]))
+
+    def test_infer_from_endYear(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": 2024,
+            }
+        )
+
+        self.assertEqual(infer_from_endYear(x), 2024)
+
+    def test_infer_from_endYear_missing(self):
+        x = pd.Series(
+            {
+                "startYear": np.nan,
+                "endYear": np.nan,
+            }
+        )
+
+        self.assertTrue(pd.isna(infer_from_endYear(x)))
+
+    def test_infer_startYear_most_frequent(self):
+        df = pd.DataFrame(
+            {
+                "appealCode": ["A", "A", "A", "B"],
+                "startYear": [2020, 2020, np.nan, np.nan],
+                "endYear": [2020, 2020, 2021, 2022],
+            }
+        )
+
+        out = infer_startYear(
+            df.copy(),
+            method="most_frequent_startYear",
+        )
+
+        self.assertEqual(out.loc[2, "startYear"], 2020)
+        self.assertTrue(out.loc[2, "flag_inferred_startYear"])
+        self.assertFalse(out.loc[2, "flag_failed_startYear_inference"])
+
+        self.assertTrue(out.loc[3, "flag_failed_startYear_inference"])
+
+    def test_infer_startYear_from_endYear(self):
+        df = pd.DataFrame(
+            {
+                "appealCode": ["A", "B"],
+                "startYear": [np.nan, np.nan],
+                "endYear": [2020, np.nan],
+            }
+        )
+
+        out = infer_startYear(
+            df.copy(),
+            method="infer_from_endYear",
+        )
+
+        self.assertEqual(out.loc[0, "startYear"], 2020)
+        self.assertTrue(out.loc[0, "flag_inferred_startYear"])
+
+        self.assertTrue(out.loc[1, "flag_failed_startYear_inference"])
+
+    def test_infer_startYear_invalid_method(self):
+        df = pd.DataFrame(
+            {
+                "appealCode": ["A"],
+                "startYear": [np.nan],
+                "endYear": [2020],
+            }
+        )
+
+        with self.assertRaises(ValueError):
+            infer_startYear(
+                df.copy(),
+                method="unknown_method",
+            )
 
 
 class TestPostProcessingPipeline(unittest.TestCase):
@@ -575,23 +1379,50 @@ class TestPostProcessingPipeline(unittest.TestCase):
     def test_full_pipeline(self):
         """Test the complete postprocessing workflow as in postprocess_results.py"""
         # Create sample data mimicking LLM output
-        sample_data = pd.DataFrame({
-            "impactValue": ["100", "50", "1500", "10"],
-            "impactValueMin": [None, "30", "1000", "5"],
-            "impactValueMax": ["120", None, "2000", "15"],
-            "impactUnit": ["families", "2 houses", "us $", "ha of agricultural land"],
-            "impactSubtype": ["Affected People", "Damaged Structures", "Economic Loss", "agricultural land"],
-            "country": ["['France', 'Germany']", "['Spain']", "['Switzerland']", "['Kenya']"],
-            "location": ["['Paris', 'Berlin']", "['Madrid']", "['Zurich']", "['Nairobi']"],
-            "hazards": ["['flood', 'tornado']", "['earthquake']", "['wildfire']", "['drought']"],
-            "startYear": [2020, 2021, 2022, 2023],
-            "startMonth": [1, None, 6, 3],
-            "startDay": [15, None, None, 10],
-            "endYear": [2020, 2021, 2022, 2023],
-            "endMonth": [2, None, 7, 4],
-            "endDay": [20, None, None, 15],
-            "reportDate": ["2020-03-01", "2021-05-01", "2022-08-01", "2023-05-01"]
-        })
+        sample_data = pd.DataFrame(
+            {
+                "impactValue": ["100", "50", "1500", "10"],
+                "impactValueMin": [None, "30", "1000", "5"],
+                "impactValueMax": ["120", None, "2000", "15"],
+                "impactUnit": [
+                    "families",
+                    "2 houses",
+                    "us $",
+                    "ha of agricultural land",
+                ],
+                "impactSubtype": [
+                    "Affected People",
+                    "Damaged Structures",
+                    "Economic Loss",
+                    "agricultural land",
+                ],
+                "country": [
+                    "['France', 'Germany']",
+                    "['Spain']",
+                    "['Switzerland']",
+                    "['Kenya']",
+                ],
+                "location": [
+                    "['Paris', 'Berlin']",
+                    "['Madrid']",
+                    "['Zurich']",
+                    "['Nairobi']",
+                ],
+                "hazards": [
+                    "['flood', 'tornado']",
+                    "['earthquake']",
+                    "['wildfire']",
+                    "['drought']",
+                ],
+                "startYear": [2020, 2021, 2022, 2023],
+                "startMonth": [1, None, 6, 3],
+                "startDay": [15, None, None, 10],
+                "endYear": [2020, 2021, 2022, 2023],
+                "endMonth": [2, None, 7, 4],
+                "endDay": [20, None, None, 15],
+                "reportDate": ["2020-03-01", "2021-05-01", "2022-08-01", "2023-05-01"],
+            }
+        )
 
         # Step 1: Format output
         df = format_output(sample_data.copy())
@@ -637,7 +1468,7 @@ class TestPostProcessingPipeline(unittest.TestCase):
         self.assertEqual(df.loc[0, "impactUnit"], "people")
         self.assertEqual(df.loc[0, "impactValue"], 360)  # 120 families * 3
         self.assertEqual(df.loc[0, "impactSubtype"], "Affected People")
-        self.assertTrue(df.loc[0, "flag_unit_conversion"])
+        self.assertTrue(df.loc[0, "flag_non_currency_unit_conversion"])
 
         # Row 1: houses with number extraction
         self.assertEqual(df.loc[1, "impactUnit"], "homes")
@@ -650,7 +1481,9 @@ class TestPostProcessingPipeline(unittest.TestCase):
         self.assertIsInstance(df.loc[2, "impactValue"], (int, float))
 
         # Row 3: metric unit standardization
-        self.assertEqual(df.loc[3, "impactUnit"], "km**2 of crop production and forestry")
+        self.assertEqual(
+            df.loc[3, "impactUnit"], "km**2 of crop production and forestry"
+        )
         self.assertTrue(df.loc[3, "flag_SI_unit_standardization"])
 
         # Verify hazard reclassification
@@ -666,23 +1499,25 @@ class TestPostProcessingPipeline(unittest.TestCase):
 
     def test_pipeline_with_quali_data(self):
         """Test pipeline with qualitative data (no values)"""
-        sample_data = pd.DataFrame({
-            "impactValue": [None, np.nan],
-            "impactValueMin": [None, np.nan],
-            "impactValueMax": [None, np.nan],
-            "impactUnit": ["people", np.nan],
-            "impactSubtype": ["Displaced People", "Damaged Structures"],
-            "country": ["['Haiti']", "['Bangladesh']"],
-            "location": ["['Port-au-Prince']", "['Dhaka']"],
-            "hazards": ["['earthquake']", "['flood']"],
-            "startYear": [2010, 2020],
-            "startMonth": [1, 7],
-            "startDay": [12, 15],
-            "endYear": [2010, 2020],
-            "endMonth": [1, 8],
-            "endDay": [12, 1],
-            "reportDate": ["2010-02-01", "2020-09-01"]
-        })
+        sample_data = pd.DataFrame(
+            {
+                "impactValue": [None, np.nan],
+                "impactValueMin": [None, np.nan],
+                "impactValueMax": [None, np.nan],
+                "impactUnit": ["people", np.nan],
+                "impactSubtype": ["Displaced People", "Damaged Structures"],
+                "country": ["['Haiti']", "['Bangladesh']"],
+                "location": ["['Port-au-Prince']", "['Dhaka']"],
+                "hazards": ["['earthquake']", "['flood']"],
+                "startYear": [2010, 2020],
+                "startMonth": [1, 7],
+                "startDay": [12, 15],
+                "endYear": [2010, 2020],
+                "endMonth": [1, 8],
+                "endDay": [12, 1],
+                "reportDate": ["2010-02-01", "2020-09-01"],
+            }
+        )
 
         # Run through pipeline
         df = format_output(sample_data.copy())
@@ -723,18 +1558,21 @@ class TestPostProcessingPipeline(unittest.TestCase):
         # Step 13: Convert monetary units
         df = df.apply(convert_monetary_units, axis=1)
 
-        #df.loc[df["quanti"] == "quali", "impactUnit"] = "null"
+        # df.loc[df["quanti"] == "quali", "impactUnit"] = "null"
 
         # Verify all rows are labeled as quali
         self.assertTrue(all(df["quanti"] == "quali"))
 
         # Verify subtypes are preserved
         self.assertEqual(df.loc[0, "impactSubtype"], "Displaced People")
-        self.assertEqual(df.loc[1, "impactSubtype"], "Unknown")  # 'Damaged Structures' not in keywords
+        self.assertEqual(
+            df.loc[1, "impactSubtype"], "Unknown"
+        )  # 'Damaged Structures' not in keywords
 
-        #Verify units are processed correctly
+        # Verify units are processed correctly
         self.assertEqual(df.loc[0, "impactUnit"], "people")
         self.assertEqual(df.loc[1, "impactUnit"], "null")
+
 
 if __name__ == "__main__":
     unittest.main()

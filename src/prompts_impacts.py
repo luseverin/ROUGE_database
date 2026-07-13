@@ -1,7 +1,9 @@
 import pandas as pd
 from src.prompt_examples import *
 from src.impact_def import *
-#Prompts for impact extraction
+
+
+# Prompts for impact extraction
 def identify_impacts_prompt(text, impact_desc):
     """Try to identify impacts from different categories. Based on impact categories
     dict"""
@@ -31,7 +33,8 @@ def identify_impacts_prompt(text, impact_desc):
     """
     return prompt
 
-def identify_value_unit_prompt(text, answer):
+
+def identify_value_unit_prompt_both(text, answer):
     prompt = f"""
     Context information is below.
     ---
@@ -40,7 +43,8 @@ def identify_value_unit_prompt(text, answer):
     Using information from the text above and no previous knowledge, please answer the query.
     Query: Based on the list of types of impacts that you previously identified:
     {answer}
-    identify the values and units of these impacts from the text above.
+    identify the values and units of these impacts from the text above. Leave the impactValue
+    and impactUnit fields as null if the value or unit are not mentioned in the text.
     Answer by providing a list of JSONs, in the following format and respecting the rules described after:
     List of JSON format:
     [
@@ -74,14 +78,64 @@ def identify_value_unit_prompt(text, answer):
     """
     return prompt
 
-def make_impact_description(impact_type, impact_value, impact_unit):
-    if ((impact_value is not None) or
-        (not pd.isna(impact_value) or
-        (impact_unit is not None) or
-        (not pd.isna(impact_unit)))):
-        return f"the impact of type '{impact_type}' with a value of {impact_value} {impact_unit}"
+
+def identify_value_unit_prompt_quanti(text, answer):
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Based on the list of types of impacts that you previously identified:
+    {answer}
+    identify the values and units of these impacts from the text above.
+    Answer by providing a list of JSONs, in the following format and respecting the rules described after:
+    List of JSON format:
+    [
+    {{
+    "impactSubtype": "<one of {answer}>",  # Description: Subtype of impact (e.g., Affected People, Road Infrastructure, Crop Production and Forestry).
+    "impactValue": <float>  # Description: The quantified value of the impact. Provide the exact number if mentioned. If a range is provided give the upper estimate.
+    "impactValuePrecision": "one of ["exact", "approx"], # Description: The flag describing whether the quantified impact value is exact or approximate. Use null if unknown.
+    "impactValueMin": <float or null>,  # Description: The lower bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+    "impactValueMax": <float or null>,  # Description: The upper bound estimate of the quantified value of the impact if the impact is approximate or a range. Use null if unknown.
+    "impactUnit": "<string>",  # Description: The unit of the impact value (e.g., people, meters, houses).
+    "valueAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the impacts information. Write the text exactly as found in the original text.
+    }}
+    ]
+
+    Rules:
+    - The `impactSubtype` field must only contain one of the valid values: {answer}.
+    - Do not reuse a specific impactValue for different entries.
+    - Provide the exact text excerpt from where you extracted the impacts information in the `valueAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
+    - Extract each mention of an impact only once. Do not repeat yourself.
+    - Provide the unit of the impact in the `impactUnit` field exactly as found in the original text, keeping all information on the measured quantity (e.g. write 'km of roads' instead of just 'km')
+    - When multiple numbers are provided favour the `impactValue` associated with `impactUnit` in terms of "people" over "households", and "CHF" over other currencies
+    - When the `impactValue` field is an exact number, `impactValuePrecision` must be set to `exact`.
+    - When the `impactValue` field is an approximation, `impactValuePrecision` must be set to `approx`.
+    - When the `impactValue` field is a range, `impactValuePrecision` must be set to `approx` and the `impactValueMin` and `impactValueMax` fields must be filled.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the list of JSONs.
+
+    Example output:
+    {examples_value_unit}
+    """
+    return prompt
+
+
+def make_impact_description(impact_type, impact_value, impact_unit, impact_sentences):
+    if (impact_value is not None) or (
+        not pd.isna(impact_value)
+        or (impact_unit is not None)
+        or (not pd.isna(impact_unit))
+    ):
+        return (
+            f"the specificimpact of type '{impact_type}' with a value of {impact_value} {impact_unit}"
+            f" described by the sentences '{impact_sentences}'"
+        )
     else:
         return f"impacts of type '{impact_type}'"
+
 
 def identify_impact_loc_prompt(text, impact_description):
     prompt = f"""
@@ -90,21 +144,20 @@ def identify_impact_loc_prompt(text, impact_description):
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify the locations where {impact_description} occurred in the report area described in the text above.
+    Query: Identify from the text above the locations where {impact_description} occurred.
     Answer as a JSON in the following format and respecting the rules described after:
     JSON format:
     {{
     "country": ["<list of strings>"],  # Description: The list of affected countries where the described impact occurred.
-    "location" : ["<list of strings>"] or null,  # Description: The list of affected locations at the subnational level (e.g. cities, regions) where the described impact occurred.
+    "location" : ["<list of strings>"] or null,  # Description: The list of affected locations at the subnational level (e.g. cities, regions) where the described impacts occurred.
     "locationAnnotation": ["<list of strings>"]  # Description: the exact text excerpt from where you extracted the location information. Write the text exactly as found in the original text.
     }}
 
     Rules:
-    - Provide the the most precise level of location found for the described impact in the `city field`.
+    - Provide the the most precise level of location found for the described impact in the `location` field.
     - Give the location names exactly as written in the text. Do not aggregate different locations in words such as "varions locations" but provide the list of names.
     - Follow the JSON format strictly; do not add or remove fields.
     - Provide the exact text excerpt from where you extracted the location information in the `locationAnnotation` field. Write the text exactly as found in the original text. Provide the entire sentences.
-    - Follow the JSON format strictly; do not add or remove fields.
     - Ensure all field constraints on allowed values and their data types are respected.
     - Do not add notes or extra text, only output the JSON.
 
@@ -113,14 +166,19 @@ def identify_impact_loc_prompt(text, impact_description):
     """
     return prompt
 
-def identify_impact_dates_prompt(text, impact_description, locations):
+
+def identify_impact_dates_prompt(text, impact_description, locations, hazards=None):
+    if hazards is not None:
+        hazards_str = f" caused by the hazards {hazards}"
+    else:
+        hazards_str = ""
     prompt = f"""
     Context information is below.
     ---
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify the dates when {impact_description} occurred at {locations} in the report area described in the text above.
+    Query: Identify from the text above the dates when {impact_description}{hazards_str} occurred at locations {locations}.
     Answer as a JSON in the following format and respecting the rules described after:
     JSON format:
     {{
@@ -145,14 +203,100 @@ def identify_impact_dates_prompt(text, impact_description, locations):
     """
     return prompt
 
-def identify_impact_hazards_prompt(text, impact_description, locations, dates, hazards_list):
+
+def identify_impact_dates_prompt_qualitative(
+    text, impact_description, locations, hazards=None
+):
+    """Prompt for extracting MULTIPLE date pairs for qualitative impacts"""
+    if hazards is not None:
+        hazards_str = f" caused by the hazards {hazards}"
+    else:
+        hazards_str = ""
     prompt = f"""
     Context information is below.
     ---
     {text}
     ---
     Using information from the text above and no previous knowledge, please answer the query.
-    Query: Identify the hazards that caused {impact_description} at {locations} at {dates} in the report area described in the text above.
+    Query: Identify from the text above the time periods when {impact_description}{hazards_str} occurred at locations {locations}.
+    If multiple distinct time periods are mentioned, extract them as separate start-end date pairs.
+
+    Answer as a JSON in the following format and respecting the rules described after:
+    JSON format:
+    {{
+    "datePairs": [
+        {{
+        "startYear": <integer or null>,
+        "startMonth": <integer or null>,
+        "startDay": <integer or null>,
+        "endYear": <integer or null>,
+        "endMonth": <integer or null>,
+        "endDay": <integer or null>,
+        "dateAnnotation": ["<text excerpt for this time period>"]
+        }},
+        {{
+        "startYear": <integer or null>,
+        "startMonth": <integer or null>,
+        "startDay": <integer or null>,
+        "endYear": <integer or null>,
+        "endMonth": <integer or null>,
+        "endDay": <integer or null>,
+        "dateAnnotation": ["<text excerpt for this time period>"]
+        }}
+    ]
+    }}
+
+    Rules:
+    - Extract ALL distinct time periods that refer to the described impact.
+    - Do NOT extract dates that refer to other impacts or events that are not related to the described impact.
+    - For each distinct period, create a separate object in the datePairs list.
+    - Each datePair must have its own dateAnnotation with the exact text excerpt for that time period.
+    - Follow the JSON format strictly; do not add or remove fields.
+    - Provide the exact text excerpts as found in the original text. Provide the entire sentences.
+    - Ensure all field constraints on allowed values and their data types are respected.
+    - Do not add notes or extra text, only output the JSON.
+
+    Example output:
+    {{
+    "datePairs": [
+        {{
+            "startYear": 2023,
+            "startMonth": 1,
+            "startDay": 15,
+            "endYear": 2023,
+            "endMonth": 2,
+            "endDay": null,
+            "dateAnnotation": ["From January 15 to February 2023, the flood destroyed houses."]
+        }},
+        {{
+            "startYear": 2023,
+            "startMonth": 6,
+            "startDay": null,
+            "endYear": 2023,
+            "endMonth": 7,
+            "endDay": 31,
+            "dateAnnotation": ["During June and July 2023, flooding destroyed further houses."]
+        }}
+    ]
+    }}
+    """
+    return prompt
+
+
+def identify_impact_hazards_prompt(
+    text, impact_description, locations, hazards_list, dates=None
+):
+    if dates is not None:
+        date_str = f" and dates {dates}"
+    else:
+        date_str = ""
+    prompt = f"""
+    Context information is below.
+    ---
+    {text}
+    ---
+    Using information from the text above and no previous knowledge, please answer the query.
+    Query: Identify from the text above the hazards that caused {impact_description} at locations {locations}{date_str}.
     Answer as a JSON in the following format and respecting the rules described after:
     JSON format:
     {{
@@ -170,6 +314,7 @@ def identify_impact_hazards_prompt(text, impact_description, locations, dates, h
     {example_hazards}
     """
     return prompt
+
 
 def make_prompt_system(impact_types, hazard_types):
     prompt_system = f"""
@@ -199,8 +344,11 @@ def make_prompt_system(impact_types, hazard_types):
     """
     return prompt_system
 
-#try new formulation with formatting
-def quantify_impacts_type_value_loc_date_haz_const_unit(imp_main, imp_sub, imp_unit, hazard_cat):
+
+# try new formulation with formatting
+def quantify_impacts_type_value_loc_date_haz_const_unit(
+    imp_main, imp_sub, imp_unit, hazard_cat
+):
     """Find impact type, values, locs, etc. altogether"""
     prompt = f"""
     Using information from the text above and no previous knowledge, please answer the query.
@@ -239,6 +387,7 @@ def quantify_impacts_type_value_loc_date_haz_const_unit(imp_main, imp_sub, imp_u
 
     """
     return prompt
+
 
 def quantify_impacts_type_value_loc_date_haz_free_unit_ranges(imp_sub, hazard_cat):
     """Find impact type, values, locs, etc. altogether"""
@@ -290,6 +439,7 @@ def quantify_impacts_type_value_loc_date_haz_free_unit_ranges(imp_sub, hazard_ca
     """
     return prompt
 
+
 def quantify_impacts_all_system_prompt(imp_sub, hazard_cat):
     """Find impact type, values, locs, etc. altogether"""
     prompt = f"""
@@ -339,87 +489,84 @@ def quantify_impacts_all_system_prompt(imp_sub, hazard_cat):
 
     """
     return prompt
-#- impactSubtype (string)
-#- impactValue (float or null)
-#- impactValuePrecision (string)
-#- impactValueMin (float or null)
-#- impactValueMax (float or null)
-#- impactUnit (string or null)
-#- country (list of strings or null)
-#- location (list of strings or null)
-#- startYear (integer or null)
-#- startMonth (integer or null)
-#- startDay (integer or null)
-#- endYear (integer or null)
-#- endMonth (integer or null)
-#- endDay (integer or null)
-#- hazards (list of strings or null)
-#- impactsAnnotation (list of strings)
+
+
+# - impactSubtype (string)
+# - impactValue (float or null)
+# - impactValuePrecision (string)
+# - impactValueMin (float or null)
+# - impactValueMax (float or null)
+# - impactUnit (string or null)
+# - country (list of strings or null)
+# - location (list of strings or null)
+# - startYear (integer or null)
+# - startMonth (integer or null)
+# - startDay (integer or null)
+# - endYear (integer or null)
+# - endMonth (integer or null)
+# - endDay (integer or null)
+# - hazards (list of strings or null)
+# - impactsAnnotation (list of strings)
+
 
 def impact_scehem_json_schema(impsub_list, haz_list):
     impact_scheme_json = {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "impactSubtype": {
-            "type": "string",
-            "enum": impsub_list
-          },
-          "impactValue": { "type": ["number", "null"] },
-          "impactUnit": { "type": ["string", "null"] },
-          "impactValuePrecision": {
-              "type": ["string", "null"],
-              "enum": ["exact", "approx"]
-          },
-          "country": {
-            "type": "array",
-            "items": { "type": "string" },
-            "minItems": 1
-          },
-          "location": {
-            "type": ["array", "null"],
-            "items": { "type": "string" }
-          },
-          "startYear": { "type": ["integer", "null"] },
-          "startMonth": { "type": ["integer", "null"] },
-          "startDay": { "type": ["integer", "null"] },
-          "endYear": { "type": ["integer", "null"] },
-          "endMonth": { "type": ["integer", "null"] },
-          "endDay": { "type": ["integer", "null"] },
-          "hazards": {
-            "type": ["array", "null"],
-            "items": {
-              "type": "string",
-              "enum": haz_list
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "impactSubtype": {"type": "string", "enum": impsub_list},
+                "impactValue": {"type": ["number", "null"]},
+                "impactUnit": {"type": ["string", "null"]},
+                "impactValuePrecision": {
+                    "type": ["string", "null"],
+                    "enum": ["exact", "approx"],
+                },
+                "country": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                },
+                "location": {"type": ["array", "null"], "items": {"type": "string"}},
+                "startYear": {"type": ["integer", "null"]},
+                "startMonth": {"type": ["integer", "null"]},
+                "startDay": {"type": ["integer", "null"]},
+                "endYear": {"type": ["integer", "null"]},
+                "endMonth": {"type": ["integer", "null"]},
+                "endDay": {"type": ["integer", "null"]},
+                "hazards": {
+                    "type": ["array", "null"],
+                    "items": {"type": "string", "enum": haz_list},
+                    "minItems": 1,
+                },
+                "impactsAnnotation": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                },
             },
-            "minItems": 1
-          },
-          "impactsAnnotation": {
-            "type": "array",
-            "items": { "type": "string" },
-            "minItems": 1
-          }
+            "required": [
+                "impactSubtype",
+                "impactValue",
+                "hazards",
+                "location",
+                "startYear",
+                "startMonth",
+                "startDay",
+                "endYear",
+                "endMonth",
+                "endDay",
+                "impactValueMin",
+                "impactValueMax",
+                "impactUnit",
+                "impactValuePrecision",
+                "country",
+                "impactsAnnotation",
+            ],
         },
-        "required": ["impactSubtype",
-                     "impactValue",
-                     "hazards",
-                     "location",
-                     "startYear",
-                     "startMonth",
-                     "startDay",
-                     "endYear",
-                     "endMonth",
-                     "endDay",
-                     "impactValueMin",
-                     "impactValueMax",
-                     "impactUnit",
-                     "impactValuePrecision",
-                     "country",
-                     "impactsAnnotation"]
-      }
     }
     return impact_scheme_json
+
 
 def groq_system_prompt(imp_sub, hazard_cat):
     prompt = f"""
@@ -475,6 +622,7 @@ def quantify_impacts_all_user_prompt(text):
     """
     return prompt
 
+
 def groq_user_prompt(text):
     prompt = f"""
     Please extract from the input text below all the information about impacts from natural hazards.
@@ -483,6 +631,7 @@ def groq_user_prompt(text):
     {text}
     """
     return prompt
+
 
 def add_text_prompt(prompt, text, text_pos="below"):
     if text_pos == "above":
@@ -493,14 +642,22 @@ def add_text_prompt(prompt, text, text_pos="below"):
         raise ValueError("Position must be 'above' or 'below'")
     return prompt
 
+
 def add_context(prompt, context):
-    return prompt + "\n### Context\nUse the following descriptions to help you complete the task:\n" + context
+    return (
+        prompt
+        + "\n### Context\nUse the following descriptions to help you complete the task:\n"
+        + context
+    )
+
 
 def add_subtype_descriptions_prompt(prompt, category, descriptions):
     return prompt + f"\n###{category} description:\n " + descriptions
 
+
 def add_examples_prompt(prompt, examples):
     return prompt + f"\n### Example output:\n {examples}"
+
 
 def add_examples_prompt_v2(prompt, examples):
     new_prompt = ""
@@ -508,13 +665,17 @@ def add_examples_prompt_v2(prompt, examples):
         new_prompt += f"\n### Example {i+1}:\n {example}\n"
     return prompt + new_prompt
 
+
 def format_desc(desc_dict):
     return "\n".join([f"{k}: {v}" for k, v in desc_dict.items()])
 
 
-def quantify_impacts_type_value_loc_date_haz(text, impact_cat_desc_dict, hazard_all_subtype_emdat):
+def quantify_impacts_type_value_loc_date_haz(
+    text, impact_cat_desc_dict, hazard_all_subtype_emdat
+):
     """Find impact type, values, locs, etc. altogether"""
-    prompt = f"""
+    prompt = (
+        f"""
     Context information is below.
     ---
     {text}
@@ -567,8 +728,8 @@ def quantify_impacts_type_value_loc_date_haz(text, impact_cat_desc_dict, hazard_
     If only the number of affected households or houses is given, assume each unit equals three people.
     Provide the answer as a list of JSON i.e. [JSON1, JSON2].
     Do not add notes or extra text, only output the list of JSONs, without saying "here is the list of JSONs".
-    Here is an example of how the structure of the list of JSONs must be:""" + \
-    """[{
+    Here is an example of how the structure of the list of JSONs must be:"""
+        + """[{
        "impactType" : "Affected People",
        "impactValue": 10000,
        "impactUnit": "people",
@@ -615,13 +776,18 @@ def quantify_impacts_type_value_loc_date_haz(text, impact_cat_desc_dict, hazard_
           }]
 
     """
-    #Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
+    )
+    # Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
     return prompt
 
-#without constraint in user prompt
-def quantify_impacts_type_value_loc_date_haz_v2(text, impact_cat_desc_dict, hazard_all_subtype_emdat):
+
+# without constraint in user prompt
+def quantify_impacts_type_value_loc_date_haz_v2(
+    text, impact_cat_desc_dict, hazard_all_subtype_emdat
+):
     """Find impact type, values, locs, etc. altogether"""
-    prompt = f"""
+    prompt = (
+        f"""
     Context information is below.
     ---
     {text}
@@ -670,8 +836,8 @@ def quantify_impacts_type_value_loc_date_haz_v2(text, impact_cat_desc_dict, haza
     If only the number of affected households or houses is given, assume each unit equals three people.
     Provide the answer as a list of JSON i.e. [JSON1, JSON2].
     Do not add notes or extra text, only output the list of JSONs, without saying "here is the list of JSONs".
-    Here is an example of how the structure of the list of JSONs must be:""" + \
-    """[{
+    Here is an example of how the structure of the list of JSONs must be:"""
+        + """[{
        "impactType" : "Affected People",
        "impactValue": 10000,
        "impactUnit": "people",
@@ -718,8 +884,10 @@ def quantify_impacts_type_value_loc_date_haz_v2(text, impact_cat_desc_dict, haza
           }]
 
     """
-    #Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
+    )
+    # Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
     return prompt
+
 
 def find_impact_types_categories(text, impact_cat, impact_desc):
     """Try to identify impacts from different categories. Based on impact categories
@@ -738,19 +906,24 @@ def find_impact_types_categories(text, impact_cat, impact_desc):
     """
     return prompt
 
+
 def make_impact_cat_prompt(impact_subType_dict):
 
     try:
-        prompt_impquant = """\n""".join([impact_subType_dict[imptype] for imptype in impact_types])
+        prompt_impquant = """\n""".join(
+            [impact_subType_dict[imptype] for imptype in impact_types]
+        )
     except ValueError as e:
         print(e)
         prompt_impquant = None
     return prompt_impquant
 
+
 def quantify_impacts_value_loc_date_haz(text, impact_type, impact_type_desc):
     """Find associated impacts from different impactTypes identified.
     Try to quantify numerically impacts from different categories."""
-    prompt = f"""
+    prompt = (
+        f"""
     Context information is below.
     ---
     {text}
@@ -788,8 +961,8 @@ def quantify_impacts_value_loc_date_haz(text, impact_type, impact_type_desc):
     If only the number of affected households or houses is given, assume each unit equals three people.
     Provide the answer as a list of JSON i.e. [JSON1, JSON2].
     Do not add notes or extra text, only output the list of JSONs, without saying "here is the list of JSONs".
-    Here is an example of how the structure of the list of JSONs must be:""" + \
-    """[{
+    Here is an example of how the structure of the list of JSONs must be:"""
+        + """[{
        "impactValue": 10000,
        "impactUnit": "people",
         "location" : ["Abu Hamad", "Tokar"],
@@ -830,35 +1003,38 @@ def quantify_impacts_value_loc_date_haz(text, impact_type, impact_type_desc):
           }]
 
     """
-    #Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
+    )
+    # Here is an example of how the structure of the list of JSONs must be:{example_impacts_quant_value_loc_date_haz}
     return prompt
 
 
 def make_impact_cat_prompt(impact_types):
     prompt_impact_dict = {
-        "Human impacts":
-        "'Affected People': Total number of individuals impacted by the hazard event (the term affected must be mentioned)."\
-        "'Injured People': Number of people injured, including those hospitalized or admitted (the term injured must be used)."\
-        "'Displaced People': Number of individuals temporarily relocated to safer areas due to the event."\
-        "'Homeless People': Number of individuals who lost their homes."\
-        "'Missing People': Number of people unaccounted for following the event."\
+        "Human impacts": "'Affected People': Total number of individuals impacted by the hazard event (the term affected must be mentioned)."
+        "'Injured People': Number of people injured, including those hospitalized or admitted (the term injured must be used)."
+        "'Displaced People': Number of individuals temporarily relocated to safer areas due to the event."
+        "'Homeless People': Number of individuals who lost their homes."
+        "'Missing People': Number of people unaccounted for following the event."
         "'Human Deaths': Number of fatalities caused by the hazard.",
         "Transportation Infrastructure": "'Transportation Infrastructure': Location of transportation infrastructure such as roads, bridges, railways, and highways impacted by a hazard. If you identify impacts but the location of the impacts is unknown, write “Location unknown”. Write the different locations in a python list format.",
         "Water, Sanitation, and Hygiene Infrastructure": "'Water Sanitation and Hygiene Infrastructure: Number of water, sanitation, and hygiene infrastructure such as sewage networks, drainage systems, wastewater treatment plants, etc. impacted by a hazard.",
-        "Healthcare Infrastructure":"'Healthcare Infrastructure': Number of healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc.  impacted by a hazard.",
-        "IT and Communication Infrastructure":"'IT and Communication Infrastructure': Number of IT and communication infrastructure  such as data centers, communication towers, and cables impacted by a hazard.",
-        "Residential Buildings":"'Residential Buildings': Number of residential buildings impacted by a hazard.",
-        "Informal Settlements":"'Informal Settlements': Number of informal settlements such as refugee camps, slums, tents, etc. impacted by a hazard.",
-        "Education Infrastructure":"'Education Infrastructure': Number of education infrastructure such as schools, universities, etc. impacted by a hazard.",
+        "Healthcare Infrastructure": "'Healthcare Infrastructure': Number of healthcare infrastructure such as hospitals, healthcare centers, pharmacies, clinics, etc.  impacted by a hazard.",
+        "IT and Communication Infrastructure": "'IT and Communication Infrastructure': Number of IT and communication infrastructure  such as data centers, communication towers, and cables impacted by a hazard.",
+        "Residential Buildings": "'Residential Buildings': Number of residential buildings impacted by a hazard.",
+        "Informal Settlements": "'Informal Settlements': Number of informal settlements such as refugee camps, slums, tents, etc. impacted by a hazard.",
+        "Education Infrastructure": "'Education Infrastructure': Number of education infrastructure such as schools, universities, etc. impacted by a hazard.",
     }
     try:
-        prompt_impquant = """\n""".join([prompt_impact_dict[imptype] for imptype in impact_types])
+        prompt_impquant = """\n""".join(
+            [prompt_impact_dict[imptype] for imptype in impact_types]
+        )
     except ValueError as e:
         print(e)
         prompt_impquant = None
     return prompt_impquant
 
-def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impact_types):
+
+def quantify_impacts(text, hazard_subtypes, hazard_location, hazard_date, impact_types):
     """Find associated impacts from identified hazard subtypes, location, and date.
     Try to quantify numerically impacts from different categories."""
     impact_types_prompt = make_impact_cat_prompt(impact_types)
@@ -882,7 +1058,8 @@ def quantify_impacts(text, hazard_subtypes, hazard_location , hazard_date, impac
     """
     return prompt
 
-#functions to be parsed to chat.completions (do not seem to work)
+
+# functions to be parsed to chat.completions (do not seem to work)
 functions = [
     {
         "name": "ImpactList",
@@ -895,7 +1072,10 @@ functions = [
                     "items": {
                         "type": "object",
                         "properties": {
-                            "impactType": {"type": "string", "enum": ["Affected People", "Jeej"]},
+                            "impactType": {
+                                "type": "string",
+                                "enum": ["Affected People", "Jeej"],
+                            },
                             "impactValue": {"type": ["integer", "null"]},
                             "impactUnit": {"type": ["string", "null"]},
                             "location": {"type": "array", "items": {"type": "string"}},
@@ -905,15 +1085,28 @@ functions = [
                             "endYear": {"type": ["integer", "null"]},
                             "endMonth": {"type": ["integer", "null"]},
                             "endDay": {"type": ["integer", "null"]},
-                            "hazards": {"type": "array", "items": {"type": "string", "enum": ["Flood", "Storm", "Drought"]}},
-                            "impactsAnnotation": {"type": "array", "items": {"type": "string"}}
+                            "hazards": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["Flood", "Storm", "Drought"],
+                                },
+                            },
+                            "impactsAnnotation": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                         },
-                        "required": ["impactType", "location", "hazards", "impactsAnnotation"]
-                    }
+                        "required": [
+                            "impactType",
+                            "location",
+                            "hazards",
+                            "impactsAnnotation",
+                        ],
+                    },
                 }
             },
-            "required": ["impacts"]
-        }
+            "required": ["impacts"],
+        },
     }
 ]
-

@@ -2,7 +2,8 @@
 import getpass
 from pathlib import Path
 DATA_PATH_LS = Path('/Users/lseverino/Documents/PhD/Projects/Como/Data_backup/')
-DATA_PATH_LH = Path("c:/Users/lhasbini/ownCloud/Documents/Thèse/Conférences_Discussions/2024_Como_Compound Events Training/data/")
+DATA_PATH_LH = Path("d:/data/ROUGE/")
+# DATA_PATH_LH = Path("c:/Users/lhasbini/ownCloud/Documents/Thèse/Conférences_Discussions/2024_Como_Compound Events Training/data/")
 # DATA_PATH_LH = Path("/scratchx/lhasbini/como_school/")
 
 user = getpass.getuser()
