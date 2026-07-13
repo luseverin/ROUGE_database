@@ -74,6 +74,7 @@ FINAL_DATA_COLS = [
     "reportDate",
     "reportLink",
     "disasterType",
+    "impactType",
     "impactSubtype",
     "impactValue",
     "impactValueMin",
