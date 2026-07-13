@@ -24,6 +24,7 @@ from src.geocoding_utils import *
 from src.geocoding import *
 from src.hazard_def import *
 from src.sanity_checks import *
+from src.impact_def import IMPACT_TYPES_MERGED
 
 ### Post process
 # 0. Formatting
@@ -204,6 +205,9 @@ else:
 
     ## Reclassify impacType
     response_df_proc = response_df_proc.apply(reclassify_impact_subtype, axis=1)
+
+    ## Add impactType
+    response_df_proc['impactType'] = response_df_proc['impactSubtype'].map(IMPACT_TYPES_MERGED)
 
     ## Reclassify hazard
     response_df_proc = response_df_proc.apply(
