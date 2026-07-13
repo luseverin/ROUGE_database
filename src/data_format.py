@@ -80,6 +80,7 @@ FINAL_DATA_COLS = [
     "impactValueMax",
     "impactValuePrecision",
     "impactUnit",
+    "damageDegree",
     "startYear",
     "startMonth",
     "startDay",
