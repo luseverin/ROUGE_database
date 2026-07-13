@@ -1,4 +1,4 @@
-from numpy import negative
+import numpy as np
 import pandas as pd
 
 MODEL_NAMES_MAP = {  # short names for model
@@ -128,3 +128,43 @@ def get_flag_cols(df):
     return [
         col for col in df.columns if col.startswith("flag_") or col.startswith("valid_")
     ]
+
+
+def gather_flags(extracted_data, flag_columns, flag_name, how="any"):
+    """
+    Gathers all flag columns into a single column "any_flag", which is True if any of the flag columns are True, and False otherwise.
+
+    Parameters
+    ----------
+    extracted_data : pandas.DataFrame
+        The dataframe containing the extracted data
+    flag_columns : list
+        The list of flag columns to gather
+    flag_name : str, default "any_flag"
+        The name of the column to store the gathered flags
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe with the added column
+    """
+
+    def check_any_flag(x):
+        return any(x[flag] for flag in flag_columns if flag in x.index)
+
+    def check_all_flags(x):
+        return all(x[flag] for flag in flag_columns if flag in x.index)
+
+    if how == "any":
+        gather_func = check_any_flag
+    elif how == "all":
+        gather_func = check_all_flags
+    else:
+        raise ValueError("Invalid value for 'how'. Must be 'any' or 'all'.")
+
+    extracted_data[flag_name] = np.nan
+    extracted_data[flag_name] = extracted_data.apply(gather_func, axis=1)
+    # drop individual flag columns
+    flags_drop = [flag for flag in flag_columns if flag != flag_name]
+    extracted_data = extracted_data.drop(columns=flags_drop)
+    return extracted_data

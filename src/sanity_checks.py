@@ -427,33 +427,3 @@ def flag_missing_country_and_location(
         )
         return np.nan
     return len(x[country_col]) == 0 and len(x[location_col]) == 0
-
-
-def gather_flags(extracted_data, flag_columns, flag_name="any_flag"):
-    """
-    Gathers all flag columns into a single column "any_flag", which is True if any of the flag columns are True, and False otherwise.
-
-    Parameters
-    ----------
-    extracted_data : pandas.DataFrame
-        The dataframe containing the extracted data
-    flag_columns : list
-        The list of flag columns to gather
-    flag_name : str, default "any_flag"
-        The name of the column to store the gathered flags
-
-    Returns
-    -------
-    pandas.DataFrame
-        The dataframe with the added column
-    """
-
-    def check_any_flag(x):
-        return any(x[flag] for flag in flag_columns if flag in x.index)
-
-    extracted_data[flag_name] = np.nan
-    extracted_data[flag_name] = extracted_data.apply(check_any_flag, axis=1)
-    # drop individual flag columns
-    flags_drop = [flag for flag in flag_columns if flag != flag_name]
-    extracted_data = extracted_data.drop(columns=flags_drop)
-    return extracted_data
