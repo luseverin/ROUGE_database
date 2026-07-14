@@ -18,7 +18,7 @@ Université Paris-Saclay, Gif-sur-Yvette, France.
 \* corresponding authors: laura.hasbini@lsce.ipsl.fr, luca.severino@usys.ethz.ch
 
 ## Abstract
-Damage from natural hazards exacts a heavy toll on society and is expected to increase under climate change. Yet, existing impact datasets remain limited and often biased toward Northern countries and monetary losses. To help address these gaps, we present ROUGE; a new socio-economic impact database obtained using textual operational reports from the International Federation of Red Cross and Red Crescent Societies (IFRC). These reports are systematically collected and provide broad coverage of regions that are commonly underrepresented in existing sources. Using large language models, we extract qualitative and quantitative information on a wide range of non-monetary impacts at national and sub-national scales. The resulting dataset documents socio-economic impacts of natural hazards on the population and the built environment with a spatial detail reaching the subregional level, capturing impacts that are rarely included in conventional databases. This resource is designed to support research and applications that require geographically explicit information on socio-economic impacts of disasters, enabling more precise and inclusive analyses of socio-economic consequences of natural hazards across the world.
+High quality data on natural hazard damages are crucial for effective disaster risk management. Yet, existing impact datasets remain limited and often biased toward Northern countries and monetary losses. To help address these gaps, we present ROUGE (Redcross Operations Unified Global Emergency database); a new socio-economic impact database obtained using textual operational reports from the International Federation of Red Cross and Red Crescent Societies (IFRC). These reports are systematically collected and provide broad coverage of regions that are commonly underrepresented in existing impact datasets. Using large language models (LLM), we extract qualitative and quantitative information on a wide range of non-monetary impacts at national and sub-national scales. The resulting dataset documents socio-economic impacts of natural hazards on the population, infrastructure and economy with a spatial detail reaching the subregional level. This resource is designed to support research and applications that require geographically explicit information on socio-economic impacts of disasters, enabling more precise and inclusive analyses of socio-economic consequences of natural hazards worldwide.
 
 ---
 ## Data references
@@ -70,12 +70,13 @@ Damage from natural hazards exacts a heavy toll on society and is expected to in
 ### Core pipeline execution
 The core pipeline consists of three main steps.
 
-|Script Name | Description |
-|1_preproces_reports.py| Pre process raw IFRC reports, formatting and text selection|
-|2_llm_extraction.py| Extract hazards and impacts using LLMs |
-|3_postprocess_results.py| Reclassify, standardize, and geocode extracted impacts|
-|4_subtypes_merger.py| Merge impactSubtypes and drop duplicates |
-|5_final_data_filter.py| Rename, reclassify and add final columns for final database|
+|   Script Name | Description |
+|--------:|:--------|
+|   1_preproces_reports.py | Pre process raw IFRC reports, formatting and text selection|
+|   2_llm_extraction.py | Extract hazards and impacts using LLMs |
+|   3_postprocess_results.py | Reclassify, standardize, and geocode extracted impacts|
+|   4_subtypes_merger.py | Merge impactSubtypes and drop duplicates |
+|   5_final_data_filter.py | Rename, reclassify and add final columns for final database|
 
 ## Repository content
 
