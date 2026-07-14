@@ -71,10 +71,11 @@ Damage from natural hazards exacts a heavy toll on society and is expected to in
 The core pipeline consists of three main steps.
 
 |Script Name | Description |
-|Fpreproces_reports.py| Pre process raw IFRC reports, formatting and text selection|
-|llm_extraction.py| Extract hazards and impacts using LLMs |
-|postprocess_results.py| Reclassify, standardize, and geocode extracted impacts|
-
+|1_preproces_reports.py| Pre process raw IFRC reports, formatting and text selection|
+|2_llm_extraction.py| Extract hazards and impacts using LLMs |
+|3_postprocess_results.py| Reclassify, standardize, and geocode extracted impacts|
+|4_subtypes_merger.py| Merge impactSubtypes and drop duplicates |
+|5_final_data_filter.py| Rename, reclassify and add final columns for final database|
 
 ## Repository content
 
@@ -85,12 +86,16 @@ Jupyter notebooks used for data inspection, validation, and analysis.
 | Notebook | Purpose |
 |--------:|:--------|
 | `download_external_sources.ipynb` | Download IFRC Monty and IFRCGo data via APIs |
+| `gather_label_reports_v2.ipynb` | Gather manually lablled reports into a single file |
+| `gather_raw_reports.ipynb` | Gather raw IFRC reports into a single file |
+| `inspect_preprocessed_data.ipynb` | Inspect the number of files dropped at each steps of the pre-processing |
 | `labelled_extracted_row_matching.ipynb` | Match manually labelled data with LLM extracted results |
 | `open_data.ipynb` | User guidelines to open the database from different formats |
 | `result_data_overview.ipynb` | Overview plots and summary statistics of extracted impacts |
 | `validation_accuracy.ipynb` | Accuracy evaluation of extracted impacts |
 | `validation_coverage.ipynb` | Coverage assessment across regions and hazards |
 | `validation_external_sources.ipynb` | Comparison with external impact databases |
+| `validation_flags.ipynb` | Analysis of the flag and error propagation |
 | `validation_sensitivity_analysis.ipynb` | Sensitivity analysis across different LLM models |
 
 ---
@@ -122,3 +127,4 @@ Source code implementing the ROUGE extraction and post processing pipeline.
 | `text_processing_functions.py` | Text cleaning and pre processing utilities |
 | `units.py` | Unit definitions per impact class and category |
 | `utils.py` | General utility and helper functions |
+| `visualisation.py` | Colormaps |
