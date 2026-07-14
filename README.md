@@ -45,22 +45,22 @@ High quality data on natural hazard damages are crucial for effective disaster r
 
 ---
 ### 1. Clone the repository
-    
+
     git clone https://github.com/luseverin/ROUGE_database
     cd ROUGE_database
     git checkout impact_extraction_multiprompt_clean
 
 ### 2. Create the conda environment
-   
+
     conda env create -f ifrc_llm_311.yml
     conda activate ifrc_llm_311
-  
+
 ### 3. Install the source package
-  
+
     pip install -e .
-   
+
 ### 4. Install required language models
-   
+
     python -m spacy download en_core_web_sm
 
 ### 5. Configure local paths
@@ -87,8 +87,6 @@ Jupyter notebooks used for data inspection, validation, and analysis.
 | Notebook | Purpose |
 |--------:|:--------|
 | `download_external_sources.ipynb` | Download IFRC Monty and IFRCGo data via APIs |
-| `gather_label_reports_v2.ipynb` | Gather manually lablled reports into a single file |
-| `gather_raw_reports.ipynb` | Gather raw IFRC reports into a single file |
 | `inspect_preprocessed_data.ipynb` | Inspect the number of files dropped at each steps of the pre-processing |
 | `labelled_extracted_row_matching.ipynb` | Match manually labelled data with LLM extracted results |
 | `open_data.ipynb` | User guidelines to open the database from different formats |
