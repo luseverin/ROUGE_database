@@ -68,7 +68,7 @@ High quality data on natural hazard damages are crucial for effective disaster r
 
 
 ### Core pipeline execution
-The core pipeline consists of three main steps.
+The core pipeline consists of five main steps.
 
 |   Script Name | Description |
 |--------:|:--------|
