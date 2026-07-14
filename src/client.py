@@ -5,14 +5,11 @@ import instructor
 import getpass
 
 ##set groq api
-#set up api key
+# set up api key
 API_KEY = os.getenv("GROQ_API_KEY")
 
 # set up client
-CLIENT = OpenAI(
-        api_key=API_KEY,
-        base_url="https://api.groq.com/openai/v1" 
-    )
+CLIENT = OpenAI(api_key=API_KEY, base_url="https://api.groq.com/openai/v1")
 # Enables `response_model`
 CLIENT = instructor.patch(client=CLIENT)
 
@@ -58,14 +55,8 @@ CONTEXT_WINDOW = model_table[model_table["id"] == MODEL_NAME]["context_window"].
 
 
 ## Nominatim
-user = getpass.getuser()
-if user == "lhasbini" :
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-elif user == "lseverino" :
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-else:
-    raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
+NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+
 
 ## Montandon
-if user == "lhasbini":
-    MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
+MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
