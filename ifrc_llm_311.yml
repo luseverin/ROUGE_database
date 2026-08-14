@@ -165,6 +165,7 @@ dependencies:
   - pysocks=1.7.1=pyha55dd90_7
   - pystac-client
   - python=3.11.13=hc22306f_0_cpython
+  - spython-dotenv
   - python-dateutil=2.9.0.post0=pyhe01879c_2
   - python-tzdata=2025.2=pyhd8ed1ab_0
   - python_abi=3.11=8_cp311
