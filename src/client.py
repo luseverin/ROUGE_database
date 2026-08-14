@@ -13,10 +13,7 @@ API_KEY = os.getenv("GROQ_API_KEY")
 # "os.getenv("GROQ_API_KEY")" Laura's
 
 # set up client
-CLIENT = OpenAI(
-        api_key=API_KEY,
-        base_url="https://api.groq.com/openai/v1" 
-    )
+CLIENT = OpenAI(api_key=API_KEY, base_url="https://api.groq.com/openai/v1")
 # Enables `response_model`
 CLIENT = instructor.patch(client=CLIENT)
 
