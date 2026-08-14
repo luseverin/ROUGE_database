@@ -128,7 +128,6 @@ FINAL_FLAG_COLS = [
     "flag_remove_number_unit_error",
     "flag_currency_conversion_error",
     "flag_non_currency_unit_conversion_error",
-    "flag_unit_processing_error",
     "flag_failed_startYear_inference",
     "flag_value_not_in_text",
     "flag_value_no_unit",

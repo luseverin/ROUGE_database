@@ -151,6 +151,7 @@ dependencies:
   - pyproj=3.7.2
   - pyshp=3.0.1
   - pysocks=1.7.1
+  - spython-dotenv
   - python-dateutil=2.9.0.post0
   - python-tzdata=2025.2
   - pytz=2025.2
