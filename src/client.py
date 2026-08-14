@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os 
 
 ##set groq api
-# set up api key
+#set up api key
 load_dotenv()
 API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -57,8 +57,14 @@ CONTEXT_WINDOW = model_table[model_table["id"] == MODEL_NAME]["context_window"].
 ]
 
 ## Nominatim
-NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+user = getpass.getuser()
+if user == "lhasbini" :
+    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+elif user == "lseverino" :
+    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
+else:
+    raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
 
 ## Montandon
-# if user == "lhasbini":
-MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
+if user == "lhasbini":
+    MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
