@@ -8,9 +8,8 @@ import os
 
 ##set groq api
 # set up api key
+load_dotenv()
 API_KEY = os.getenv("GROQ_API_KEY")
-# "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" #Luca's
-# "os.getenv("GROQ_API_KEY")" Laura's
 
 # set up client
 CLIENT = OpenAI(api_key=API_KEY, base_url="https://api.groq.com/openai/v1")
@@ -58,13 +57,7 @@ CONTEXT_WINDOW = model_table[model_table["id"] == MODEL_NAME]["context_window"].
 ]
 
 ## Nominatim
-user = getpass.getuser()
-if user == "lhasbini":
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-elif user == "lseverino":
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-else:
-    raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
+NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
 
 ## Montandon
 # if user == "lhasbini":
