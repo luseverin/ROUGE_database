@@ -48,7 +48,7 @@ MODEL_NAME_LIST = [
 ]
 
 # seelct model
-MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
 # retrieve max tokens
 MAX_COMPLETION_TOKENS = model_table[model_table["id"] == MODEL_NAME][
