@@ -59,16 +59,9 @@ CONTEXT_WINDOW = model_table[model_table["id"] == MODEL_NAME]["context_window"].
     0
 ]
 
-
 ## Nominatim
-user = getpass.getuser()
-if user == "lhasbini":
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-elif user == "lseverino":
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-else:
-    raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
+NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
 
 ## Montandon
-if user == "lhasbini":
-    MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
+# if user == "lhasbini":
+MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
