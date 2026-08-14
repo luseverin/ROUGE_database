@@ -3,12 +3,13 @@ import pandas as pd
 from openai import OpenAI
 import instructor
 import getpass
+from dotenv import load_dotenv
+import os
 
 ##set groq api
 # set up api key
+load_dotenv()
 API_KEY = os.getenv("GROQ_API_KEY")
-# "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" #Luca's
-# "os.getenv("GROQ_API_KEY")" Laura's
 
 # set up client
 CLIENT = OpenAI(
@@ -47,8 +48,8 @@ MODEL_NAME_LIST = [
     "whisper-large-v3",
 ]
 
-# seelct model
-MODEL_NAME = "llama-3.3-70b-versatile"
+# select model
+MODEL_NAME = "llama-3.3-70b-versatile"  # "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # retrieve max tokens
 MAX_COMPLETION_TOKENS = model_table[model_table["id"] == MODEL_NAME][
@@ -58,16 +59,8 @@ CONTEXT_WINDOW = model_table[model_table["id"] == MODEL_NAME]["context_window"].
     0
 ]
 
-
 ## Nominatim
-user = getpass.getuser()
-if user == "lhasbini":
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-elif user == "lseverino":
-    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
-else:
-    raise ValueError(f"Cannot define nominatim user agent for unknown user: {user}")
+NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT")
 
 ## Montandon
-if user == "lhasbini":
-    MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
+MONTANDON_API_TOKEN = os.getenv("MONTANDON_API_TOKEN")
