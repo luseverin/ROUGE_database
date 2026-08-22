@@ -5,10 +5,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 # import copy as cp
 from src.geocoding import remove_admin_words
 
-
-from sklearn.metrics.pairwise import cosine_similarity
-
-
 def vectorize(cell_values, unique_values):
     """vectorizing function for categorical columns"""
     # cell_values = list() if not cell_values else cell_values
