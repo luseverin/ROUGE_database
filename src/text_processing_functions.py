@@ -7,6 +7,7 @@ import fasttext.FastText as fasttext_module
 import unicodedata
 from sympy import I
 from text_to_num import text2num
+from functools import wraps
 
 # from number_spacy import find_numbers
 # from spacy.tokens import Span
