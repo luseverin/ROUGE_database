@@ -29,6 +29,7 @@ import time
 import geopy as gpy
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError, GeocoderRateLimited
 from joblib import dump
+from geopy.extra.rate_limiter import RateLimiter
 
 # set up logger
 LOGGER = logging.getLogger("postprocessing")
