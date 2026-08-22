@@ -46,7 +46,7 @@ MODEL_NAME_LIST = [
 ]
 
 # seelct model
-MODEL_NAME = "llama-3.3-70b-versatile"#"meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_NAME = "openai/gpt-oss-120b"#"llama-3.3-70b-versatile"#"meta-llama/llama-4-scout-17b-16e-instruct"
 
 # retrieve max tokens
 MAX_COMPLETION_TOKENS = model_table[model_table["id"] == MODEL_NAME][
